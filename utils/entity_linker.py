@@ -15,8 +15,8 @@ from .word_tokenizer import BasicTokenizer
 logger = logging.getLogger(__name__)
 
 
-class Mention(object):
-    __slots__ = ('title', 'text', 'link_count', 'total_link_count', 'doc_count', 'span')
+class MentionCandidate(object):
+    __slots__ = ('title', 'text', 'link_count', 'total_link_count', 'doc_count')
 
     def __init__(self, title, text, link_count, total_link_count, doc_count):
         self.title = title
@@ -40,30 +40,19 @@ class Mention(object):
             return 0.0
 
     def __repr__(self):
-        return '<Mention %s -> %s>' % (self.text, self.title)
+        return '<MentionCandidate %s -> %s>' % (self.text, self.title)
 
 
 class EntityLinker(object):
-    def __init__(self, mention_db, min_link_prob, min_prior_prob):
+    def __init__(self, mention_db):
         self._mention_db = mention_db
-        self._min_link_prob = min_link_prob
-        self._min_prior_prob = min_prior_prob
-
         self._tokenizer = BasicTokenizer()
-
-    @property
-    def min_link_prob(self):
-        return self._min_link_prob
-
-    @property
-    def min_prior_prob(self):
-        return self._min_prior_prob
 
     def detect_mentions(self, text):
         tokens = self._tokenizer.tokenize(text)
         end_offsets = frozenset(t.span[1] for t in tokens)
 
-        ret = []
+        ret = defaultdict(list)
         cur = 0
         for token in tokens:
             start = token.span[0]
@@ -75,17 +64,15 @@ class EntityLinker(object):
                 if end in end_offsets:
                     matched = False
 
-                    for mention in self._mention_db.query(prefix, self._min_link_prob,
-                                                          self._min_prior_prob):
-                        mention.span = (start, end)
-                        ret.append(mention)
+                    for mention in self._mention_db.query(prefix):
+                        ret[(start, end)].append(mention)
                         cur = end
                         matched = True
 
                     if matched:
                         break
 
-        return ret
+        return tuple(ret.items())
 
 
 class MentionDB(object):
@@ -97,28 +84,16 @@ class MentionDB(object):
         self._data_trie = data_trie
         self._max_mention_len = max_mention_len
 
-    def query(self, text, min_link_prob=0.0, min_prior_prob=0.0, min_link_count=0):
-        ret = []
-        text = text.lower()
-        for (title_id, link_count, total_link_count, doc_count) in self._data_trie[text]:
-            if doc_count == 0 or float(total_link_count) / doc_count < min_link_prob:
-                break
-            if link_count < min_link_count:
-                continue
-            if total_link_count == 0 or float(link_count) / total_link_count < min_prior_prob:
-                continue
-
-            ret.append(Mention(self._title_trie.restore_key(title_id), text, link_count,
-                               total_link_count, doc_count))
-
-        return ret
+    def query(self, text):
+        return [MentionCandidate(self._title_trie.restore_key(args[0]), text, *args[1:])
+                for args in self._data_trie[text.lower()]]
 
     def prefix_search(self, text, start=0):
         target_text = text[start:start+self._max_mention_len].lower()
         return sorted(self._mention_trie.prefixes(target_text), key=len, reverse=True)
 
     @staticmethod
-    def build(dump_db, min_link_prob, min_prior_prob, min_link_count, max_mention_len,
+    def build(dump_db, min_link_prob, max_candidate_size, min_link_count, max_mention_len,
               pool_size, chunk_size):
         name_dict = defaultdict(lambda: Counter())
         init_args = [dump_db, None]
@@ -176,14 +151,9 @@ class MentionDB(object):
                 if link_prob < min_link_prob:
                     continue
 
-                for (title, link_count) in entity_counter.items():
+                for (title, link_count) in entity_counter.most_common()[:max_candidate_size]:
                     if link_count < min_link_count:
                         continue
-
-                    prior_prob = float(link_count) / total_link_count
-                    if prior_prob < min_prior_prob:
-                        continue
-
                     yield (name, (title_trie[title], link_count, total_link_count, doc_count))
 
         data_trie = RecordTrie('<IIII', item_generator())

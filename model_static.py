@@ -433,6 +433,8 @@ class LukeModel(LukeBaseModel):
         self.page_entity_prediction = EntityPredictionHead(config,
             self.entity_embeddings.entity_embeddings.weight)
 
+        self.embeddings.word_embeddings.weight.requires_grad = False
+
         self.apply(self.init_weights)
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
@@ -492,11 +494,25 @@ class LukeForSequenceClassification(LukeBaseModel):
         self.num_labels = num_labels
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, num_labels)
+
+        # self.classifier = nn.Linear(config.hidden_size * 3, num_labels)
+        # self.dense = nn.Linear(config.hidden_size * 3, config.hidden_size * 3)
+        # self.activation = nn.Tanh()
+
         self.apply(self.init_weights)
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
                 entity_position_ids, entity_segment_ids, entity_attention_mask,
                 entity_link_prob_ids, entity_prior_prob_ids, labels=None):
+        # (encoded_layers, _) = super(LukeForSequenceClassification, self).forward(
+        #     word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
+        #     entity_segment_ids, entity_attention_mask, entity_link_prob_ids, entity_prior_prob_ids,
+        #     output_all_encoded_layers=False)
+        # word_hidden_states = encoded_layers[0]
+        # pooled_output = word_hidden_states[:, [0, 1, 2]].view(-1, self.config.hidden_size * 3)
+        # pooled_output = self.dense(pooled_output)
+        # pooled_output = self.activation(pooled_output)
+
         (_, pooled_output) = super(LukeForSequenceClassification, self).forward(
             word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
             entity_segment_ids, entity_attention_mask, entity_link_prob_ids, entity_prior_prob_ids,

@@ -23,7 +23,7 @@ class LukeConfig(object):
     def __init__(self, vocab_size, entity_vocab_size, hidden_size, entity_emb_size,
                  num_hidden_layers, num_attention_heads, intermediate_size, hidden_dropout_prob,
                  attention_probs_dropout_prob, max_position_embeddings, type_vocab_size,
-                 initializer_range, link_prob_bin_size, prior_prob_bin_size, **kwargs):
+                 initializer_range, **kwargs):
         self.vocab_size = vocab_size
         self.entity_vocab_size = entity_vocab_size
         self.hidden_size = hidden_size
@@ -36,8 +36,6 @@ class LukeConfig(object):
         self.max_position_embeddings = max_position_embeddings
         self.type_vocab_size = type_vocab_size
         self.initializer_range = initializer_range
-        self.link_prob_bin_size = link_prob_bin_size
-        self.prior_prob_bin_size = prior_prob_bin_size
 
     def __repr__(self):
         return json.dumps(self.__dict__, indent=2, sort_keys=True) + "\n"
@@ -92,41 +90,6 @@ class WordEmbeddings(nn.Module):
         return embeddings
 
 
-class EntityEmbeddings(nn.Module):
-    """Construct the embeddings from entity, position and token_type embeddings.
-    """
-    def __init__(self, config):
-        super(EntityEmbeddings, self).__init__()
-        self.config = config
-
-        self.entity_embeddings = nn.Embedding(config.entity_vocab_size, config.entity_emb_size)
-        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
-        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
-        self.link_prob_embeddings = nn.Embedding(config.link_prob_bin_size, config.hidden_size)
-        self.prior_prob_embeddings = nn.Embedding(config.prior_prob_bin_size, config.hidden_size)
-
-        if config.entity_emb_size != config.hidden_size:
-            self.entity_dense = nn.Linear(config.entity_emb_size, config.hidden_size, bias=False)
-
-        self.LayerNorm = LayerNorm(config.hidden_size, eps=1e-12)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
-    def forward(self, entity_ids, position_ids, token_type_ids, link_prob_ids, prior_prob_ids):
-        entity_embeddings = self.entity_embeddings(entity_ids)
-        if self.config.entity_emb_size != self.config.hidden_size:
-            entity_embeddings = self.entity_dense(entity_embeddings)
-        position_embeddings = self.position_embeddings(position_ids)
-        token_type_embeddings = self.token_type_embeddings(token_type_ids)
-        link_prob_embeddings = self.link_prob_embeddings(link_prob_ids)
-        prior_prob_embeddings = self.prior_prob_embeddings(prior_prob_ids)
-
-        embeddings = entity_embeddings + position_embeddings + token_type_embeddings +\
-            link_prob_embeddings + prior_prob_embeddings
-        embeddings = self.LayerNorm(embeddings)
-        embeddings = self.dropout(embeddings)
-        return embeddings
-
-
 class SelfAttention(nn.Module):
     def __init__(self, config):
         super(SelfAttention, self).__init__()
@@ -146,8 +109,7 @@ class SelfAttention(nn.Module):
         # batch, num_attention_heads, seq_length, attention_head_size
         return x.permute(0, 2, 1, 3)
 
-    def forward(self, word_hidden_states, entity_hidden_states, attention_mask):
-        hidden_states = torch.cat([word_hidden_states, entity_hidden_states], dim=1)
+    def forward(self, hidden_states, attention_mask):
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
@@ -174,12 +136,7 @@ class SelfAttention(nn.Module):
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
 
-        word_seq_size = word_hidden_states.size(1)
-
-        word_context_layer = context_layer[:, :word_seq_size, :]
-        entity_context_layer = context_layer[:, word_seq_size:, :]
-
-        return (word_context_layer, entity_context_layer)
+        return context_layer
 
 
 class SelfOutput(nn.Module):
@@ -202,12 +159,10 @@ class Attention(nn.Module):
         self.self = SelfAttention(config)
         self.output = SelfOutput(config)
 
-    def forward(self, word_hidden_states, entity_hidden_states, attention_mask):
-        (word_self_output, entity_self_output) = self.self(word_hidden_states, entity_hidden_states,
-                                                           attention_mask)
-        word_output = self.output(word_self_output, word_hidden_states)
-        entity_output = self.output(entity_self_output, entity_hidden_states)
-        return (word_output, entity_output)
+    def forward(self, hidden_states, attention_mask):
+        self_output = self.self(hidden_states, attention_mask)
+        output = self.output(self_output, hidden_states)
+        return output
 
 
 class Intermediate(nn.Module):
@@ -242,14 +197,11 @@ class Layer(nn.Module):
         self.intermediate = Intermediate(config)
         self.output = Output(config)
 
-    def forward(self, word_hidden_states, entity_hidden_states, attention_mask):
-        (word_attention_output, entity_attention_output) = self.attention(
-            word_hidden_states, entity_hidden_states, attention_mask)
-        word_intermediate_output = self.intermediate(word_attention_output)
-        entity_intermediate_output = self.intermediate(entity_attention_output)
-        word_layer_output = self.output(word_intermediate_output, word_attention_output)
-        entity_layer_output = self.output(entity_intermediate_output, entity_attention_output)
-        return (word_layer_output, entity_layer_output)
+    def forward(self, hidden_states, attention_mask):
+        attention_output = self.attention(hidden_states, attention_mask)
+        intermediate_output = self.intermediate(attention_output)
+        layer_output = self.output(intermediate_output, attention_output)
+        return layer_output
 
 
 class Encoder(nn.Module):
@@ -258,16 +210,14 @@ class Encoder(nn.Module):
         layer = Layer(config)
         self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config.num_hidden_layers)])
 
-    def forward(self, word_hidden_states, entity_hidden_states, attention_mask,
-                output_all_encoded_layers=True):
+    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True):
         all_encoder_layers = []
         for layer_module in self.layer:
-            (word_hidden_states, entity_hidden_states) = layer_module(word_hidden_states,
-                entity_hidden_states, attention_mask)
+            hidden_states = layer_module(hidden_states, attention_mask)
             if output_all_encoded_layers:
-                all_encoder_layers.append((word_hidden_states, entity_hidden_states))
+                all_encoder_layers.append(hidden_states)
         if not output_all_encoded_layers:
-            all_encoder_layers.append((word_hidden_states, entity_hidden_states))
+            all_encoder_layers.append(hidden_states)
         return all_encoder_layers
 
 
@@ -278,20 +228,19 @@ class Pooler(nn.Module):
         self.activation = nn.Tanh()
 
     def forward(self, word_hidden_states):
-        pooled_output = word_hidden_states[:, 0]
-        pooled_output = self.dense(pooled_output)
+        # We "pool" the model by simply taking the hidden state corresponding
+        # to the first token.
+        first_token_tensor = word_hidden_states[:, 0]
+        pooled_output = self.dense(first_token_tensor)
         pooled_output = self.activation(pooled_output)
         return pooled_output
 
 
 class PredictionHeadTransform(nn.Module):
-    def __init__(self, config, out_hidden_size=None):
+    def __init__(self, config):
         super(PredictionHeadTransform, self).__init__()
-        if out_hidden_size is None:
-            out_hidden_size = config.hidden_size
-
-        self.dense = nn.Linear(config.hidden_size, out_hidden_size)
-        self.LayerNorm = LayerNorm(out_hidden_size, eps=1e-12)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.LayerNorm = LayerNorm(config.hidden_size, eps=1e-12)
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
@@ -319,22 +268,6 @@ class LMPredictionHead(nn.Module):
         return hidden_states
 
 
-class EntityPredictionHead(nn.Module):
-    def __init__(self, config, entity_embedding_weights):
-        super(EntityPredictionHead, self).__init__()
-        self.transform = PredictionHeadTransform(config, entity_embedding_weights.size(1))
-
-        self.decoder = nn.Linear(entity_embedding_weights.size(1),
-                                 entity_embedding_weights.size(0),
-                                 bias=False)
-        self.decoder.weight = entity_embedding_weights
-        self.bias = nn.Parameter(torch.zeros(entity_embedding_weights.size(0)))
-
-    def forward(self, target_tensor):
-        target_tensor = self.transform(target_tensor)
-        return self.decoder(target_tensor) + self.bias
-
-
 class BertPreTrainingHeads(nn.Module):
     def __init__(self, config, bert_model_embedding_weights):
         super(BertPreTrainingHeads, self).__init__()
@@ -356,25 +289,19 @@ class LukeBaseModel(nn.Module):
         self.encoder = Encoder(config)
         self.pooler = Pooler(config)
         self.embeddings = WordEmbeddings(config)
-        self.entity_embeddings = EntityEmbeddings(config)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
-                entity_position_ids, entity_segment_ids, entity_attention_mask,
-                entity_link_prob_ids, entity_prior_prob_ids, output_all_encoded_layers=True):
-        attention_mask = torch.cat([word_attention_mask, entity_attention_mask], dim=1)
-        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-
+    def forward(self, word_ids, word_segment_ids, word_attention_mask,
+                output_all_encoded_layers=True):
+        extended_attention_mask = word_attention_mask.unsqueeze(1).unsqueeze(2)
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
-        word_embedding_output = self.embeddings(word_ids, word_segment_ids)
-        entity_embedding_output = self.entity_embeddings(entity_ids, entity_position_ids,
-            entity_segment_ids, entity_link_prob_ids, entity_prior_prob_ids)
-        encoded_layers = self.encoder(word_embedding_output, entity_embedding_output,
-                                      extended_attention_mask,
-                                      output_all_encoded_layers=output_all_encoded_layers)
-        word_sequence_output = encoded_layers[-1][0]
-        pooled_output = self.pooler(word_sequence_output)
+        embedding_output = self.embeddings(word_ids, word_segment_ids)
+        encoded_layers = self.encoder(embedding_output, extended_attention_mask,
+                                      output_all_encoded_layers=False)
+
+        sequence_output = encoded_layers[-1]
+        pooled_output = self.pooler(sequence_output)
 
         if not output_all_encoded_layers:
             encoded_layers = encoded_layers[-1]
@@ -419,7 +346,7 @@ class LukeBaseModel(nn.Module):
                 if child is not None:
                     load(child, prefix + name + '.')
 
-        load(self, prefix='')
+        load(self)
         if len(unexpected_keys) > 0:
             logger.info("Weights from pretrained model not used in {}: {}".format(
                 self.__class__.__name__, sorted(unexpected_keys)))
@@ -428,31 +355,19 @@ class LukeBaseModel(nn.Module):
 class LukeModel(LukeBaseModel):
     def __init__(self, config):
         super(LukeModel, self).__init__(config)
+
         self.cls = BertPreTrainingHeads(config, self.embeddings.word_embeddings.weight)
-        self.entity_classifier = nn.Linear(config.hidden_size, 2)
-        self.page_entity_prediction = EntityPredictionHead(config,
-            self.entity_embeddings.entity_embeddings.weight)
 
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
-                entity_position_ids, entity_segment_ids, entity_attention_mask,
-                entity_link_prob_ids, entity_prior_prob_ids, masked_lm_labels,
-                is_random_next, entity_labels, a_entity_id, b_entity_id, **kwargs):
+    def forward(self, word_ids, word_segment_ids, word_attention_mask, masked_lm_labels,
+                is_random_next, **kwargs):
+        batch_size = word_ids.size(0)
+
         (encoded_layers, pooled_output) = super(LukeModel, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-            entity_segment_ids, entity_attention_mask, entity_link_prob_ids, entity_prior_prob_ids,
-            output_all_encoded_layers=False
+            word_ids, word_segment_ids, word_attention_mask, output_all_encoded_layers=False
         )
-        word_sequence_output = encoded_layers[0]
-        entity_sequence_output = encoded_layers[1]
-
-        (masked_lm_scores, nsp_score) = self.cls(word_sequence_output, pooled_output)
-        entity_scores = self.entity_classifier(entity_sequence_output)
-
-        ent_vector = torch.cat([word_sequence_output[:, 1], word_sequence_output[:, 2]], dim=0)
-        # 2 * batch x entity_vocab_size
-        page_entity_scores = self.page_entity_prediction(ent_vector)
+        (masked_lm_scores, nsp_score) = self.cls(encoded_layers, pooled_output)
 
         loss_fn = CrossEntropyLoss(ignore_index=-1)
         ret = {}
@@ -466,22 +381,9 @@ class LukeModel(LukeBaseModel):
 
         ret['nsp_loss'] = loss_fn(nsp_score, is_random_next)
         ret['nsp_correct'] = (torch.argmax(nsp_score, 1).data == is_random_next.data).sum()
-        ret['nsp_total'] = ret['nsp_correct'].new_tensor(word_ids.size(0))
+        ret['nsp_total'] = ret['nsp_correct'].new_tensor(batch_size)
 
-        entity_scores = entity_scores.view(-1, 2)
-        entity_labels = entity_labels.view(-1)
-        ret['entity_loss'] = loss_fn(entity_scores, entity_labels)
-        ret['entity_correct'] = (torch.argmax(entity_scores, 1).data == entity_labels.data).sum()
-        ret['entity_total'] = entity_labels.ne(-1).sum()
-
-        entity_ids = torch.cat([a_entity_id, b_entity_id])
-        ret['page_entity_loss'] = loss_fn(page_entity_scores, entity_ids)
-        ret['page_entity_correct'] = (torch.argmax(page_entity_scores, 1).data ==
-                                      entity_ids.data).sum()
-        ret['page_entity_total'] = entity_ids.ne(-1).sum()
-
-        ret['loss'] = ret['masked_lm_loss'] + ret['nsp_loss'] + ret['entity_loss'] +\
-            ret['page_entity_loss']
+        ret['loss'] = ret['masked_lm_loss'] + ret['nsp_loss']
 
         return ret
 
@@ -494,13 +396,9 @@ class LukeForSequenceClassification(LukeBaseModel):
         self.classifier = nn.Linear(config.hidden_size, num_labels)
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
-                entity_position_ids, entity_segment_ids, entity_attention_mask,
-                entity_link_prob_ids, entity_prior_prob_ids, labels=None):
+    def forward(self, word_ids, word_segment_ids, word_attention_mask, labels=None, **kwargs):
         (_, pooled_output) = super(LukeForSequenceClassification, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-            entity_segment_ids, entity_attention_mask, entity_link_prob_ids, entity_prior_prob_ids,
-            output_all_encoded_layers=False)
+            word_ids, word_segment_ids, word_attention_mask, output_all_encoded_layers=False)
 
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
@@ -520,13 +418,9 @@ class LukeForSequenceRegression(LukeBaseModel):
         self.regressor = nn.Linear(config.hidden_size, 1)
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
-                entity_position_ids, entity_segment_ids, entity_attention_mask,
-                entity_link_prob_ids, entity_prior_prob_ids, labels=None):
+    def forward(self, word_ids, word_segment_ids, word_attention_mask, labels=None, **kwargs):
         (_, pooled_output) = super(LukeForSequenceRegression, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-            entity_segment_ids, entity_attention_mask, entity_link_prob_ids, entity_prior_prob_ids,
-            output_all_encoded_layers=False)
+            word_ids, word_segment_ids, word_attention_mask, output_all_encoded_layers=False)
 
         pooled_output = self.dropout(pooled_output)
         logits = self.regressor(pooled_output)
@@ -547,24 +441,14 @@ class LukeForMultipleChoice(LukeBaseModel):
         self.classifier = nn.Linear(config.hidden_size, 1)
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
-                entity_position_ids, entity_segment_ids, entity_attention_mask,
-                entity_link_prob_ids, entity_prior_prob_ids, answer_mask, labels=None):
+    def forward(self, word_ids, word_segment_ids, word_attention_mask, answer_mask, labels=None,
+                **kwargs):
         word_size = word_ids.size(-1)
-        entity_size = entity_ids.size(-1)
-        word_ids = word_ids.view(-1, word_size)
-        word_segment_ids = word_segment_ids.view(-1, word_size)
-        word_attention_mask = word_attention_mask.view(-1, word_size)
-        entity_ids = entity_ids.view(-1, entity_size)
-        entity_position_ids = entity_position_ids.view(-1, entity_size)
-        entity_segment_ids = entity_segment_ids.view(-1, entity_size)
-        entity_attention_mask = entity_attention_mask.view(-1, entity_size)
-        entity_link_prob_ids = entity_link_prob_ids.view(-1, entity_size)
-        entity_prior_prob_ids = entity_prior_prob_ids.view(-1, entity_size)
-
+        flat_word_ids = word_ids.view(-1, word_size)
+        flat_word_segment_ids = word_segment_ids.view(-1, word_size)
+        flat_word_attention_mask = word_attention_mask.view(-1, word_size)
         (_, pooled_output) = super(LukeForMultipleChoice, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-            entity_segment_ids, entity_attention_mask, entity_link_prob_ids, entity_prior_prob_ids,
+            flat_word_ids, flat_word_segment_ids, flat_word_attention_mask,
             output_all_encoded_layers=False)
 
         pooled_output = self.dropout(pooled_output)
@@ -576,7 +460,7 @@ class LukeForMultipleChoice(LukeBaseModel):
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
-            loss = loss_fct(reshaped_logits + answer_mask, labels)
+            loss = loss_fct(reshaped_logits, labels)
             return loss
         else:
             return reshaped_logits

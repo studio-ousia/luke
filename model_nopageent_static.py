@@ -430,15 +430,15 @@ class LukeModel(LukeBaseModel):
         super(LukeModel, self).__init__(config)
         self.cls = BertPreTrainingHeads(config, self.embeddings.word_embeddings.weight)
         self.entity_classifier = nn.Linear(config.hidden_size, 2)
-        self.page_entity_prediction = EntityPredictionHead(config,
-            self.entity_embeddings.entity_embeddings.weight)
+
+        self.embeddings.word_embeddings.weight.requires_grad = False
 
         self.apply(self.init_weights)
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
                 entity_position_ids, entity_segment_ids, entity_attention_mask,
                 entity_link_prob_ids, entity_prior_prob_ids, masked_lm_labels,
-                is_random_next, entity_labels, a_entity_id, b_entity_id, **kwargs):
+                is_random_next, entity_labels, **kwargs):
         (encoded_layers, pooled_output) = super(LukeModel, self).forward(
             word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
             entity_segment_ids, entity_attention_mask, entity_link_prob_ids, entity_prior_prob_ids,
@@ -449,10 +449,6 @@ class LukeModel(LukeBaseModel):
 
         (masked_lm_scores, nsp_score) = self.cls(word_sequence_output, pooled_output)
         entity_scores = self.entity_classifier(entity_sequence_output)
-
-        ent_vector = torch.cat([word_sequence_output[:, 1], word_sequence_output[:, 2]], dim=0)
-        # 2 * batch x entity_vocab_size
-        page_entity_scores = self.page_entity_prediction(ent_vector)
 
         loss_fn = CrossEntropyLoss(ignore_index=-1)
         ret = {}
@@ -474,14 +470,7 @@ class LukeModel(LukeBaseModel):
         ret['entity_correct'] = (torch.argmax(entity_scores, 1).data == entity_labels.data).sum()
         ret['entity_total'] = entity_labels.ne(-1).sum()
 
-        entity_ids = torch.cat([a_entity_id, b_entity_id])
-        ret['page_entity_loss'] = loss_fn(page_entity_scores, entity_ids)
-        ret['page_entity_correct'] = (torch.argmax(page_entity_scores, 1).data ==
-                                      entity_ids.data).sum()
-        ret['page_entity_total'] = entity_ids.ne(-1).sum()
-
-        ret['loss'] = ret['masked_lm_loss'] + ret['nsp_loss'] + ret['entity_loss'] +\
-            ret['page_entity_loss']
+        ret['loss'] = ret['masked_lm_loss'] + ret['nsp_loss'] + ret['entity_loss']
 
         return ret
 

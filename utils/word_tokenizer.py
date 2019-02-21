@@ -75,19 +75,23 @@ class BasicTokenizer(object):
 class WordPieceTokenizer(object):
     def __init__(self, vocab, lowercase=False, max_chars_per_word=100):
         self.vocab = vocab
-        self._lowercase = lowercase
+        self.lowercase = lowercase
         self._max_chars_per_word = max_chars_per_word
 
-        self._basic_tokenizer = BasicTokenizer(lowercase)
+        self.basic_tokenizer = BasicTokenizer(lowercase)
 
-    def tokenize(self, text, use_subword=True):
+    def tokenize(self, text_or_tokens, use_subword=True):
         output_tokens = []
 
-        tokens = self._basic_tokenizer.tokenize(text)
-        if not use_subword:
-            return tokens
+        if isinstance(text_or_tokens, str):
+            input_tokens = self.basic_tokenizer.tokenize(text_or_tokens)
+        else:
+            input_tokens = text_or_tokens
 
-        for orig_token in tokens:
+        if not use_subword:
+            return input_tokens
+
+        for orig_token in input_tokens:
             word_text = orig_token.text
 
             if len(word_text) > self._max_chars_per_word:

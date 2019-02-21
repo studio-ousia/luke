@@ -3,15 +3,6 @@
 import pkg_resources
 
 
-class NLTKSentenceTokenizer(object):
-    def __init__(self, model_path='tokenizers/punkt/english.pickle'):
-        import nltk
-        self._tokenizer = nltk.data.load(model_path)
-
-    def span_tokenize(self, text):
-        return self._tokenizer.span_tokenize(text)
-
-
 class OpenNLPSentenceTokenizer(object):
     _java_initialized = False
 
