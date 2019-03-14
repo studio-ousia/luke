@@ -16,14 +16,16 @@ logger = logging.getLogger(__name__)
 
 
 class MentionCandidate(object):
-    __slots__ = ('title', 'text', 'link_count', 'total_link_count', 'doc_count')
+    __slots__ = ('title', 'text', 'link_count', 'total_link_count', 'doc_count',
+                 'total_entity_count')
 
-    def __init__(self, title, text, link_count, total_link_count, doc_count):
+    def __init__(self, title, text, link_count, total_link_count, doc_count, total_entity_count):
         self.title = title
         self.text = text
         self.link_count = link_count
         self.total_link_count = total_link_count
         self.doc_count = doc_count
+        self.total_entity_count = total_entity_count
 
     @property
     def link_prob(self):
@@ -44,9 +46,10 @@ class MentionCandidate(object):
 
 
 class EntityLinker(object):
-    def __init__(self, mention_db):
+    def __init__(self, mention_db, min_prior_prob=0.0):
         self._mention_db = mention_db
         self._tokenizer = BasicTokenizer()
+        self._min_prior_prob = min_prior_prob
 
     def detect_mentions(self, text):
         tokens = self._tokenizer.tokenize(text)
@@ -65,6 +68,9 @@ class EntityLinker(object):
                     matched = False
 
                     for mention in self._mention_db.query(prefix):
+                        if mention.prior_prob <= self._min_prior_prob:
+                            continue
+
                         ret[(start, end)].append(mention)
                         cur = end
                         matched = True
@@ -96,6 +102,7 @@ class MentionDB(object):
     def build(dump_db, min_link_prob, max_candidate_size, min_link_count, max_mention_len,
               pool_size, chunk_size):
         name_dict = defaultdict(lambda: Counter())
+        entity_occurrences = Counter()
         init_args = [dump_db, None]
 
         logger.info('Step 1/4: Starting to iterate over Wikipedia pages...')
@@ -103,8 +110,10 @@ class MentionDB(object):
         with closing(Pool(pool_size, initializer=init_worker, initargs=init_args)) as pool:
             with tqdm(total=dump_db.page_size(), mininterval=0.5) as bar:
                 f = partial(_extract_links, max_mention_len=max_mention_len)
-                for ret in pool.imap_unordered(f, dump_db.titles(), chunksize=chunk_size):
-                    for (text, title) in ret:
+                for (links, titles) in pool.imap_unordered(f, dump_db.titles(),
+                                                           chunksize=chunk_size):
+                    entity_occurrences.update(titles)
+                    for (text, title) in links:
                         name_dict[text][title] += 1
                     bar.update(1)
 
@@ -154,9 +163,11 @@ class MentionDB(object):
                 for (title, link_count) in entity_counter.most_common()[:max_candidate_size]:
                     if link_count < min_link_count:
                         continue
-                    yield (name, (title_trie[title], link_count, total_link_count, doc_count))
+                    entity_prior = entity_occurrences.get(title, 0)
+                    yield (name, (title_trie[title], link_count, total_link_count, doc_count,
+                                  entity_prior))
 
-        data_trie = RecordTrie('<IIII', item_generator())
+        data_trie = RecordTrie('<IIIII', item_generator())
         mention_trie = Trie(data_trie.keys())
 
         return MentionDB(title_trie, mention_trie, data_trie, max_mention_len)
@@ -175,7 +186,7 @@ class MentionDB(object):
         title_trie = title_trie.frombytes(obj.pop('title_trie'))
         mention_trie = Trie()
         mention_trie = mention_trie.frombytes(obj.pop('mention_trie'))
-        data_trie = RecordTrie('<IIII')
+        data_trie = RecordTrie('<IIIII')
         data_trie = data_trie.frombytes(obj.pop('data_trie'))
 
         return MentionDB(title_trie, mention_trie, data_trie, **obj)
@@ -195,17 +206,19 @@ def init_worker(dump_db, name_trie):
 
 
 def _extract_links(title, max_mention_len):
-    ret = []
+    links = []
+    titles = set()
 
     for paragraph in _dump_db.get_paragraphs(title):
         for wiki_link in paragraph.wiki_links:
+            title = _dump_db.resolve_redirect(wiki_link.title)
             text = wiki_link.text.lower()
-            if len(text) > max_mention_len:
-                continue
 
-            ret.append((text, _dump_db.resolve_redirect(wiki_link.title)))
+            titles.add(title)
+            if len(text) <= max_mention_len:
+                links.append((text, title))
 
-    return ret
+    return (links, titles)
 
 
 def _count_occurrences(title, max_mention_len):

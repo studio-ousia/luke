@@ -4,6 +4,7 @@ from collections import Counter
 from marisa_trie import Trie
 from tqdm import tqdm
 
+MASK_TOKEN = '[MASK]'
 UNK_TOKEN = '[UNK]'
 
 
@@ -65,8 +66,6 @@ class WordPieceVocab(Vocab):
         with open(vocab_input) as f:
             return {line.strip(): ind for (ind, line) in enumerate(f)}
 
-BertVocab = WordPieceVocab
-
 
 class EntityVocab(Vocab):
     def __init__(self, vocab_file):
@@ -81,21 +80,22 @@ class EntityVocab(Vocab):
         return vocab
 
     @staticmethod
-    def build_vocab(dump_db, vocab_size, target, out_file, white_list=[]):
+    def build_vocab(wiki_corpus, vocab_size, out_file, white_list=[]):
         counter = Counter()
+        for link in wiki_corpus.iterate_links():
+            counter[link.title] += 1
 
-        for page_title in tqdm(dump_db.titles(), total=dump_db.page_size()):
-            for paragraph in dump_db.get_paragraphs(page_title):
-                if target == 'abstract' and not paragraph.abstract:
-                    continue
-                for link in paragraph.wiki_links:
-                    title = link.title
-                    if title.lower().split(':')[0] in ('image', 'file'):
-                        continue
-                    title = dump_db.resolve_redirect(title)
-                    counter[title] += 1
+        titles = set()
+        for title in white_list:
+            if counter[title] != 0:
+                titles.add(title)
 
-        titles = set([t for (t, _) in counter.most_common(vocab_size - 1)])
-        titles.update(white_list)
+        titles.add(MASK_TOKEN)
+        titles.add(UNK_TOKEN)
+        for (title, _) in counter.most_common():
+            titles.add(title)
+            if len(titles) == vocab_size:
+                break
+
         vocab = Trie(titles)
         vocab.save(out_file)

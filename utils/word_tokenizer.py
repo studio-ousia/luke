@@ -129,5 +129,3 @@ class WordPieceTokenizer(object):
                 output_tokens.extend(tokens)
 
         return output_tokens
-
-BertTokenizer = WordPieceTokenizer

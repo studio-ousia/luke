@@ -9,6 +9,9 @@ class OpenNLPSentenceTokenizer(object):
     def __init__(self):
         self._initialized = False
 
+    def __reduce__(self):
+        return (self.__class__, tuple())
+
     def initialize(self):
         # we need to delay the initialization of Java in order for this class to
         # properly work with multiprocessing

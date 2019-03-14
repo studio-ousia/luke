@@ -5,6 +5,7 @@ import functools
 import json
 import logging
 import multiprocessing
+import os
 import click
 import joblib
 from wikipedia2vec.dump_db import DumpDB
@@ -39,23 +40,9 @@ def build_dump_db(dump_file, out_file, strip_accents, **kwargs):
 @cli.command()
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.argument('out_file', type=click.Path())
-@click.option('--vocab-size', default=1000000)
-@click.option('--target', type=click.Choice(['abstract', 'full']), default='full')
-@click.option('-i', '--include', type=click.File(), multiple=True)
-def build_entity_vocab(dump_db_file, include, **kwargs):
-    from utils.vocab import EntityVocab
-
-    dump_db = DumpDB(dump_db_file)
-    white_list = [line.rstrip() for f in include for line in f]
-    EntityVocab.build_vocab(dump_db, white_list=white_list, **kwargs)
-
-
-@cli.command()
-@click.argument('dump_db_file', type=click.Path(exists=True))
-@click.argument('out_file', type=click.Path())
 @click.option('--min-link-prob', default=0.1)
 @click.option('--max-candidate-size', default=100)
-@click.option('--min-link-count', default=5)
+@click.option('--min-link-count', default=0)
 @click.option('--max-mention-len', default=100)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', default=30)
@@ -73,11 +60,12 @@ def build_mention_db(dump_db_file, out_file, **kwargs):
 @click.argument('word_vocab_file', type=click.Path(exists=True))
 @click.argument('out_file', type=click.Path())
 @click.option('--target', type=click.Choice(['abstract', 'full']), default='full')
-@click.option('--min-prior-prob', default=0.0)
-@click.option('--min-sentence-len', default=10)
 @click.option('--uncased/--cased', default=True)
+@click.option('--min-prior-prob', default=0.1)
+@click.option('--min-sentence-len', default=10)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
-def build_corpus_data(dump_db_file, mention_db_file, word_vocab_file, uncased, **kwargs):
+def build_corpus_data(dump_db_file, mention_db_file, word_vocab_file, uncased, min_prior_prob,
+                      **kwargs):
     from utils.vocab import WordPieceVocab
     from utils.word_tokenizer import WordPieceTokenizer
     from utils.sentence_tokenizer import OpenNLPSentenceTokenizer
@@ -90,74 +78,169 @@ def build_corpus_data(dump_db_file, mention_db_file, word_vocab_file, uncased, *
     sentence_tokenizer = OpenNLPSentenceTokenizer()
 
     mention_db = MentionDB.load(mention_db_file)
-    entity_linker = EntityLinker(mention_db)
+    entity_linker = EntityLinker(mention_db, min_prior_prob)
 
     WikiCorpus.build_corpus_data(dump_db, tokenizer, sentence_tokenizer, entity_linker, **kwargs)
 
 
-def train_options(func):
+@cli.command()
+@click.argument('corpus_data_file', type=click.Path())
+@click.argument('out_file', type=click.Path())
+@click.option('--vocab-size', default=1000000)
+@click.option('-i', '--include', type=click.File(), multiple=True)
+def build_entity_vocab(corpus_data_file, include, **kwargs):
+    from wiki_corpus import WikiCorpus
+    from utils.vocab import EntityVocab
+
+    corpus = WikiCorpus(corpus_data_file)
+    white_list = [line.rstrip() for f in include for line in f]
+    EntityVocab.build_vocab(corpus, white_list=white_list, **kwargs)
+
+
+def common_training_options(func):
     @click.argument('corpus_data_file', type=click.Path())
     @click.argument('entity_vocab_file', type=click.Path(exists=True))
     @click.option('--run-name', type=click.Path(),
-                  default=datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
-    @click.option('--output-dir', type=click.Path(), default='out')
-    @click.option('--log-dir', type=click.Path(), default='log')
+                  default=datetime.datetime.now().strftime('job_%Y%m%d-%H%M%S'))
+    @click.option('--base-output-dir', type=click.Path(), default='out')
+    @click.option('--base-log-dir', type=click.Path(), default='log')
     @click.option('--mmap', is_flag=True)
+    @click.option('--single-sentence/--sentence-pair', is_flag=True)
     @click.option('--batch-size', default=256)  # BERT default=256
-    @click.option('--learning-rate', default=1e-4)  # BERT original=1e-4, recommended for fine-tuning: 2e-5
-    @click.option('--warmup-steps', default=10000)
     @click.option('--gradient-accumulation-steps', default=1)
+    @click.option('--learning-rate', default=1e-4)  # BERT original=1e-4, recommended for fine-tuning: 2e-5
+    @click.option('--lr-decay/--no-lr-decay', default=False)
+    @click.option('--warmup-steps', default=10000)
     @click.option('--max-seq-length', default=512)  # BERT default=512
-    @click.option('--max-entity-length', default=128)
+    @click.option('--max-entity-length', default=256)
     @click.option('--short-seq-prob', default=0.1)
     @click.option('--masked-lm-prob', default=0.15)
     @click.option('--max-predictions-per-seq', default=77)  # 512 * 0.15
     @click.option('--num-train-steps', default=300000)
-    @click.option('--num-page-split', default=100)
+    @click.option('--num-page-chunks', default=200)
+    @click.option('--save-every', default=10000)
     @click.option('--entity-emb-size', default=768)
-    @click.option('--link-prob-bin-size', default=20)
-    @click.option('--prior-prob-bin-size', default=20)
-    @click.option('--mask-title-words/--no-mask-title-words', default=True)
     @click.option('--bert-model-name', default='bert-base-uncased')
-    @click.option('--entity-emb-file', type=click.Path(exists=True), default=None)
-    @click.option('--model-type', default='model')
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
     return wrapper
 
 
-@cli.command(name='train')
-@train_options
-@click.option('-j', '--json-data', default=None)
-def train_(entity_vocab_file, json_data, **kwargs):
-    from utils.vocab import EntityVocab
-    import train
+def run_training_options(func):
+    @click.option('--masked-entity-prob', default=0.15)
+    @click.option('--max-entity-predictions-per-seq', default=38)  # 256 * 0.15
+    @click.option('--update-all-weights', is_flag=True)
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
 
-    entity_vocab = EntityVocab(entity_vocab_file)
-    if json_data is not None:
-        kwargs.update(json.loads(json_data))
 
-    train.train(entity_vocab=entity_vocab, **kwargs)
+def run_e2e_training_options(func):
+    @click.option('--link-prob-bin-size', default=20)
+    @click.option('--prior-prob-bin-size', default=20)
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
 
 
 @cli.command()
-@click.argument('data_file', type=click.Path())
-@click.option('--batch-size', default=None, type=int)
-@click.option('--gradient-accumulation-steps', default=None, type=int)
-def resume_training(data_file, batch_size, gradient_accumulation_steps):
+@common_training_options
+@run_training_options
+@click.option('-j', '--json-data', default=None)
+def run_training(json_data, **kwargs):
     import train
+    _run_training(train.run_training, json_data, **kwargs)
 
-    args = joblib.load(data_file)
-    args['model_file'] = data_file.replace('.pkl', '.bin').replace('data', 'model')
-    args['optimizer_file'] = data_file.replace('.pkl', '.bin').replace('data', 'optimizer')
 
-    if batch_size is not None:
-        args['batch_size'] = batch_size
-    if gradient_accumulation_steps is not None:
-        args['gradient_accumulation_steps'] = gradient_accumulation_steps
+@cli.command()
+@common_training_options
+@run_e2e_training_options
+@click.option('-j', '--json-data', default=None)
+def run_e2e_training(json_data, **kwargs):
+    import train
+    _run_training(train.run_e2e_training, json_data, **kwargs)
 
-    train.train(**args)
+
+def _run_training(train_func, json_data, **kwargs):
+    if json_data is not None:
+        kwargs.update(json.loads(json_data))
+
+    run_name = kwargs.pop('run_name')
+    output_dir = os.path.join(kwargs.pop('base_output_dir'), run_name)
+    kwargs['output_dir'] = output_dir
+    os.makedirs(output_dir, exist_ok=True)
+
+    log_dir = os.path.join(kwargs.pop('base_log_dir'), run_name)
+    kwargs['log_dir'] = log_dir
+    os.makedirs(log_dir, exist_ok=True)
+
+    train_func(**kwargs)
+
+
+def resume_training_options(func):
+    @click.argument('output_dir', type=click.Path())
+    @click.option('--global-step', default=None, type=int)
+    @click.option('--batch-size', default=None, type=int)
+    @click.option('--gradient-accumulation-steps', default=None, type=int)
+    @click.option('--learning-rate', default=None, type=float)
+    @click.option('--lr-decay/--no-lr-decay', default=None)
+    @click.option('--num-train-steps', default=None, type=int)
+    @click.option('--save-every', default=None, type=int)
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+
+
+@cli.command()
+@resume_training_options
+@click.option('-j', '--json-data', default=None)
+def resume_training(json_data, **kwargs):
+    import train
+    _resume_training(train.run_training, json_data, **kwargs)
+
+
+@cli.command()
+@resume_training_options
+@click.option('-j', '--json-data', default=None)
+def resume_e2e_training(json_data, **kwargs):
+    import train
+    _resume_training(train.run_e2e_training, json_data, **kwargs)
+
+
+def _resume_training(train_func, json_data, output_dir, global_step, **kwargs):
+    if json_data is not None:
+        kwargs.update(json.loads(json_data))
+
+    if global_step is None:
+        # get the latest data file
+        data_file = sorted([f for f in os.listdir(output_dir) if f.startswith('data_')])[-1]
+        global_step = int(data_file.replace('data_step', '').replace('.pkl', ''))
+    else:
+        data_file = 'data_step%07d.pkl' % global_step
+
+    data = joblib.load(os.path.join(output_dir, data_file))
+
+    args = data['args']
+    args['global_step'] = data['global_step']
+    args['page_chunks'] = data['page_chunks']
+
+    model_file = data_file.replace('.pkl', '.bin').replace('data', 'model')
+    args['model_file'] = os.path.join(output_dir, model_file)
+    optimizer_file = data_file.replace('.pkl', '.bin').replace('data', 'optimizer')
+    args['optimizer_file'] = os.path.join(output_dir, optimizer_file)
+    sparse_optimizer_file = data_file.replace('.pkl', '.bin').replace('data', 'sparse_optimizer')
+    if os.path.exists(sparse_optimizer_file):
+        args['sparse_optimizer_file'] = os.path.join(output_dir, sparse_optimizer_file)
+
+    for (key, value) in kwargs.items():
+        if value is not None:
+            args[key] = value
+
+    train_func(**args)
 
 
 def task_common_options(func):

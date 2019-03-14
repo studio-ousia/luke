@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import gc
-import importlib
+import inspect
 import logging
 import os
 import time
@@ -11,112 +11,97 @@ import torch
 from pytorch_pretrained_bert.modeling import BertForPreTraining
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-from wikipedia2vec import Wikipedia2Vec
 
-from optimization import BertAdam
+from batch_generator import LukeBatchGenerator, LukeE2EBatchGenerator
+from model_common import LayerNorm
+from model import LukeConfig, LukePretrainingModel
+from model_e2e import LukeE2EConfig, LukeE2EPretrainingModel
+from optimization import BertAdam, SparseBertAdam
+from utils.vocab import EntityVocab
 from wiki_corpus import WikiCorpus
-from .batch_generator import BatchGenerator
 
 logger = logging.getLogger(__name__)
 
 
-def train(corpus_data_file, entity_vocab, run_name, output_dir, log_dir, mmap, batch_size,
-          learning_rate, warmup_steps, gradient_accumulation_steps, max_seq_length,
-          max_entity_length, short_seq_prob, masked_lm_prob, max_predictions_per_seq,
-          num_train_steps, num_page_split, entity_emb_size, link_prob_bin_size, prior_prob_bin_size,
-          mask_title_words, bert_model_name, entity_emb_file, global_step=0, page_indices_list=[],
-          model_file=None, optimizer_file=None, model_type='model', **kwargs):
-    train_args = locals()
+def run_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, batch_size,
+    gradient_accumulation_steps, max_seq_length, max_entity_length, short_seq_prob, masked_lm_prob,
+    max_predictions_per_seq, masked_entity_prob, max_entity_predictions_per_seq, update_all_weights,
+    entity_emb_size, bert_model_name, model_file=None, **train_kwargs):
+    train_args = train_kwargs.copy()
+    for arg in inspect.getfullargspec(run_training).args:
+        train_args[arg] = locals()[arg]
+    # logger.info('Arguments: %s', json.dumps(train_args, indent=2, sort_keys=True))
 
-    model_module = importlib.import_module(model_type)
-    LukeConfig = getattr(model_module, 'LukeConfig')
-    LukeModel = getattr(model_module, 'LukeModel')
-    LayerNorm = getattr(model_module, 'LayerNorm')
-
-    logger.info('run name: %s', run_name)
-
-    device = torch.device('cuda:0')
-    n_gpu = torch.cuda.device_count()
-
-    logger.info('device: {} n_gpu: {}'.format(device, n_gpu))
-
-    batch_size = int(batch_size / gradient_accumulation_steps)
-
+    entity_vocab = EntityVocab(entity_vocab_file)
     bert_model = BertForPreTraining.from_pretrained(bert_model_name)
-    logger.info('loaded BERT model: %s', bert_model_name)
-
     config = LukeConfig(entity_vocab_size=entity_vocab.size,
                         entity_emb_size=entity_emb_size,
-                        link_prob_bin_size=link_prob_bin_size,
-                        prior_prob_bin_size=prior_prob_bin_size,
                         **bert_model.config.to_dict())
 
     logger.info('Model configuration: %s', config)
-    model = LukeModel(config)
-
+    model = LukePretrainingModel(config)
     if model_file is None:
         model.load_bert_weights(bert_model.state_dict())
-        if entity_emb_file is not None:
-            entity_emb = Wikipedia2Vec.load(entity_emb_file)
-            entity_emb_weights = model.entity_embeddings.entity_embeddings.weight.data.numpy()
-            for title in entity_vocab:
-                try:
-                    vec = entity_emb.get_entity_vector(title)
-                    entity_emb_weights[entity_vocab[title]] = vec
-                except KeyError:
-                    pass
-            entity_emb_weights = torch.nn.Parameter(torch.FloatTensor(entity_emb_weights))
-            model.entity_embeddings.entity_embeddings.weight = entity_emb_weights
-
     else:
         model.load_state_dict(torch.load(model_file, map_location='cpu'))
 
     del bert_model
 
-    if n_gpu > 1:
-        model = torch.nn.DataParallel(model, device_ids=list(range(0, n_gpu - 1)))
+    if not update_all_weights:
+        for param in model.parameters():
+            param.requires_grad = False
+        for param in model.entity_embeddings.parameters():
+            param.requires_grad = True
+        for param in model.entity_predictions.parameters():
+            param.requires_grad = True
 
-    model.to(device)
-    model.train()
-
-    parameters = {'params': [], 'weight_decay': 0.01}
-    no_decay_parameters = {'params': [], 'weight_decay': 0.0}
-
-    for module in model.modules():
-        if isinstance(module, LayerNorm):
-            no_decay_parameters['params'].extend(
-                [p for p in module.parameters(recurse=False) if p.requires_grad])
-        else:
-            for (name, param) in module.named_parameters(recurse=False):
-                if not param.requires_grad:
-                    continue
-                if 'bias' in name:
-                    no_decay_parameters['params'].append(param)
-                else:
-                    parameters['params'].append(param)
-
-    warmup_proportion = warmup_steps / num_train_steps
-
-    opt_device = torch.device('cuda:' + str(n_gpu - 1))
-
-    optimizer = BertAdam([parameters, no_decay_parameters], lr=learning_rate, device=opt_device,
-                         warmup=warmup_proportion, t_total=num_train_steps)
-
-    if optimizer_file is not None:
-        optimizer.load_state_dict(torch.load(optimizer_file, map_location='cpu'))
-
-    run_output_dir = os.path.join(output_dir, run_name)
-    os.makedirs(run_output_dir, exist_ok=True)
-    run_log_dir = os.path.join(log_dir, run_name)
-    os.makedirs(run_log_dir, exist_ok=True)
-
-    page_size = WikiCorpus(corpus_data_file, mmap_mode='r').page_size
-
-    logger.info("***** Running training *****")
-    batch_generator = BatchGenerator(
+    batch_generator = LukeBatchGenerator(
         corpus_data_file=corpus_data_file,
         entity_vocab=entity_vocab,
-        batch_size=batch_size,
+        batch_size=batch_size / gradient_accumulation_steps,
+        max_seq_length=max_seq_length,
+        max_entity_length=max_entity_length,
+        short_seq_prob=short_seq_prob,
+        masked_lm_prob=masked_lm_prob,
+        max_predictions_per_seq=max_predictions_per_seq,
+        masked_entity_prob=masked_entity_prob,
+        max_entity_predictions_per_seq=max_entity_predictions_per_seq,
+        single_sentence=single_sentence,
+        mmap=mmap)
+
+    _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
+           **train_kwargs)
+
+
+def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, batch_size,
+    gradient_accumulation_steps, max_seq_length, max_entity_length, short_seq_prob, masked_lm_prob,
+    max_predictions_per_seq, link_prob_bin_size, prior_prob_bin_size, entity_emb_size,
+    bert_model_name, model_file=None, **train_kwargs):
+    train_args = train_kwargs.copy()
+    for arg in inspect.getfullargspec(run_e2e_training).args:
+        train_args[arg] = locals()[arg]
+
+    entity_vocab = EntityVocab(entity_vocab_file)
+    bert_model = BertForPreTraining.from_pretrained(bert_model_name)
+    config = LukeE2EConfig(entity_vocab_size=entity_vocab.size,
+                           entity_emb_size=entity_emb_size,
+                           link_prob_bin_size=link_prob_bin_size,
+                           prior_prob_bin_size=prior_prob_bin_size,
+                           **bert_model.config.to_dict())
+
+    logger.info('Model configuration: %s', config)
+    model = LukeE2EPretrainingModel(config)
+    if model_file is None:
+        model.load_bert_weights(bert_model.state_dict())
+    else:
+        model.load_state_dict(torch.load(model_file, map_location='cpu'))
+
+    del bert_model
+
+    batch_generator = LukeE2EBatchGenerator(
+        corpus_data_file=corpus_data_file,
+        entity_vocab=entity_vocab,
+        batch_size=batch_size / gradient_accumulation_steps,
         max_seq_length=max_seq_length,
         max_entity_length=max_entity_length,
         short_seq_prob=short_seq_prob,
@@ -124,34 +109,102 @@ def train(corpus_data_file, entity_vocab, run_name, output_dir, log_dir, mmap, b
         max_predictions_per_seq=max_predictions_per_seq,
         link_prob_bin_size=link_prob_bin_size,
         prior_prob_bin_size=prior_prob_bin_size,
-        mask_title_words=mask_title_words,
+        single_sentence=single_sentence,
         mmap=mmap)
 
-    summary_writer = SummaryWriter(run_log_dir)
-    pbar = tqdm(total=num_train_steps, initial=global_step)
+    _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
+           **train_kwargs)
+
+
+def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
+           output_dir, log_dir, learning_rate, lr_decay, warmup_steps, num_train_steps,
+           num_page_chunks, save_every, global_step=0, page_chunks=[], optimizer_file=None,
+           sparse_optimizer_file=None):
+    device = torch.device('cuda:0')
+    n_gpu = torch.cuda.device_count()
+
+    model.to(device)
+    if n_gpu > 1:
+        model = torch.nn.DataParallel(model, device_ids=list(range(0, n_gpu - 1)))
+
+    parameters = {'params': [], 'weight_decay': 0.01}
+    sparse_parameters = {'params': [], 'weight_decay': 0.01}
+    no_decay_parameters = {'params': [], 'weight_decay': 0.0}
+
+    for module in model.modules():
+        if isinstance(module, torch.nn.Embedding) and module.sparse:
+            sparse_parameters['params'].extend(
+                [p for p in module.parameters(recurse=False) if p.requires_grad])
+        elif isinstance(module, LayerNorm):
+            no_decay_parameters['params'].extend(
+                [p for p in module.parameters(recurse=False) if p.requires_grad])
+        else:
+            for (name, param) in module.named_parameters(recurse=False):
+                if param.requires_grad:
+                    if 'bias' in name:
+                        no_decay_parameters['params'].append(param)
+                    else:
+                        parameters['params'].append(param)
+
+    warmup_proportion = warmup_steps / num_train_steps
+    optimizer_device = torch.device('cuda:' + str(n_gpu - 1))
+
+    optimizer = BertAdam([parameters, no_decay_parameters], lr=learning_rate, lr_decay=lr_decay,
+                         device=optimizer_device, warmup=warmup_proportion, t_total=num_train_steps)
+    if optimizer_file is not None:
+        optimizer.load_state_dict(torch.load(optimizer_file, map_location='cpu'))
+
+    if sparse_parameters['params']:
+        sparse_optimizer = SparseBertAdam([sparse_parameters], lr=learning_rate, lr_decay=lr_decay,
+                                          device=optimizer_device, warmup=warmup_proportion,
+                                          t_total=num_train_steps)
+        if sparse_optimizer_file is not None:
+            sparse_optimizer.load_state_dict(torch.load(sparse_optimizer_file, map_location='cpu'))
+    else:
+        sparse_optimizer = None
 
     gc.collect()
     torch.cuda.empty_cache()
 
+    model.train()
+
+    def save_model(model, suffix, global_step, page_chunks):
+        if n_gpu > 1:
+            torch.save(model.module.state_dict(), os.path.join(output_dir, 'model_%s.bin' % suffix))
+        else:
+            torch.save(model.state_dict(), os.path.join(output_dir, 'model_%s.bin' % suffix))
+
+        optimizer_file = 'optimizer_%s.bin' % suffix
+        torch.save(optimizer.state_dict(), os.path.join(output_dir, optimizer_file))
+
+        if sparse_optimizer is not None:
+            sparse_optimizer_file = 'sparse_optimizer_%s.bin' % suffix
+            torch.save(sparse_optimizer.state_dict(),
+                       os.path.join(output_dir, sparse_optimizer_file))
+
+        data = {}
+        data['args'] = train_args
+        data['global_step'] = global_step
+        data['page_chunks'] = page_chunks
+        data['config'] = model.config.to_dict()
+        joblib.dump(data, os.path.join(output_dir, 'data_%s.pkl' % suffix))
+
+    page_size = WikiCorpus(corpus_data_file, mmap_mode='r').page_size
+    summary_writer = SummaryWriter(log_dir)
+    pbar = tqdm(total=num_train_steps, initial=global_step)
+
     while True:
-        if not page_indices_list:
-            page_indices_list = np.array_split(np.random.permutation(page_size), num_page_split)
-        page_indices = page_indices_list.pop()
+        if not page_chunks:
+            logger.info('Creating new page chunks (step %d)', global_step)
+            page_chunks = np.array_split(np.random.permutation(page_size), num_page_chunks)
+
+        page_indices = page_chunks.pop()
 
         tr_loss = 0
         results = []
         prev_time = time.time()
 
-        # suffix = 'step%07d' % (global_step,)
-        # torch.save(model.module.state_dict(),
-        #             os.path.join(run_output_dir, 'model_%s.bin' % suffix))
-        # data = train_args
-        # data['global_step'] = global_step
-        # data['page_indices_list'] = page_indices_list
-        # joblib.dump(data, os.path.join(run_output_dir, 'data_%s.pkl' % suffix))
-
-        for (step, batch) in enumerate(batch_generator.generate_batches(
-            page_indices=page_indices)):
+        for (step, batch) in enumerate(batch_generator.generate_batches(page_indices=page_indices)):
             batch = {k: torch.from_numpy(v).to(device) for (k, v) in batch.items()}
             result = model(**batch)
             results.append(result)
@@ -165,14 +218,18 @@ def train(corpus_data_file, entity_vocab, run_name, output_dir, log_dir, mmap, b
                 loss = loss / gradient_accumulation_steps
 
             loss.backward()
-
             tr_loss += loss.item()
+
             if (step + 1) % gradient_accumulation_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad()
+                if sparse_optimizer is not None:
+                    sparse_optimizer.step()
+                    sparse_optimizer.zero_grad()
 
                 summary = {}
                 summary['learning_rate'] = optimizer.get_lr()[0]
+
                 summary['loss'] = tr_loss
                 tr_loss = 0
 
@@ -180,7 +237,7 @@ def train(corpus_data_file, entity_vocab, run_name, output_dir, log_dir, mmap, b
                 summary['batch_run_time'] = current_time - prev_time
                 prev_time = current_time
 
-                for name in ('masked_lm', 'nsp', 'entity', 'page_entity'):
+                for name in ('masked_lm', 'nsp', 'entity', 'masked_entity'):
                     try:
                         summary[name + '_loss'] = torch.cat(
                             [r[name + '_loss'].view(-1) for r in results]).mean().item()
@@ -204,24 +261,10 @@ def train(corpus_data_file, entity_vocab, run_name, output_dir, log_dir, mmap, b
                 global_step += 1
                 pbar.update(1)
 
-        logger.info('saving the model to %s', run_output_dir)
-        suffix = 'step%07d' % (global_step,)
+                if global_step % save_every == 0:
+                    save_model(model, 'step%07d' % (global_step,), global_step, page_chunks)
 
-        if n_gpu > 1:
-            torch.save(model.module.state_dict(),
-                        os.path.join(run_output_dir, 'model_%s.bin' % suffix))
-        else:
-            torch.save(model.state_dict(),
-                        os.path.join(run_output_dir, 'model_%s.bin' % suffix))
-
-        optimizer_file = 'optimizer_%s.bin' % suffix
-        torch.save(optimizer.state_dict(), os.path.join(run_output_dir, optimizer_file))
-
-        data = train_args
-        data['global_step'] = global_step
-        data['page_indices_list'] = page_indices_list
-        joblib.dump(data, os.path.join(run_output_dir, 'data_%s.pkl' % suffix))
-
+        save_model(model, 'step%07d' % (global_step,), global_step, page_chunks)
         if global_step == num_train_steps:
             break
 

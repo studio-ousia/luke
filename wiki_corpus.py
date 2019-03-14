@@ -1,21 +1,18 @@
 # -*- coding: utf-8 -*-
 
-import os
 import random
 from multiprocessing.pool import Pool
 import joblib
 import numpy as np
 from marisa_trie import Trie
-from stemming.porter2 import stem
 from tqdm import tqdm
 
 
 class Word(object):
-    __slots__ = ('id', 'in_title', '_vocab')
+    __slots__ = ('id', '_vocab')
 
-    def __init__(self, id_, in_title, vocab):
+    def __init__(self, id_, vocab):
         self.id = id_
-        self.in_title = in_title
         self._vocab = vocab
 
     @property
@@ -104,29 +101,24 @@ class WikiCorpus(object):
 
         if mmap_mode is None:
             self._word_arr = np.fromfile(corpus_file + '_word.bin', dtype=np.uint32)
-            self._in_title_arr = np.fromfile(corpus_file + '_intitle.bin', dtype=np.bool)
+            self._link_arr = np.fromfile(corpus_file + '_link.bin', dtype=np.uint32)
             self._mention_arr = np.fromfile(corpus_file + '_mention.bin', dtype=np.int32)
-            if os.path.exists(corpus_file + '_link.bin'):
-                self._link_arr = np.fromfile(corpus_file + '_link.bin', dtype=np.uint32)
         else:
             self._word_arr = np.memmap(corpus_file + '_word.bin', dtype=np.uint32, mode=mmap_mode)
-            self._in_title_arr = np.memmap(corpus_file + '_intitle.bin', dtype=np.bool,
-                                           mode=mmap_mode)
+            self._link_arr = np.memmap(corpus_file + '_link.bin', dtype=np.uint32, mode=mmap_mode)
             self._mention_arr = np.memmap(corpus_file + '_mention.bin', dtype=np.int32,
                                           mode=mmap_mode)
-            if os.path.exists(corpus_file + '_link.bin'):
-                self._link_arr = np.memmap(corpus_file + '_link.bin', dtype=np.uint32,
-                                           mode=mmap_mode)
 
         meta = joblib.load(corpus_file + '_meta.pkl', mmap_mode=mmap_mode)
 
         self.tokenizer = meta['tokenizer']
         self.entity_linker = meta['entity_linker']
+        self.sentence_tokenizer = meta['sentence_tokenizer']
         self.word_vocab = self.tokenizer.vocab
         self.title_vocab = meta['title_vocab']
 
         self._word_offsets = meta['word_offsets']
-        self._link_offsets = meta.get('link_offsets')
+        self._link_offsets = meta['link_offsets']
         self._mention_offsets = meta['mention_offsets']
         self._page_ids = meta['page_ids']
         self._page_offsets = meta['page_offsets']
@@ -138,6 +130,11 @@ class WikiCorpus(object):
     @property
     def word_size(self):
         return self._word_arr.shape[0]
+
+    def iterate_links(self):
+        for index in range(0, self._link_arr.size, 3):
+            yield Link(self.title_vocab.restore_key(self._link_arr[index]),
+                       *self._link_arr[index+1:index+3])
 
     def iterate_pages(self, page_indices=None, shuffle=True):
         if page_indices is None:
@@ -164,14 +161,11 @@ class WikiCorpus(object):
 
     def _read_sentence(self, index):
         word_ids = self._word_arr[self._word_offsets[index]:self._word_offsets[index+1]]
-        in_title_flags = self._in_title_arr[self._word_offsets[index]:self._word_offsets[index+1]]
-        words = [Word(i, t, self.word_vocab) for (i, t) in zip(word_ids, in_title_flags)]
+        words = [Word(i, self.word_vocab) for i in word_ids]
 
-        links = []
-        if self._link_arr is not None:
-            link_data = self._link_arr[self._link_offsets[index]:self._link_offsets[index+1]]
-            links = [Link(self.title_vocab.restore_key(link_data[i]), *link_data[i+1:i+3])
-                     for i in range(0, link_data.size, 3)]
+        link_data = self._link_arr[self._link_offsets[index]:self._link_offsets[index+1]]
+        links = [Link(self.title_vocab.restore_key(link_data[i]), *link_data[i+1:i+3])
+                 for i in range(0, link_data.size, 3)]
 
         mention_data = self._mention_arr[self._mention_offsets[index]:self._mention_offsets[index+1]]
         mentions = []
@@ -186,7 +180,7 @@ class WikiCorpus(object):
 
     @staticmethod
     def build_corpus_data(dump_db, tokenizer, sentence_tokenizer, entity_linker, out_file, target,
-                          min_prior_prob, min_sentence_len, pool_size):
+                          min_sentence_len, pool_size):
         word_offsets = [0]
         link_offsets = [0]
         mention_offsets = [0]
@@ -197,23 +191,25 @@ class WikiCorpus(object):
         link_offset = 0
         mention_offset = 0
 
-        title_vocab = Trie(dump_db.titles())
+        target_titles = [
+            title for title in dump_db.titles()
+            if not (':' in title and title.lower().split(':')[0] in ('image', 'file', 'category'))
+        ]
+        title_vocab = Trie(target_titles)
 
         try:
             word_file = open(out_file + '_word.bin', mode='wb')
-            in_title_file = open(out_file + '_intitle.bin', mode='wb')
             link_file = open(out_file + '_link.bin', mode='wb')
             mention_file = open(out_file + '_mention.bin', mode='wb')
 
-            with tqdm(total=dump_db.page_size()) as bar:
+            with tqdm(total=len(target_titles)) as bar:
                 with Pool(pool_size, initializer=_init_worker, initargs=(dump_db, title_vocab,
-                    tokenizer, sentence_tokenizer, entity_linker, target, min_prior_prob,
+                    tokenizer, sentence_tokenizer, entity_linker, target,
                     min_sentence_len)) as pool:
-                    for (page_id, data) in pool.imap(_process_page, dump_db.titles()):
+                    for (page_id, data) in pool.imap(_process_page, target_titles):
                         if data:
-                            for (word_arr, in_title_arr, link_arr, mention_arr) in data:
+                            for (word_arr, link_arr, mention_arr) in data:
                                 word_file.write(word_arr.tobytes())
-                                in_title_file.write(in_title_arr.tobytes())
                                 word_offset += word_arr.size
                                 word_offsets.append(word_offset)
 
@@ -232,7 +228,6 @@ class WikiCorpus(object):
 
         finally:
             word_file.close()
-            in_title_file.close()
             link_file.close()
             mention_file.close()
 
@@ -243,9 +238,10 @@ class WikiCorpus(object):
         page_offsets = np.array(page_offsets, dtype=np.uint32)
 
         joblib.dump(dict(
-            title_vocab=title_vocab,
             tokenizer=tokenizer,
+            sentence_tokenizer=sentence_tokenizer,
             entity_linker=entity_linker,
+            title_vocab=title_vocab,
             word_offsets=word_offsets,
             link_offsets=link_offsets,
             mention_offsets=mention_offsets,
@@ -260,14 +256,13 @@ _tokenizer = None
 _sentence_tokenizer = None
 _entity_linker = None
 _target = None
-_min_prior_prob = None
 _min_sentence_len = None
 
 
 def _init_worker(dump_db, title_vocab, tokenizer, sentence_tokenizer, entity_linker,
-                 target, min_prior_prob, min_sentence_len):
-    global _dump_db, _title_vocab, _tokenizer, _sentence_tokenizer,\
-        _entity_linker, _target, _min_prior_prob, _min_sentence_len
+                 target, min_sentence_len):
+    global _dump_db, _title_vocab, _tokenizer, _sentence_tokenizer, _entity_linker, _target,\
+        _min_sentence_len
 
     _dump_db = dump_db
     _title_vocab = title_vocab
@@ -275,42 +270,30 @@ def _init_worker(dump_db, title_vocab, tokenizer, sentence_tokenizer, entity_lin
     _sentence_tokenizer = sentence_tokenizer
     _entity_linker = entity_linker
     _target = target
-    _min_prior_prob = min_prior_prob
     _min_sentence_len = min_sentence_len
 
 
 def _process_page(page_title):
     data = []
-    title_words = frozenset([stem(t.text.lower())
-                             for t in _tokenizer.basic_tokenizer.tokenize(page_title)])
 
     for paragraph in _dump_db.get_paragraphs(page_title):
         if _target == 'abstract' and not paragraph.abstract:
             continue
 
-        paragraph_text = paragraph.text
         paragraph_links = []
         for link in paragraph.wiki_links:
             link_title = _dump_db.resolve_redirect(link.title)
             if link_title in _title_vocab:
                 paragraph_links.append((link_title, link.span))
 
-        for (sent_start, sent_end) in _sentence_tokenizer.span_tokenize(paragraph_text):
-            sent_text = paragraph_text[sent_start:sent_end]
+        for (sent_start, sent_end) in _sentence_tokenizer.span_tokenize(paragraph.text):
+            sent_text = paragraph.text[sent_start:sent_end]
 
             if len(sent_text.split()) < _min_sentence_len:
                 continue
 
-            word_tokens = _tokenizer.basic_tokenizer.tokenize(sent_text)
-            in_title_map = np.full(len(sent_text), 0)
-            for token in word_tokens:
-                if len(token.text) >= 3 and stem(token.text.lower()) in title_words:
-                    in_title_map[token.start:token.end] = 1
-
-            tokens = _tokenizer.tokenize(word_tokens)
-
+            tokens = _tokenizer.tokenize(sent_text)
             word_arr = np.array([t.id for t in tokens], dtype=np.uint32)
-            in_title_arr = np.array([in_title_map[t.start] for t in tokens], dtype=np.bool)
 
             token_start_map = np.full(len(sent_text), -1)
             token_end_map = np.full(len(sent_text), -1)
@@ -365,8 +348,6 @@ def _process_page(page_title):
                 for (rank, (mention, title_id)) in enumerate(zip(mentions, title_ids)):
                     if title_id is None:
                         continue
-                    if mention.prior_prob <= _min_prior_prob:
-                        continue
 
                     if is_gold_mention:
                         label = int(title_id == gold_title_id)
@@ -377,10 +358,10 @@ def _process_page(page_title):
                     prior_prob = int(mention.prior_prob * 100)
 
                     detected_mentions.extend([title_id, token_start, token_end, link_prob,
-                                              prior_prob, rank, label])
+                                                prior_prob, rank, label])
 
             link_arr = np.array(links, dtype=np.uint32)
             mention_arr = np.array(detected_mentions, dtype=np.int32)
-            data.append((word_arr, in_title_arr, link_arr, mention_arr))
+            data.append((word_arr, link_arr, mention_arr))
 
     return (_title_vocab[page_title], data)
