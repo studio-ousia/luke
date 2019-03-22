@@ -171,8 +171,10 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
     def save_model(model, suffix, global_step, page_chunks):
         if n_gpu > 1:
             torch.save(model.module.state_dict(), os.path.join(output_dir, 'model_%s.bin' % suffix))
+            config_dict = model.module.config.to_dict()
         else:
             torch.save(model.state_dict(), os.path.join(output_dir, 'model_%s.bin' % suffix))
+            config_dict = model.config.to_dict()
 
         optimizer_file = 'optimizer_%s.bin' % suffix
         torch.save(optimizer.state_dict(), os.path.join(output_dir, optimizer_file))
@@ -186,7 +188,7 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
         data['args'] = train_args
         data['global_step'] = global_step
         data['page_chunks'] = page_chunks
-        data['config'] = model.config.to_dict()
+        data['config'] = config_dict
         joblib.dump(data, os.path.join(output_dir, 'data_%s.pkl' % suffix))
 
     page_size = WikiCorpus(corpus_data_file, mmap_mode='r').page_size
@@ -200,32 +202,48 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
 
         page_indices = page_chunks.pop()
 
+        step = 0
         tr_loss = 0
         results = []
         prev_time = time.time()
 
-        for (step, batch) in enumerate(batch_generator.generate_batches(page_indices=page_indices)):
-            batch = {k: torch.from_numpy(v).to(device) for (k, v) in batch.items()}
-            result = model(**batch)
+        for batch in batch_generator.generate_batches(page_indices=page_indices):
+            try:
+                batch = {k: torch.from_numpy(v).to(device) for (k, v) in batch.items()}
+                result = model(**batch)
+                loss = result['loss']
+                result = {k: v.cpu().detach().numpy() for (k, v) in result.items()}
+
+                if n_gpu > 1:
+                    loss = loss.mean()
+
+                if gradient_accumulation_steps > 1:
+                    loss = loss / gradient_accumulation_steps
+
+                loss.backward()
+
+            except RuntimeError as e:
+                if 'out of memory' in str(e):
+                    logger.exception('Out of memory error has occurred. Skipping a batch...')
+                    loss = None
+                    gc.collect()
+                    torch.cuda.empty_cache()
+                    continue
+                else:
+                    raise
+
+            step += 1
+            tr_loss += loss.item()
             results.append(result)
 
-            loss = result['loss']
-
-            if n_gpu > 1:
-                loss = loss.mean()
-
-            if gradient_accumulation_steps > 1:
-                loss = loss / gradient_accumulation_steps
-
-            loss.backward()
-            tr_loss += loss.item()
-
-            if (step + 1) % gradient_accumulation_steps == 0:
+            if step == gradient_accumulation_steps:
                 optimizer.step()
                 optimizer.zero_grad()
                 if sparse_optimizer is not None:
                     sparse_optimizer.step()
                     sparse_optimizer.zero_grad()
+
+                step = 0
 
                 summary = {}
                 summary['learning_rate'] = optimizer.get_lr()[0]
@@ -239,12 +257,12 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
 
                 for name in ('masked_lm', 'nsp', 'entity', 'masked_entity'):
                     try:
-                        summary[name + '_loss'] = torch.cat(
-                            [r[name + '_loss'].view(-1) for r in results]).mean().item()
-                        correct = torch.cat(
-                            [r[name + '_correct'].view(-1) for r in results]).sum().item()
-                        total = torch.cat(
-                            [r[name + '_total'].view(-1) for r in results]).sum().item()
+                        summary[name + '_loss'] = np.concatenate(
+                            [r[name + '_loss'].flatten() for r in results]).mean()
+                        correct = np.concatenate(
+                            [r[name + '_correct'].flatten() for r in results]).sum()
+                        total = np.concatenate(
+                            [r[name + '_total'].flatten() for r in results]).sum()
                         if total > 0:
                             summary[name + '_acc'] = correct / total
                     except KeyError:
