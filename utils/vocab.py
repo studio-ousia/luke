@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
-from collections import Counter
-from marisa_trie import Trie
+from collections import Counter, OrderedDict
+from marisa_trie import Trie, RecordTrie
 from tqdm import tqdm
 
-MASK_TOKEN = '[MASK]'
+PAD_TOKEN = '[PAD]'
 UNK_TOKEN = '[UNK]'
+MASK_TOKEN = '[MASK]'
 
 
 class Vocab(object):
@@ -41,7 +42,6 @@ class Vocab(object):
 class WordPieceVocab(Vocab):
     def __init__(self, vocab_file):
         super(WordPieceVocab, self).__init__(vocab_file)
-
         self.inv_vocab = {v: k for k, v in self.vocab.items()}
 
         self._word_trie = Trie(w for w in self.vocab.keys() if not w.startswith('##'))
@@ -71,11 +71,19 @@ class EntityVocab(Vocab):
     def __init__(self, vocab_file):
         super(EntityVocab, self).__init__(vocab_file)
 
+        self.inv_vocab = {v[0]: k for k, v in self.vocab.items()}
+
+    def __reduce__(self):
+        return (self.__class__, (self.vocab,))
+
+    def __getitem__(self, key):
+        return self.vocab[key][0][0]
+
     def get_title_by_id(self, id_):
-        return self.vocab.restore_key(id_)
+        return self.inv_vocab[id_]
 
     def _load_vocab(self, vocab_input):
-        vocab = Trie()
+        vocab = RecordTrie('II')
         vocab.load(vocab_input)
         return vocab
 
@@ -85,17 +93,23 @@ class EntityVocab(Vocab):
         for link in wiki_corpus.iterate_links():
             counter[link.title] += 1
 
-        titles = set()
+        title_dict = OrderedDict()
+        title_dict[PAD_TOKEN] = 0
+        title_dict[UNK_TOKEN] = 0
+        title_dict[MASK_TOKEN] = 0
+
         for title in white_list:
             if counter[title] != 0:
-                titles.add(title)
+                title_dict[title] = counter[title]
 
-        titles.add(MASK_TOKEN)
-        titles.add(UNK_TOKEN)
-        for (title, _) in counter.most_common():
-            titles.add(title)
-            if len(titles) == vocab_size:
+        for (title, count) in counter.most_common():
+            title_dict[title] = count
+            if len(title_dict) == vocab_size:
                 break
 
-        vocab = Trie(titles)
+        def item_generator():
+            for (ind, (title, count)) in enumerate(title_dict.items()):
+                yield (title, (ind, count))
+
+        vocab = RecordTrie('II', item_generator())
         vocab.save(out_file)
