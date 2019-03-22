@@ -131,6 +131,7 @@ def run_training_options(func):
     @click.option('--masked-entity-prob', default=0.15)
     @click.option('--max-entity-predictions-per-seq', default=38)  # 256 * 0.15
     @click.option('--update-all-weights', is_flag=True)
+    @click.option('--model-file', type=click.Path(exists=True), default=None)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -245,33 +246,47 @@ def _resume_training(train_func, json_data, output_dir, global_step, **kwargs):
 
 def task_common_options(func):
     @click.argument('model_file', type=click.Path(exists=True))
-    @click.argument('word_vocab_file', type=click.Path(exists=True))
-    @click.argument('mention_db_file', type=click.Path(exists=True))
     @click.option('--output-dir', type=click.Path())
     @click.option('--data-dir', type=click.Path(exists=True), default='data')
-    @click.option('--uncased/--cased', default=True)
     @click.option('--max-seq-length', default=512)
-    @click.option('--max-entity-length', default=128)
-    @click.option('--min-prior-prob', default=[0.1, 0.3, 0.9], type=float, multiple=True)
-    @click.option('--batch-size', default=[32], type=int, multiple=True)
-    @click.option('--learning-rate', default=[2e-5, 3e-5, 5e-5], type=float, multiple=True)
-    @click.option('--iteration', default=[4.0], type=float, multiple=True)
+    @click.option('--batch-size', default=32)
+    @click.option('--learning-rate', default=3e-5)
+    @click.option('--iteration', default=4.0)
     @click.option('--eval-batch-size', default=8)
     @click.option('--warmup-proportion', default=0.1)
-    @click.option('--lr-decay', is_flag=True)
+    @click.option('--lr-decay/--no-lr-decay', default=True)
     @click.option('--seed', default=42)
     @click.option('--gradient-accumulation-steps', default=1)
-    @click.option('--fix-entity-emb/--update-entity-emb', default=[True, False], multiple=True)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
     return wrapper
 
 
+@cli.command()
+@click.argument('dump_db_file', type=click.Path(exists=True))
+@click.argument('mention_db_file', type=click.Path(exists=True))
+@click.option('--max-candidate-size', default=30)
+@click.option('--fix-entity-emb/--update-entity-emb', default=True)
+@task_common_options
+def entity_disambiguation(dump_db_file, mention_db_file, data_dir, **kwargs):
+    from utils.entity_linker import MentionDB
+    from entity_disambiguation import run
+
+    dump_db = DumpDB(dump_db_file)
+    mention_db = MentionDB.load(mention_db_file)
+    data_dir = os.path.join('data', 'aida-ppr')
+
+    run(data_dir, dump_db, mention_db, **kwargs)
+
+
 def glue_options(func):
     @task_common_options
     @click.option('-t', '--task-name', default='mrpc', type=click.Choice(['cola', 'mnli', 'qnli',
         'mrpc', 'rte', 'qqp', 'scitail', 'sts-b']))
+    @click.option('--max-entity-length', default=128)
+    @click.option('--min-prior-prob', default=[0.1, 0.3, 0.9], type=float, multiple=True)
+    @click.option('--fix-entity-emb/--update-entity-emb', default=[True, False], multiple=True)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
