@@ -121,6 +121,7 @@ def common_training_options(func):
     @click.option('--save-every', default=10000)
     @click.option('--entity-emb-size', default=768)
     @click.option('--bert-model-name', default='bert-base-uncased')
+    @click.option('--model-file', type=click.Path(exists=True), default=None)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -131,7 +132,6 @@ def run_training_options(func):
     @click.option('--masked-entity-prob', default=0.15)
     @click.option('--max-entity-predictions-per-seq', default=38)  # 256 * 0.15
     @click.option('--update-all-weights', is_flag=True)
-    @click.option('--model-file', type=click.Path(exists=True), default=None)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -141,6 +141,8 @@ def run_training_options(func):
 def run_e2e_training_options(func):
     @click.option('--link-prob-bin-size', default=20)
     @click.option('--prior-prob-bin-size', default=20)
+    @click.option('--entity-classification/--no-entity-classification', default=True)
+    @click.option('--pretrained-model-file', type=click.Path(exists=True), default=None)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)

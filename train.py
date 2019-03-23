@@ -70,13 +70,14 @@ def run_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, bat
         mmap=mmap)
 
     _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
-           **train_kwargs)
+           allocate_gpu_for_optimizer=True, **train_kwargs)
 
 
 def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, batch_size,
     gradient_accumulation_steps, max_seq_length, max_entity_length, short_seq_prob, masked_lm_prob,
     max_predictions_per_seq, link_prob_bin_size, prior_prob_bin_size, entity_emb_size,
-    bert_model_name, model_file=None, **train_kwargs):
+    entity_classification, bert_model_name, model_file=None, pretrained_model_file=None,
+    **train_kwargs):
     train_args = train_kwargs.copy()
     for arg in inspect.getfullargspec(run_e2e_training).args:
         train_args[arg] = locals()[arg]
@@ -87,12 +88,16 @@ def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence,
                            entity_emb_size=entity_emb_size,
                            link_prob_bin_size=link_prob_bin_size,
                            prior_prob_bin_size=prior_prob_bin_size,
+                           entity_classification=entity_classification,
                            **bert_model.config.to_dict())
 
     logger.info('Model configuration: %s', config)
     model = LukeE2EPretrainingModel(config)
     if model_file is None:
-        model.load_bert_weights(bert_model.state_dict())
+        if pretrained_model_file is None:
+            model.load_bert_weights(bert_model.state_dict())
+        else:
+            model.load_state_dict(torch.load(pretrained_model_file, map_location='cpu'), strict=False)
     else:
         model.load_state_dict(torch.load(model_file, map_location='cpu'))
 
@@ -113,19 +118,21 @@ def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence,
         mmap=mmap)
 
     _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
-           **train_kwargs)
+           allocate_gpu_for_optimizer=False, **train_kwargs)
 
 
 def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
            output_dir, log_dir, learning_rate, lr_decay, warmup_steps, num_train_steps,
-           num_page_chunks, save_every, global_step=0, page_chunks=[], optimizer_file=None,
-           sparse_optimizer_file=None):
+           num_page_chunks, save_every, allocate_gpu_for_optimizer, global_step=0, page_chunks=[], optimizer_file=None, sparse_optimizer_file=None):
     device = torch.device('cuda:0')
     n_gpu = torch.cuda.device_count()
 
     model.to(device)
     if n_gpu > 1:
-        model = torch.nn.DataParallel(model, device_ids=list(range(0, n_gpu - 1)))
+        if allocate_gpu_for_optimizer:
+            model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu - 1)))
+        else:
+            model = torch.nn.DataParallel(model, device_ids=list(range(n_gpu)))
 
     parameters = {'params': [], 'weight_decay': 0.01}
     sparse_parameters = {'params': [], 'weight_decay': 0.01}
@@ -147,7 +154,10 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
                         parameters['params'].append(param)
 
     warmup_proportion = warmup_steps / num_train_steps
-    optimizer_device = torch.device('cuda:' + str(n_gpu - 1))
+    if allocate_gpu_for_optimizer:
+        optimizer_device = torch.device('cuda:' + str(n_gpu - 1))
+    else:
+        optimizer_device = torch.device('cuda:0')
 
     optimizer = BertAdam([parameters, no_decay_parameters], lr=learning_rate, lr_decay=lr_decay,
                          device=optimizer_device, warmup=warmup_proportion, t_total=num_train_steps)

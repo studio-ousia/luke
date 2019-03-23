@@ -15,7 +15,8 @@ class LukeE2EConfig(BaseConfig):
     def __init__(self, vocab_size, entity_vocab_size, hidden_size, entity_emb_size,
                  num_hidden_layers, num_attention_heads, intermediate_size, hidden_dropout_prob,
                  attention_probs_dropout_prob, max_position_embeddings, type_vocab_size,
-                 initializer_range, link_prob_bin_size, prior_prob_bin_size, **kwargs):
+                 initializer_range, link_prob_bin_size, prior_prob_bin_size,
+                 entity_classification, **kwargs):
         self.vocab_size = vocab_size
         self.entity_vocab_size = entity_vocab_size
         self.hidden_size = hidden_size
@@ -30,6 +31,7 @@ class LukeE2EConfig(BaseConfig):
         self.initializer_range = initializer_range
         self.link_prob_bin_size = link_prob_bin_size
         self.prior_prob_bin_size = prior_prob_bin_size
+        self.entity_classification = entity_classification
 
 
 class EntityEmbeddings(nn.Module):
@@ -41,8 +43,10 @@ class EntityEmbeddings(nn.Module):
                                               sparse=True)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
-        self.link_prob_embeddings = nn.Embedding(config.link_prob_bin_size, config.hidden_size)
-        self.prior_prob_embeddings = nn.Embedding(config.prior_prob_bin_size, config.hidden_size)
+        if config.link_prob_bin_size:
+            self.link_prob_embeddings = nn.Embedding(config.link_prob_bin_size, config.hidden_size)
+        if config.prior_prob_bin_size:
+            self.prior_prob_embeddings = nn.Embedding(config.prior_prob_bin_size, config.hidden_size)
 
         if config.entity_emb_size != config.hidden_size:
             self.entity_dense = nn.Linear(config.entity_emb_size, config.hidden_size, bias=False)
@@ -56,11 +60,14 @@ class EntityEmbeddings(nn.Module):
             entity_embeddings = self.entity_dense(entity_embeddings)
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
-        link_prob_embeddings = self.link_prob_embeddings(link_prob_ids)
-        prior_prob_embeddings = self.prior_prob_embeddings(prior_prob_ids)
+        embeddings = entity_embeddings + position_embeddings + token_type_embeddings
+        if self.config.link_prob_bin_size:
+            link_prob_embeddings = self.link_prob_embeddings(link_prob_ids)
+            embeddings += link_prob_embeddings
+        if self.config.prior_prob_bin_size:
+            prior_prob_embeddings = self.prior_prob_embeddings(prior_prob_ids)
+            embeddings += prior_prob_embeddings
 
-        embeddings = entity_embeddings + position_embeddings + token_type_embeddings +\
-            link_prob_embeddings + prior_prob_embeddings
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
 
@@ -104,7 +111,8 @@ class LukeE2EPretrainingModel(LukeE2EModel):
         super(LukeE2EPretrainingModel, self).__init__(config)
 
         self.cls = BertPreTrainingHeads(config, self.embeddings.word_embeddings.weight)
-        self.entity_classifier = nn.Linear(config.hidden_size, 2)
+        if config.entity_classification:
+            self.entity_classifier = nn.Linear(config.hidden_size, 2)
 
         self.apply(self.init_weights)
 
@@ -123,16 +131,13 @@ class LukeE2EPretrainingModel(LukeE2EModel):
         loss_fn = CrossEntropyLoss(ignore_index=-1)
         ret = {}
 
-        # batch_size x word_seq_size x 1
         masked_lm_mask = (masked_lm_labels != -1)
-        # masked_size x hidden_size
         masked_word_sequence_output = torch.masked_select(
             word_sequence_output, masked_lm_mask.unsqueeze(-1)).view(-1, self.config.hidden_size)
         (masked_lm_scores, nsp_score) = self.cls(masked_word_sequence_output, pooled_output)
 
         masked_lm_scores = masked_lm_scores.view(-1, self.config.vocab_size)
         masked_lm_labels = torch.masked_select(masked_lm_labels, masked_lm_mask)
-        # masked_lm_labels = masked_lm_labels.view(-1)
         ret['masked_lm_loss'] = loss_fn(masked_lm_scores, masked_lm_labels)
         ret['masked_lm_correct'] = (torch.argmax(masked_lm_scores, 1).data ==
                                     masked_lm_labels.data).sum()
@@ -145,13 +150,14 @@ class LukeE2EPretrainingModel(LukeE2EModel):
             ret['nsp_total'] = ret['nsp_correct'].new_tensor(word_ids.size(0))
             ret['loss'] += ret['nsp_loss']
 
-        entity_scores = self.entity_classifier(entity_sequence_output)
-        entity_scores = entity_scores.view(-1, 2)
-        entity_labels = entity_labels.view(-1)
-        ret['entity_loss'] = loss_fn(entity_scores, entity_labels)
-        ret['entity_correct'] = (torch.argmax(entity_scores, 1).data == entity_labels.data).sum()
-        ret['entity_total'] = entity_labels.ne(-1).sum()
+        if self.config.entity_classification:
+            entity_scores = self.entity_classifier(entity_sequence_output)
+            entity_scores = entity_scores.view(-1, 2)
+            entity_labels = entity_labels.view(-1)
+            ret['entity_loss'] = loss_fn(entity_scores, entity_labels)
+            ret['entity_correct'] = (torch.argmax(entity_scores, 1).data == entity_labels.data).sum()
+            ret['entity_total'] = entity_labels.ne(-1).sum()
 
-        ret['loss'] += ret['entity_loss']
+            ret['loss'] += ret['entity_loss']
 
         return ret

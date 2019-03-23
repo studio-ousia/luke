@@ -130,9 +130,7 @@ class LukePretrainingModel(LukeModel):
         loss_fn = CrossEntropyLoss(ignore_index=-1)
         ret = {}
 
-        # batch_size x word_seq_size x 1
         masked_lm_mask = (masked_lm_labels != -1)
-        # masked_size x hidden_size
         masked_word_sequence_output = torch.masked_select(
             word_sequence_output, masked_lm_mask.unsqueeze(-1)).view(-1, self.config.hidden_size)
         (masked_lm_scores, nsp_score) = self.cls(masked_word_sequence_output, pooled_output)
