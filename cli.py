@@ -117,8 +117,8 @@ def common_training_options(func):
     @click.option('--masked-lm-prob', default=0.15)
     @click.option('--max-predictions-per-seq', default=77)  # 512 * 0.15
     @click.option('--num-train-steps', default=300000)
-    @click.option('--num-page-chunks', default=200)
-    @click.option('--save-every', default=10000)
+    @click.option('--num-page-chunks', default=100)
+    @click.option('--save-every', default=5000)
     @click.option('--entity-emb-size', default=768)
     @click.option('--bert-model-name', default='bert-base-uncased')
     @click.option('--model-file', type=click.Path(exists=True), default=None)
