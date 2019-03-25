@@ -58,15 +58,27 @@ class EntityEmbeddings(nn.Module):
         entity_embeddings = self.entity_embeddings(entity_ids)
         if self.config.entity_emb_size != self.config.hidden_size:
             entity_embeddings = self.entity_dense(entity_embeddings)
-        position_embeddings = self.position_embeddings(position_ids)
+
+        if position_ids.dim() == 2:
+            position_embeddings = self.position_embeddings(position_ids)
+
+        else:
+            position_embeddings = self.position_embeddings(position_ids.clamp(min=0))
+            position_embedding_mask = (position_ids != -1).float().unsqueeze(-1)
+            position_embeddings = position_embeddings * position_embedding_mask
+
+            position_embeddings = torch.sum(position_embeddings, dim=2, keepdim=False)
+            position_embeddings = position_embeddings / (position_embedding_mask.sum(dim=2) + 1e-6)
+
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
+
         embeddings = entity_embeddings + position_embeddings + token_type_embeddings
         if self.config.link_prob_bin_size:
             link_prob_embeddings = self.link_prob_embeddings(link_prob_ids)
-            embeddings += link_prob_embeddings
+            embeddings = embeddings + link_prob_embeddings
         if self.config.prior_prob_bin_size:
             prior_prob_embeddings = self.prior_prob_embeddings(prior_prob_ids)
-            embeddings += prior_prob_embeddings
+            embeddings = embeddings + prior_prob_embeddings
 
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)

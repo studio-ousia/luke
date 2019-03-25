@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 def run_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, batch_size,
     gradient_accumulation_steps, max_seq_length, max_entity_length, short_seq_prob, masked_lm_prob,
     max_predictions_per_seq, masked_entity_prob, max_entity_predictions_per_seq, update_all_weights,
-    entity_emb_size, bert_model_name, model_file=None, **train_kwargs):
+    entity_emb_size, bert_model_name, single_token_per_mention=False, max_mention_length=100,
+    model_file=None, **train_kwargs):
     train_args = train_kwargs.copy()
     for arg in inspect.getfullargspec(run_training).args:
         train_args[arg] = locals()[arg]
@@ -61,12 +62,14 @@ def run_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, bat
         batch_size=batch_size / gradient_accumulation_steps,
         max_seq_length=max_seq_length,
         max_entity_length=max_entity_length,
+        max_mention_length=max_mention_length,
         short_seq_prob=short_seq_prob,
         masked_lm_prob=masked_lm_prob,
         max_predictions_per_seq=max_predictions_per_seq,
         masked_entity_prob=masked_entity_prob,
         max_entity_predictions_per_seq=max_entity_predictions_per_seq,
         single_sentence=single_sentence,
+        single_token_per_mention=single_token_per_mention,
         mmap=mmap)
 
     _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
@@ -76,8 +79,8 @@ def run_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, bat
 def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, batch_size,
     gradient_accumulation_steps, max_seq_length, max_entity_length, short_seq_prob, masked_lm_prob,
     max_predictions_per_seq, link_prob_bin_size, prior_prob_bin_size, entity_emb_size,
-    entity_classification, bert_model_name, model_file=None, pretrained_model_file=None,
-    **train_kwargs):
+    entity_classification, bert_model_name, single_token_per_mention=False, max_mention_length=100,
+    model_file=None, pretrained_model_file=None, **train_kwargs):
     train_args = train_kwargs.copy()
     for arg in inspect.getfullargspec(run_e2e_training).args:
         train_args[arg] = locals()[arg]
@@ -109,12 +112,14 @@ def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence,
         batch_size=batch_size / gradient_accumulation_steps,
         max_seq_length=max_seq_length,
         max_entity_length=max_entity_length,
+        max_mention_length=max_mention_length,
         short_seq_prob=short_seq_prob,
         masked_lm_prob=masked_lm_prob,
         max_predictions_per_seq=max_predictions_per_seq,
         link_prob_bin_size=link_prob_bin_size,
         prior_prob_bin_size=prior_prob_bin_size,
         single_sentence=single_sentence,
+        single_token_per_mention=single_token_per_mention,
         mmap=mmap)
 
     _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,

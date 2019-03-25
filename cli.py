@@ -106,6 +106,7 @@ def common_training_options(func):
     @click.option('--base-log-dir', type=click.Path(), default='log')
     @click.option('--mmap', is_flag=True)
     @click.option('--single-sentence/--sentence-pair', is_flag=True)
+    @click.option('--single-token-per-mention/--multiple-token-per-mention', default=True)
     @click.option('--batch-size', default=256)  # BERT default=256
     @click.option('--gradient-accumulation-steps', default=1)
     @click.option('--learning-rate', default=1e-4)  # BERT original=1e-4, recommended for fine-tuning: 2e-5
@@ -113,6 +114,7 @@ def common_training_options(func):
     @click.option('--warmup-steps', default=10000)
     @click.option('--max-seq-length', default=512)  # BERT default=512
     @click.option('--max-entity-length', default=256)
+    @click.option('--max-mention-length', default=100)
     @click.option('--short-seq-prob', default=0.1)
     @click.option('--masked-lm-prob', default=0.15)
     @click.option('--max-predictions-per-seq', default=77)  # 512 * 0.15
