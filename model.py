@@ -35,7 +35,8 @@ class EntityEmbeddings(nn.Module):
         super(EntityEmbeddings, self).__init__()
         self.config = config
 
-        self.entity_embeddings = nn.Embedding(config.entity_vocab_size, config.entity_emb_size)
+        self.entity_embeddings = nn.Embedding(config.entity_vocab_size, config.entity_emb_size,
+                                              padding_idx=0)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
@@ -148,7 +149,6 @@ class LukePretrainingModel(LukeModel):
 
         masked_lm_scores = masked_lm_scores.view(-1, self.config.vocab_size)
         masked_lm_labels = torch.masked_select(masked_lm_labels, masked_lm_mask)
-        # masked_lm_labels = masked_lm_labels.view(-1)
         ret['masked_lm_loss'] = loss_fn(masked_lm_scores, masked_lm_labels)
         ret['masked_lm_correct'] = (torch.argmax(masked_lm_scores, 1).data ==
                                     masked_lm_labels.data).sum()

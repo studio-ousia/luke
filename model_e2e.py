@@ -40,7 +40,7 @@ class EntityEmbeddings(nn.Module):
         self.config = config
 
         self.entity_embeddings = nn.Embedding(config.entity_vocab_size, config.entity_emb_size,
-                                              sparse=True)
+                                              sparse=True, padding_idx=0)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
         if config.link_prob_bin_size:

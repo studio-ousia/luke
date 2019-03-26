@@ -50,7 +50,7 @@ class WordEmbeddings(nn.Module):
         super(WordEmbeddings, self).__init__()
         self.config = config
 
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
