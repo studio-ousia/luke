@@ -143,7 +143,9 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
     sparse_parameters = {'params': [], 'weight_decay': 0.01}
     no_decay_parameters = {'params': [], 'weight_decay': 0.0}
 
-    for module in model.modules():
+    params_set = set()
+
+    for (module_name, module) in model.named_modules():
         if isinstance(module, torch.nn.Embedding) and module.sparse:
             sparse_parameters['params'].extend(
                 [p for p in module.parameters(recurse=False) if p.requires_grad])
@@ -152,6 +154,10 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
                 [p for p in module.parameters(recurse=False) if p.requires_grad])
         else:
             for (name, param) in module.named_parameters(recurse=False):
+                if param in params_set:
+                    continue
+                params_set.add(param)
+
                 if param.requires_grad:
                     if 'bias' in name:
                         no_decay_parameters['params'].append(param)
@@ -291,11 +297,11 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
                 if global_step == num_train_steps:
                     break
 
+                if global_step != 0 and global_step % save_every == 0:
+                    save_model(model, 'step%07d' % (global_step,), global_step, page_chunks)
+
                 global_step += 1
                 pbar.update(1)
-
-                if global_step % save_every == 0:
-                    save_model(model, 'step%07d' % (global_step,), global_step, page_chunks)
 
         save_model(model, 'step%07d' % (global_step,), global_step, page_chunks)
         if global_step == num_train_steps:
