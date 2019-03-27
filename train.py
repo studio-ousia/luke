@@ -100,7 +100,8 @@ def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence,
         if pretrained_model_file is None:
             model.load_bert_weights(bert_model.state_dict())
         else:
-            model.load_state_dict(torch.load(pretrained_model_file, map_location='cpu'), strict=False)
+            model.load_state_dict(torch.load(pretrained_model_file, map_location='cpu'),
+                                  strict=False)
     else:
         model.load_state_dict(torch.load(model_file, map_location='cpu'))
 
@@ -128,7 +129,8 @@ def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence,
 
 def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
            output_dir, log_dir, learning_rate, lr_decay, warmup_steps, num_train_steps,
-           num_page_chunks, save_every, allocate_gpu_for_optimizer, global_step=0, page_chunks=[], optimizer_file=None, sparse_optimizer_file=None):
+           num_page_chunks, save_every, allocate_gpu_for_optimizer, global_step=0, page_chunks=[],
+           optimizer_file=None, sparse_optimizer_file=None):
     device = torch.device('cuda:0')
     n_gpu = torch.cuda.device_count()
 
@@ -145,7 +147,7 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
 
     params_set = set()
 
-    for (module_name, module) in model.named_modules():
+    for module in model.modules():
         if isinstance(module, torch.nn.Embedding) and module.sparse:
             sparse_parameters['params'].extend(
                 [p for p in module.parameters(recurse=False) if p.requires_grad])
