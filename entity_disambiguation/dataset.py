@@ -6,6 +6,30 @@ import re
 from collections import defaultdict
 
 
+class EntityDisambiguationDataset:
+    def __init__(self, dataset_dir):
+        self.train = load_documents(os.path.join(dataset_dir, 'aida_train.csv'),
+                                    os.path.join(dataset_dir, 'aida_train.txt'))
+        self.test_a = load_documents(os.path.join(dataset_dir, 'aida_testA.csv'),
+                                     os.path.join(dataset_dir, 'testa_testb_aggregate_original'))
+        self.test_b = load_documents(os.path.join(dataset_dir, 'aida_testB.csv'),
+                                     os.path.join(dataset_dir, 'testa_testb_aggregate_original'))
+        self.ace2004 = load_documents(os.path.join(dataset_dir, 'wned-ace2004.csv'),
+                                     os.path.join(dataset_dir, 'ace2004.conll'))
+        self.aquaint = load_documents(os.path.join(dataset_dir, 'wned-aquaint.csv'),
+                                      os.path.join(dataset_dir, 'aquaint.conll'))
+        self.clueweb = load_documents(os.path.join(dataset_dir, 'wned-clueweb.csv'),
+                                      os.path.join(dataset_dir, 'clueweb.conll'))
+        self.msnbc = load_documents(os.path.join(dataset_dir, 'wned-msnbc.csv'),
+                                    os.path.join(dataset_dir, 'msnbc.conll'))
+        self.wikipedia = load_documents(os.path.join(dataset_dir, 'wned-wikipedia.csv'),
+                                        os.path.join(dataset_dir, 'wikipedia.conll'))
+
+    def get_all_datasets(self):
+        return (self.train, self.test_a, self.test_b, self.ace2004, self.aquaint, self.clueweb,
+                self.msnbc, self.wikipedia)
+
+
 class Document(object):
     __slots__ = ('id', 'words', 'mentions')
 
@@ -84,6 +108,8 @@ def load_documents(csv_path, conll_path):
 
         mention_span_index = 0
         for mention in mentions:
+            if not mention['title']:
+                continue
             mention_text = punc_remover.sub('', mention['text'].lower())
 
             while True:
@@ -116,6 +142,8 @@ def load_mentions_from_csv_file(path):
             if comps[6] != 'EMPTYCAND':
                 candidates = [c.split(',') for c in comps[6:-2]]
                 candidates = [Candidate(','.join(c[2:]), float(c[1])) for c in candidates]
+                candidates = [c for c in candidates if c.title]
+                candidates = sorted(candidates, key=lambda c: c.prior_prob, reverse=True)
             else:
                 candidates = []
 
@@ -129,27 +157,3 @@ def load_mentions_from_csv_file(path):
                                                title=title))
 
     return mention_data
-
-
-class EntityDisambiguationDataset:
-    def __init__(self, dataset_dir):
-        self.train = load_documents(os.path.join(dataset_dir, 'aida_train.csv'),
-                                    os.path.join(dataset_dir, 'aida_train.txt'))
-        self.test_a = load_documents(os.path.join(dataset_dir, 'aida_testA.csv'),
-                                     os.path.join(dataset_dir, 'testa_testb_aggregate_original'))
-        self.test_b = load_documents(os.path.join(dataset_dir, 'aida_testB.csv'),
-                                     os.path.join(dataset_dir, 'testa_testb_aggregate_original'))
-        self.ace2004 = load_documents(os.path.join(dataset_dir, 'wned-ace2004.csv'),
-                                     os.path.join(dataset_dir, 'ace2004.conll'))
-        self.aquaint = load_documents(os.path.join(dataset_dir, 'wned-aquaint.csv'),
-                                      os.path.join(dataset_dir, 'aquaint.conll'))
-        self.clueweb = load_documents(os.path.join(dataset_dir, 'wned-clueweb.csv'),
-                                      os.path.join(dataset_dir, 'clueweb.conll'))
-        self.msnbc = load_documents(os.path.join(dataset_dir, 'wned-msnbc.csv'),
-                                    os.path.join(dataset_dir, 'msnbc.conll'))
-        self.wikipedia = load_documents(os.path.join(dataset_dir, 'wned-wikipedia.csv'),
-                                        os.path.join(dataset_dir, 'wikipedia.conll'))
-
-    def get_all_datasets(self):
-        return (self.train, self.test_a, self.test_b, self.ace2004, self.aquaint, self.clueweb,
-                self.msnbc, self.wikipedia)

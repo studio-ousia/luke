@@ -269,19 +269,19 @@ def task_common_options(func):
 
 @cli.command()
 @click.argument('dump_db_file', type=click.Path(exists=True))
-@click.argument('mention_db_file', type=click.Path(exists=True))
+@click.option('--max-entity-length', default=128)
 @click.option('--max-candidate-size', default=30)
+@click.option('--min-context-prior-prob', default=0.9)
 @click.option('--fix-entity-emb/--update-entity-emb', default=True)
+@click.option('-t', '--test-set', default=['test_b'], multiple=True)
 @task_common_options
-def entity_disambiguation(dump_db_file, mention_db_file, data_dir, **kwargs):
-    from utils.entity_linker import MentionDB
-    from entity_disambiguation import run
+def entity_disambiguation(dump_db_file, data_dir, **kwargs):
+    from entity_disambiguation.main import run
 
     dump_db = DumpDB(dump_db_file)
-    mention_db = MentionDB.load(mention_db_file)
-    data_dir = os.path.join('data', 'aida-ppr')
+    data_dir = os.path.join(data_dir, 'entity-disambiguation')
 
-    run(data_dir, dump_db, mention_db, **kwargs)
+    run(data_dir, dump_db, **kwargs)
 
 
 def glue_options(func):

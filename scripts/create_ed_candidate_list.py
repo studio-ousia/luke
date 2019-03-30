@@ -3,7 +3,7 @@
 import click
 from wikipedia2vec.dump_db import DumpDB
 
-from utils.entity_disambiguation_dataset import EntityDisambiguationDataset
+from utils.entity_disambiguation.dataset import EntityDisambiguationDataset
 
 
 @click.command()
