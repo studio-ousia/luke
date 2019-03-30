@@ -131,7 +131,7 @@ class LukePretrainingModel(LukeModel):
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
                 entity_position_ids, entity_segment_ids, entity_attention_mask,
-                masked_lm_labels, masked_entity_labels, is_random_next=None, **kwargs):
+                masked_entity_labels, masked_lm_labels=None, is_random_next=None, **kwargs):
         (encoded_layers, pooled_output) = super(LukePretrainingModel, self).forward(
             word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
             entity_segment_ids, entity_attention_mask, output_all_encoded_layers=False
@@ -141,25 +141,6 @@ class LukePretrainingModel(LukeModel):
 
         loss_fn = CrossEntropyLoss(ignore_index=-1)
         ret = {}
-
-        masked_lm_mask = (masked_lm_labels != -1)
-        masked_word_sequence_output = torch.masked_select(
-            word_sequence_output, masked_lm_mask.unsqueeze(-1)).view(-1, self.config.hidden_size)
-        (masked_lm_scores, nsp_score) = self.cls(masked_word_sequence_output, pooled_output)
-
-        masked_lm_scores = masked_lm_scores.view(-1, self.config.vocab_size)
-        masked_lm_labels = torch.masked_select(masked_lm_labels, masked_lm_mask)
-        ret['masked_lm_loss'] = loss_fn(masked_lm_scores, masked_lm_labels)
-        ret['masked_lm_correct'] = (torch.argmax(masked_lm_scores, 1).data ==
-                                    masked_lm_labels.data).sum()
-        ret['masked_lm_total'] = masked_lm_labels.ne(-1).sum()
-        ret['loss'] = ret['masked_lm_loss']
-
-        if is_random_next is not None:
-            ret['nsp_loss'] = loss_fn(nsp_score, is_random_next)
-            ret['nsp_correct'] = (torch.argmax(nsp_score, 1).data == is_random_next.data).sum()
-            ret['nsp_total'] = ret['nsp_correct'].new_tensor(word_ids.size(0))
-            ret['loss'] += ret['nsp_loss']
 
         entity_mask = (masked_entity_labels != -1)
         masked_entity_sequence_output = torch.masked_select(
@@ -171,6 +152,27 @@ class LukePretrainingModel(LukeModel):
         ret['masked_entity_loss'] = loss_fn(entity_scores, entity_labels)
         ret['masked_entity_correct'] = (torch.argmax(entity_scores, 1).data == entity_labels.data).sum()
         ret['masked_entity_total'] = entity_labels.ne(-1).sum()
-        ret['loss'] += ret['masked_entity_loss']
+        ret['loss'] = ret['masked_entity_loss']
+
+        if masked_lm_labels is not None:
+            masked_lm_mask = (masked_lm_labels != -1)
+            masked_word_sequence_output = torch.masked_select(
+                word_sequence_output, masked_lm_mask.unsqueeze(-1)).view(-1, self.config.hidden_size)
+            masked_lm_scores = self.cls.predictions(masked_word_sequence_output)
+
+            masked_lm_scores = masked_lm_scores.view(-1, self.config.vocab_size)
+            masked_lm_labels = torch.masked_select(masked_lm_labels, masked_lm_mask)
+            ret['masked_lm_loss'] = loss_fn(masked_lm_scores, masked_lm_labels)
+            ret['masked_lm_correct'] = (torch.argmax(masked_lm_scores, 1).data ==
+                                        masked_lm_labels.data).sum()
+            ret['masked_lm_total'] = masked_lm_labels.ne(-1).sum()
+            ret['loss'] += ret['masked_lm_loss']
+
+        if is_random_next is not None:
+            nsp_score = self.cls.seq_relationship(pooled_output)
+            ret['nsp_loss'] = loss_fn(nsp_score, is_random_next)
+            ret['nsp_correct'] = (torch.argmax(nsp_score, 1).data == is_random_next.data).sum()
+            ret['nsp_total'] = ret['nsp_correct'].new_tensor(word_ids.size(0))
+            ret['loss'] += ret['nsp_loss']
 
         return ret

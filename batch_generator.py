@@ -343,8 +343,12 @@ def create_word_data(a_words, b_words, word_vocab, max_seq_length, masked_lm_pro
         word_ids.append(sep_id)
         word_len += len(b_words)
 
-    masked_lm_labels = np.full(max_seq_length, -1, dtype=np.int)
+    ret = {}
+
     if max_predictions_per_seq > 0:
+        masked_lm_labels = np.full(max_seq_length, -1, dtype=np.int)
+        ret['masked_lm_labels'] = masked_lm_labels
+
         num_to_predict = min(max_predictions_per_seq, max(1, int(round(word_len * masked_lm_prob))))
 
         for index in np.random.permutation(len(word_ids)):
@@ -364,20 +368,18 @@ def create_word_data(a_words, b_words, word_vocab, max_seq_length, masked_lm_pro
 
     output_word_ids = np.zeros(max_seq_length, dtype=np.int)
     output_word_ids[:len(word_ids)] = word_ids
+    ret['word_ids'] = output_word_ids
 
     word_attention_mask = np.ones(max_seq_length, dtype=np.int)
     word_attention_mask[len(word_ids):] = 0
+    ret['word_attention_mask'] = word_attention_mask
 
     word_segment_ids = np.zeros(max_seq_length, dtype=np.int)
     if b_words is not None:
         word_segment_ids[len(a_words) + 2:len(word_ids)] = 1  # 2 for CLS and SEP
+    ret['word_segment_ids'] = word_segment_ids
 
-    return dict(
-        word_ids=output_word_ids,
-        word_attention_mask=word_attention_mask,
-        word_segment_ids=word_segment_ids,
-        masked_lm_labels=masked_lm_labels,
-    )
+    return ret
 
 
 def create_link_data(a_links, b_links, a_word_length, entity_vocab, max_entity_length,
