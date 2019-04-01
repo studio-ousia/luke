@@ -8,22 +8,24 @@ from collections import defaultdict
 
 class EntityDisambiguationDataset:
     def __init__(self, dataset_dir):
+        person_names = frozenset(load_person_names(os.path.join(dataset_dir, 'persons.txt')))
+
         self.train = load_documents(os.path.join(dataset_dir, 'aida_train.csv'),
-                                    os.path.join(dataset_dir, 'aida_train.txt'))
+            os.path.join(dataset_dir, 'aida_train.txt'), person_names)
         self.test_a = load_documents(os.path.join(dataset_dir, 'aida_testA.csv'),
-                                     os.path.join(dataset_dir, 'testa_testb_aggregate_original'))
+            os.path.join(dataset_dir, 'testa_testb_aggregate_original'), person_names)
         self.test_b = load_documents(os.path.join(dataset_dir, 'aida_testB.csv'),
-                                     os.path.join(dataset_dir, 'testa_testb_aggregate_original'))
+            os.path.join(dataset_dir, 'testa_testb_aggregate_original'), person_names)
         self.ace2004 = load_documents(os.path.join(dataset_dir, 'wned-ace2004.csv'),
-                                     os.path.join(dataset_dir, 'ace2004.conll'))
+            os.path.join(dataset_dir, 'ace2004.conll'), person_names)
         self.aquaint = load_documents(os.path.join(dataset_dir, 'wned-aquaint.csv'),
-                                      os.path.join(dataset_dir, 'aquaint.conll'))
+            os.path.join(dataset_dir, 'aquaint.conll'), person_names)
         self.clueweb = load_documents(os.path.join(dataset_dir, 'wned-clueweb.csv'),
-                                      os.path.join(dataset_dir, 'clueweb.conll'))
+            os.path.join(dataset_dir, 'clueweb.conll'), person_names)
         self.msnbc = load_documents(os.path.join(dataset_dir, 'wned-msnbc.csv'),
-                                    os.path.join(dataset_dir, 'msnbc.conll'))
+            os.path.join(dataset_dir, 'msnbc.conll'), person_names)
         self.wikipedia = load_documents(os.path.join(dataset_dir, 'wned-wikipedia.csv'),
-                                        os.path.join(dataset_dir, 'wikipedia.conll'))
+            os.path.join(dataset_dir, 'wikipedia.conll'), person_names)
 
     def get_all_datasets(self):
         return (self.train, self.test_a, self.test_b, self.ace2004, self.aquaint, self.clueweb,
@@ -71,9 +73,14 @@ class Candidate(object):
         return '<Candidate %s (prior prob: %.3f)>' % (self.title, self.prior_prob)
 
 
-def load_documents(csv_path, conll_path):
+def load_person_names(input_file):
+    with open(input_file) as f:
+        return [l.strip() for l in f]
+
+
+def load_documents(csv_path, conll_path, person_names):
     document_data = {}
-    mention_data = load_mentions_from_csv_file(csv_path)
+    mention_data = load_mentions_from_csv_file(csv_path, person_names)
 
     with open(conll_path, 'r') as f:
         cur_doc = {}
@@ -109,7 +116,7 @@ def load_documents(csv_path, conll_path):
         mention_span_index = 0
         for mention in mentions:
             if not mention['title']:
-                continue
+                mention['title'] = '--NIL--'
             mention_text = punc_remover.sub('', mention['text'].lower())
 
             while True:
@@ -131,7 +138,7 @@ def load_documents(csv_path, conll_path):
     return documents
 
 
-def load_mentions_from_csv_file(path):
+def load_mentions_from_csv_file(path, person_names):
     mention_data = defaultdict(list)
     with open(path, 'r') as f:
         for line in f:
@@ -155,5 +162,43 @@ def load_mentions_from_csv_file(path):
 
             mention_data[doc_name].append(dict(text=mention_text, candidates=candidates,
                                                title=title))
+
+    def find_coreference(target_mention, mention_list):
+        target_mention_text = target_mention['text'].lower()
+        ret = []
+
+        for mention in mention_list:
+            if not mention['candidates'] or mention['candidates'][0].title not in person_names:
+                continue
+
+            mention_text = mention['text'].lower()
+            if mention_text == target_mention_text:
+                continue
+
+            start_pos = mention_text.find(target_mention_text)
+            if start_pos == -1:
+                continue
+
+            end_pos = start_pos + len(target_mention_text) - 1
+            if (start_pos == 0 or mention_text[start_pos - 1] == ' ') and\
+               (end_pos == len(mention_text) - 1 or mention_text[end_pos + 1] == ' '):
+                ret.append(mention)
+
+        return ret
+
+    for (_, mentions) in mention_data.items():
+        for mention in mentions:
+            coref_mentions = find_coreference(mention, mentions)
+            if coref_mentions:
+                new_cands = defaultdict(int)
+                for coref_mention in coref_mentions:
+                    for candidate in coref_mention['candidates']:
+                        new_cands[candidate.title] += candidate.prior_prob
+
+                for candidate_title in new_cands.keys():
+                    new_cands[candidate_title] /= len(coref_mentions)
+
+                mention['candidates'] = sorted([Candidate(t, p) for (t, p) in new_cands.items()],
+                                               key=lambda c: c.prior_prob, reverse=True)
 
     return mention_data

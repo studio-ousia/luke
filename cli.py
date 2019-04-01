@@ -272,8 +272,9 @@ def task_common_options(func):
 @click.option('--max-entity-length', default=128)
 @click.option('--max-candidate-size', default=30)
 @click.option('--min-context-prior-prob', default=0.9)
+@click.option('--prior-prob-bin-size', default=0)
 @click.option('--fix-entity-emb/--update-entity-emb', default=True)
-@click.option('-t', '--test-set', default=['test_b'], multiple=True)
+@click.option('-t', '--test-set', default=['test_a'], multiple=True)
 @task_common_options
 def entity_disambiguation(dump_db_file, data_dir, **kwargs):
     from entity_disambiguation.main import run

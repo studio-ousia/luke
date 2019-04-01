@@ -22,16 +22,16 @@ from utils.vocab import EntityVocab, MASK_TOKEN, PAD_TOKEN
 from wiki_corpus import WikiCorpus
 
 from .dataset import EntityDisambiguationDataset
-from .model import LukeForEntityDisambiguation
+from .model import LukeForEntityDisambiguation, LukeConfigForEntityDisambiguation
 
 DATASET_CACHE_FILE = 'entity_disambiguation_dataset.pkl'
 
 logger = logging.getLogger(__name__)
 
 
-def process_documents(documents, tokenizer, entity_vocab, max_seq_length, max_entity_length,
-                      max_candidate_size, min_context_prior_prob, single_token_per_mention,
-                      max_mention_length):
+def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_entity_length,
+                      max_candidate_size, min_context_prior_prob, prior_prob_bin_size,
+                      single_token_per_mention, max_mention_length):
     ret = []
     max_num_tokens = max_seq_length - 2
     for document in tqdm(documents):
@@ -91,6 +91,9 @@ def process_documents(documents, tokenizer, entity_vocab, max_seq_length, max_en
                 if mention == target_mention:
                     continue
 
+                if entity_index == max_entity_length:
+                    break
+
                 start = mention.start - token_start
                 end = mention.end - token_start
 
@@ -107,17 +110,19 @@ def process_documents(documents, tokenizer, entity_vocab, max_seq_length, max_en
                     if entity_index == max_entity_length:
                         break
 
-                if entity_index == max_entity_length:
-                    break
-
             entity_segment_ids = np.zeros(max_entity_length, dtype=np.int)
             entity_attention_mask = np.zeros(max_entity_length, dtype=np.int)
             entity_attention_mask[:entity_index] = 1
 
             entity_candidate_ids = np.zeros(max_candidate_size, dtype=np.int)
+            entity_prior_prob_ids = np.zeros(max_candidate_size, dtype=np.int)
 
             candidates = target_mention.candidates[:max_candidate_size]
             entity_candidate_ids[:len(candidates)] = [entity_vocab[c.title] for c in candidates]
+            if prior_prob_bin_size != 0:
+                entity_prior_prob_ids[:len(candidates)] = [
+                    min(int(c.prior_prob * prior_prob_bin_size), prior_prob_bin_size - 1)
+                    for c in candidates]
 
             entity_label = entity_vocab[target_mention.title]
 
@@ -129,6 +134,7 @@ def process_documents(documents, tokenizer, entity_vocab, max_seq_length, max_en
                            entity_segment_ids=entity_segment_ids,
                            entity_attention_mask=entity_attention_mask,
                            entity_candidate_ids=entity_candidate_ids,
+                           entity_prior_prob_ids=entity_prior_prob_ids,
                            entity_label=entity_label)
 
             ret.append((document, target_mention, feature))
@@ -137,9 +143,9 @@ def process_documents(documents, tokenizer, entity_vocab, max_seq_length, max_en
 
 
 def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_length,
-        max_candidate_size, min_context_prior_prob, batch_size, eval_batch_size, learning_rate,
-        iteration, warmup_proportion, lr_decay, seed, gradient_accumulation_steps, fix_entity_emb,
-        test_set):
+        max_candidate_size, min_context_prior_prob, prior_prob_bin_size, batch_size,
+        eval_batch_size, learning_rate, iteration, warmup_proportion, lr_decay, seed,
+        gradient_accumulation_steps, fix_entity_emb, test_set):
     device = torch.device('cuda')
     n_gpu = torch.cuda.device_count()
 
@@ -158,7 +164,8 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
     data_file = model_file.replace('.bin', '.pkl').replace('model', 'data')
     model_data = joblib.load(data_file)
 
-    config = LukeConfig(**model_data['config'])
+    config = LukeConfigForEntityDisambiguation(prior_prob_bin_size=prior_prob_bin_size,
+                                               **model_data['config'])
     corpus = WikiCorpus(model_data['args']['corpus_data_file'])
     orig_entity_vocab = EntityVocab(model_data['args']['entity_vocab_file'])
     single_token_per_mention = model_data['args'].get('single_token_per_mention', False)
@@ -220,23 +227,13 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
 
     logger.info('Creating TensorDataset for training')
 
-    train_data = process_documents(dataset.train, corpus.tokenizer, entity_vocab, max_seq_length,
+    train_data = generate_features(dataset.train, corpus.tokenizer, entity_vocab, max_seq_length,
                                    max_entity_length, max_candidate_size, min_context_prior_prob,
-                                   single_token_per_mention, max_mention_length)
+                                   prior_prob_bin_size, single_token_per_mention, max_mention_length)
     train_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in train_data], dtype=torch.long)
                                     for k in model_arg_names])
     train_sampler = RandomSampler(train_tensors)
     train_dataloader = DataLoader(train_tensors, sampler=train_sampler, batch_size=train_batch_size)
-
-    logger.info('Creating TensorDataset for evaluation')
-
-    eval_data = process_documents(dataset.test_b, corpus.tokenizer, entity_vocab, max_seq_length,
-                                  max_entity_length, max_candidate_size, min_context_prior_prob,
-                                  single_token_per_mention, max_mention_length)
-    eval_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in eval_data], dtype=torch.long)
-                                   for k in model_arg_names])
-    eval_sampler = SequentialSampler(eval_tensors)
-    eval_dataloader = DataLoader(eval_tensors, sampler=eval_sampler, batch_size=eval_batch_size)
 
     model.to(device)
     if n_gpu > 1:
@@ -270,9 +267,21 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
     if output_dir:
         writer = open(os.path.join(output_dir, 'eval_results.jl'), 'a')
 
-    def evaluate(model, global_step, n_iter):
+    def evaluate(model, target, global_step, n_iter):
         model.eval()
-        (macro_acc, micro_acc) = compute_accuracy(model, eval_data, eval_dataloader, device)
+
+        with open(DATASET_CACHE_FILE, mode='rb') as f:
+            (dataset, entity_titles) = pickle.load(f)
+        documents = getattr(dataset, target)
+        eval_data = generate_features(documents, corpus.tokenizer, entity_vocab, max_seq_length,
+                                      max_entity_length, max_candidate_size, min_context_prior_prob,
+                                      prior_prob_bin_size, single_token_per_mention, max_mention_length)
+        eval_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in eval_data], dtype=torch.long)
+                                    for k in model_arg_names])
+        eval_sampler = SequentialSampler(eval_tensors)
+        eval_dataloader = DataLoader(eval_tensors, sampler=eval_sampler, batch_size=eval_batch_size)
+
+        (precision, recall, f1) = compute_precision_recall_f1(model, eval_data, eval_dataloader, device)
 
         result = dict(
             global_step=global_step,
@@ -286,10 +295,11 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
             max_seq_length=max_seq_length,
             iteration=n_iter,
         )
-        result['eval_micro_accuracy'] = micro_acc
-        result['eval_macro_accuracy'] = macro_acc
+        result['eval_precision'] = precision
+        result['eval_recall'] = recall
+        result['eval_f1'] = f1
 
-        logger.info("***** Eval results *****")
+        logger.info("***** Eval results: %s *****", target)
         for key in sorted(result.keys()):
             if key.startswith('eval_') or key in ('loss', 'global_step', 'iteration'):
                 logger.info("  %s = %s", key, str(result[key]))
@@ -299,7 +309,8 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
             writer.flush()
 
     for n_iter in trange(int(iteration), desc='Epoch'):
-        evaluate(model, global_step, n_iter)
+        for target in test_set:
+            evaluate(model, target, global_step, n_iter)
 
         model.train()
 
@@ -320,13 +331,14 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
                 model.zero_grad()
                 global_step += 1
 
-    evaluate(model, global_step, n_iter)
+    for target in test_set:
+        evaluate(model, target, global_step, n_iter)
 
     if output_dir:
         writer.close()
 
 
-def compute_accuracy(model, eval_data, eval_dataloader, device):
+def compute_precision_recall_f1(model, eval_data, eval_dataloader, device):
     eval_logits = []
     eval_labels = []
     for batch in tqdm(eval_dataloader):
@@ -341,18 +353,18 @@ def compute_accuracy(model, eval_data, eval_dataloader, device):
     outputs = np.argmax(np.vstack(eval_logits), axis=1)
 
     num_correct = 0
-    num_total = 0
-    num_doc_correct = collections.defaultdict(int)
-    num_doc_total = collections.defaultdict(int)
+    num_mentions = 0
+    num_mentions_with_candidates = 0
     for (predicted, correct, (document, mention, _)) in zip(outputs, eval_labels, eval_data):
         if predicted == correct:
             num_correct += 1
-            num_doc_correct[document.id] += 1
 
-        num_total += 1
-        num_doc_total[document.id] += 1
+        num_mentions += 1
+        if mention.candidates:
+            num_mentions_with_candidates += 1
 
-    macro_acc = np.mean([num_doc_correct[k] / num_doc_total[k] for k in num_doc_correct.keys()])
-    micro_acc = num_correct / num_total
+    precision = num_correct / num_mentions_with_candidates
+    recall = num_correct / num_mentions
+    f1 = 2.0 * precision * recall / (precision + recall)
 
-    return (macro_acc, micro_acc)
+    return (precision, recall, f1)
