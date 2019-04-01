@@ -47,12 +47,12 @@ class BertAdam(Optimizer):
         defaults = dict(lr=lr, lr_decay=lr_decay, warmup=warmup, t_total=t_total, b1=b1, b2=b2, e=e,
                         weight_decay_rate=weight_decay_rate, max_grad_norm=max_grad_norm)
 
+        super(BertAdam, self).__init__(params, defaults)
+
         if device is None:
             self.device = self.param_groups[0]['params'][0].device
         else:
             self.device = device
-
-        super(BertAdam, self).__init__(params, defaults)
 
     def get_lr(self):
         lr = []

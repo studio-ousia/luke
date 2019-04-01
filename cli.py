@@ -15,9 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 @click.group()
-def cli():
+@click.option('-v', '--verbose', is_flag=True)
+def cli(verbose):
     fmt = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
-    logging.basicConfig(level=logging.INFO, format=fmt)
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG, format=fmt)
+    else:
+        logging.basicConfig(level=logging.INFO, format=fmt)
 
 
 @cli.command()
@@ -271,9 +275,11 @@ def task_common_options(func):
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.option('--max-entity-length', default=128)
 @click.option('--max-candidate-size', default=30)
+@click.option('--max-mention-length', default=20)
 @click.option('--min-context-prior-prob', default=0.9)
-@click.option('--prior-prob-bin-size', default=0)
+@click.option('--prior-prob-bin-size', default=20)
 @click.option('--fix-entity-emb/--update-entity-emb', default=True)
+@click.option('--fix-entity-bias/--update-entity-bias', default=False)
 @click.option('-t', '--test-set', default=['test_a'], multiple=True)
 @task_common_options
 def entity_disambiguation(dump_db_file, data_dir, **kwargs):

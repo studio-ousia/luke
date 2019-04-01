@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import collections
+import copy
 import inspect
 import json
 import logging
@@ -11,10 +11,9 @@ import joblib
 import numpy as np
 import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
 from batch_generator import create_word_data
-from model import LukeConfig
 from model_common import LayerNorm
 from optimization import BertAdam
 from utils import clean_text
@@ -34,7 +33,8 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
                       single_token_per_mention, max_mention_length):
     ret = []
     max_num_tokens = max_seq_length - 2
-    for document in tqdm(documents):
+    for document in documents:
+        document = copy.deepcopy(document)
         orig_words = [clean_text(w) for w in document.words]
         mention_start_map = {m.span[0]: m for m in document.mentions}
         mention_end_map = {m.span[1]: m for m in document.mentions}
@@ -52,25 +52,31 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
         for target_mention in document.mentions:
             target_span = target_mention.span
 
-            mention_size = target_span[1] - target_span[0]
-            half_context_size = int((max_num_tokens - mention_size) / 2)
+            mention_length = target_span[1] - target_span[0]
+            half_context_size = int((max_num_tokens - mention_length) / 2)
 
             left_token_size = target_span[0]
             right_token_size = len(tokens) - target_span[1]
             if left_token_size < right_token_size:
                 left_context_size = min(left_token_size, half_context_size)
                 right_context_size = min(right_token_size,
-                                         max_num_tokens - left_context_size - mention_size)
+                                         max_num_tokens - left_context_size - mention_length)
             else:
                 right_context_size = min(right_token_size, half_context_size)
                 left_context_size = min(left_token_size,
-                                        max_num_tokens - right_context_size - mention_size)
+                                        max_num_tokens - right_context_size - mention_length)
 
             token_start = target_span[0] - left_context_size
             token_end = target_span[1] + right_context_size
             target_tokens = tokens[token_start:target_span[0]]
             target_tokens += tokens[target_span[0]:target_span[1]]
             target_tokens += tokens[target_span[1]:token_end]
+            # print('---')
+            # print('title', target_mention.title)
+            # print('left', tokens[token_start:target_span[0]])
+            # print('mention', tokens[target_span[0]:target_span[1]])
+            # print('right', tokens[target_span[1]:token_end])
+            # print('---')
 
             word_data = create_word_data(target_tokens, None, tokenizer.vocab, max_seq_length)
 
@@ -80,8 +86,8 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
             if single_token_per_mention:
                 entity_position_ids = np.full((max_entity_length, max_mention_length), -1,
                                               dtype=np.int)
-                entity_position_ids[0][:mention_size] = range(left_context_size + 1,
-                                                              left_context_size + mention_size + 1)
+                entity_position_ids[0][:mention_length] = range(left_context_size + 1,
+                                                              left_context_size + mention_length + 1)
             else:
                 entity_position_ids = np.zeros(max_entity_length, dtype=np.int)
                 entity_position_ids[0] = left_context_size + 1
@@ -100,12 +106,12 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
                 if start < 0 or end > max_num_tokens:
                     continue
 
-                mention_size = end - start
+                mention_length = end - start
                 for candidate in mention.candidates:
                     if candidate.prior_prob <= min_context_prior_prob:
                         continue
                     entity_ids[entity_index] = entity_vocab[candidate.title]
-                    entity_position_ids[entity_index][:mention_size] = range(start + 1, end + 1)
+                    entity_position_ids[entity_index][:mention_length] = range(start + 1, end + 1)
                     entity_index += 1
                     if entity_index == max_entity_length:
                         break
@@ -143,10 +149,9 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
 
 
 def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_length,
-        max_candidate_size, min_context_prior_prob, prior_prob_bin_size, batch_size,
-        eval_batch_size, learning_rate, iteration, warmup_proportion, lr_decay, seed,
-        gradient_accumulation_steps, fix_entity_emb, test_set):
-    device = torch.device('cuda')
+        max_candidate_size, max_mention_length, min_context_prior_prob, prior_prob_bin_size,
+        batch_size, eval_batch_size, learning_rate, iteration, warmup_proportion, lr_decay, seed,
+        gradient_accumulation_steps, fix_entity_emb, fix_entity_bias, test_set):
     n_gpu = torch.cuda.device_count()
 
     random.seed(seed)
@@ -167,10 +172,9 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
     config = LukeConfigForEntityDisambiguation(prior_prob_bin_size=prior_prob_bin_size,
                                                **model_data['config'])
     corpus = WikiCorpus(model_data['args']['corpus_data_file'])
+    tokenizer = corpus.tokenizer
     orig_entity_vocab = EntityVocab(model_data['args']['entity_vocab_file'])
     single_token_per_mention = model_data['args'].get('single_token_per_mention', False)
-    # max_mention_length = model_data['args'].get('max_mention_length', 100)
-    max_mention_length = 20
 
     logger.info('Loading dataset...')
 
@@ -222,20 +226,24 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
     if fix_entity_emb:
         model.entity_embeddings.entity_embeddings.weight.requires_grad = False
 
-    train_batch_size = int(batch_size / gradient_accumulation_steps)
-    model_arg_names = inspect.getfullargspec(LukeForEntityDisambiguation.forward)[0][1:]
+    logger.info('Fix entity bias during training: %s', fix_entity_bias)
+    if fix_entity_bias:
+        model.entity_predictions.bias.requires_grad = False
 
     logger.info('Creating TensorDataset for training')
 
-    train_data = generate_features(dataset.train, corpus.tokenizer, entity_vocab, max_seq_length,
+    train_batch_size = int(batch_size / gradient_accumulation_steps)
+    model_arg_names = inspect.getfullargspec(LukeForEntityDisambiguation.forward)[0][1:]
+
+    train_data = generate_features(dataset.train, tokenizer, entity_vocab, max_seq_length,
                                    max_entity_length, max_candidate_size, min_context_prior_prob,
                                    prior_prob_bin_size, single_token_per_mention, max_mention_length)
     train_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in train_data], dtype=torch.long)
                                     for k in model_arg_names])
-    train_sampler = RandomSampler(train_tensors)
-    train_dataloader = DataLoader(train_tensors, sampler=train_sampler, batch_size=train_batch_size)
+    train_dataloader = DataLoader(train_tensors, sampler=RandomSampler(train_tensors),
+                                  batch_size=train_batch_size)
 
-    model.to(device)
+    model.to('cuda')
     if n_gpu > 1:
         model = torch.nn.DataParallel(model)
 
@@ -259,8 +267,7 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
                 else:
                     parameters['params'].append(param)
 
-    opt_device = torch.device('cuda:0')
-    optimizer = BertAdam([parameters, no_decay_parameters], lr=learning_rate, device=opt_device,
+    optimizer = BertAdam([parameters, no_decay_parameters], lr=learning_rate,
                          warmup=warmup_proportion, lr_decay=lr_decay, t_total=num_train_steps)
     global_step = 0
 
@@ -270,18 +277,17 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
     def evaluate(model, target, global_step, n_iter):
         model.eval()
 
-        with open(DATASET_CACHE_FILE, mode='rb') as f:
-            (dataset, entity_titles) = pickle.load(f)
         documents = getattr(dataset, target)
-        eval_data = generate_features(documents, corpus.tokenizer, entity_vocab, max_seq_length,
+        eval_data = generate_features(documents, tokenizer, entity_vocab, max_seq_length,
                                       max_entity_length, max_candidate_size, min_context_prior_prob,
                                       prior_prob_bin_size, single_token_per_mention, max_mention_length)
         eval_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in eval_data], dtype=torch.long)
-                                    for k in model_arg_names])
-        eval_sampler = SequentialSampler(eval_tensors)
-        eval_dataloader = DataLoader(eval_tensors, sampler=eval_sampler, batch_size=eval_batch_size)
+                                     for k in model_arg_names])
+        eval_dataloader = DataLoader(eval_tensors, sampler=SequentialSampler(eval_tensors),
+                                     batch_size=eval_batch_size)
 
-        (precision, recall, f1) = compute_precision_recall_f1(model, eval_data, eval_dataloader, device)
+        (precision, recall, f1) = compute_precision_recall_f1(model, eval_data, eval_dataloader,
+                                                              target)
 
         result = dict(
             global_step=global_step,
@@ -301,30 +307,29 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
 
         logger.info("***** Eval results: %s *****", target)
         for key in sorted(result.keys()):
-            if key.startswith('eval_') or key in ('loss', 'global_step', 'iteration'):
+            if key in ('eval_f1', 'loss', 'global_step', 'iteration'):
                 logger.info("  %s = %s", key, str(result[key]))
 
         if output_dir:
             writer.write("%s\n" % json.dumps(result, sort_keys=True))
             writer.flush()
 
-    for n_iter in trange(int(iteration), desc='Epoch'):
+    for n_iter in range(int(iteration)):
         for target in test_set:
             evaluate(model, target, global_step, n_iter)
 
         model.train()
+        logger.info("***** Epoch: %d *****", n_iter)
 
-        nb_tr_examples = 0
         nb_tr_steps = 0
-        for (step, batch) in enumerate(tqdm(train_dataloader, desc='Iteration')):
-            batch = tuple(t.to(device) for t in batch)
+        for (step, batch) in enumerate(tqdm(train_dataloader, desc='train')):
+            batch = tuple(t.to('cuda') for t in batch)
             loss = model(*batch)
             if n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu.
             if gradient_accumulation_steps > 1:
                 loss = loss / gradient_accumulation_steps
             loss.backward()
-            nb_tr_examples += batch[0].size(0)
             nb_tr_steps += 1
             if (step + 1) % gradient_accumulation_steps == 0:
                 optimizer.step()
@@ -338,11 +343,11 @@ def run(data_dir, dump_db, model_file, output_dir, max_seq_length, max_entity_le
         writer.close()
 
 
-def compute_precision_recall_f1(model, eval_data, eval_dataloader, device):
+def compute_precision_recall_f1(model, eval_data, eval_dataloader, desc):
     eval_logits = []
     eval_labels = []
-    for batch in tqdm(eval_dataloader):
-        args = [t.to(device) for t in batch[:-1]]
+    for batch in tqdm(eval_dataloader, desc=desc, leave=False):
+        args = [t.to('cuda') for t in batch[:-1]]
         with torch.no_grad():
             logits = model(*args)
 
@@ -355,13 +360,19 @@ def compute_precision_recall_f1(model, eval_data, eval_dataloader, device):
     num_correct = 0
     num_mentions = 0
     num_mentions_with_candidates = 0
-    for (predicted, correct, (document, mention, _)) in zip(outputs, eval_labels, eval_data):
+    for (predicted, correct, (_, mention, _)) in zip(outputs, eval_labels, eval_data):
         if predicted == correct:
             num_correct += 1
+
+        assert correct != 0
 
         num_mentions += 1
         if mention.candidates:
             num_mentions_with_candidates += 1
+
+    logger.debug('#mentions (%s): %d', desc, num_mentions)
+    logger.debug('#mentions with candidates (%s): %d', desc, num_mentions_with_candidates)
+    logger.debug('#correct (%s): %d', desc, num_correct)
 
     precision = num_correct / num_mentions_with_candidates
     recall = num_correct / num_mentions
