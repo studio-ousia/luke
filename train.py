@@ -31,7 +31,6 @@ def run_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, bat
     train_args = train_kwargs.copy()
     for arg in inspect.getfullargspec(run_training).args:
         train_args[arg] = locals()[arg]
-    # logger.info('Arguments: %s', json.dumps(train_args, indent=2, sort_keys=True))
 
     entity_vocab = EntityVocab(entity_vocab_file)
     bert_model = BertForPreTraining.from_pretrained(bert_model_name)
@@ -257,6 +256,7 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
 
             step += 1
             tr_loss += loss.item()
+            loss = None
             results.append(result)
 
             if step == gradient_accumulation_steps:

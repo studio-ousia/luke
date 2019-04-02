@@ -358,7 +358,7 @@ def _process_page(page_title):
                     prior_prob = int(mention.prior_prob * 100)
 
                     detected_mentions.extend([title_id, token_start, token_end, link_prob,
-                                                prior_prob, rank, label])
+                                              prior_prob, rank, label])
 
             link_arr = np.array(links, dtype=np.uint32)
             mention_arr = np.array(detected_mentions, dtype=np.int32)

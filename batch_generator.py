@@ -109,8 +109,8 @@ class BatchWorker(multiprocessing.Process):
 
         self._output_queue = output_queue
         self._is_finished = is_finished
-        self._target_entity_annotation = target_entity_annotation
         self._page_indices = page_indices
+        self._target_entity_annotation = target_entity_annotation
         self._corpus_data_file = corpus_data_file
         self._entity_vocab = entity_vocab
         self._batch_size = batch_size
@@ -404,7 +404,6 @@ def create_link_data(a_links, b_links, a_word_length, entity_vocab, max_entity_l
 
     if b_links is None:
         b_links = []
-
     else:
         for link in b_links:
             link.start += 2 + a_word_length  # 2 for CLS and SEP
@@ -489,7 +488,6 @@ def create_mention_data(a_mentions, b_mentions, a_word_length, entity_vocab, max
         for mention in b_mentions:
             mention.start += 2 + a_word_length  # 2 for CLS and SEP
             mention.end += 2 + a_word_length
-
         b_mentions = [m for m in b_mentions if m.title in entity_vocab]
 
     index = 0
