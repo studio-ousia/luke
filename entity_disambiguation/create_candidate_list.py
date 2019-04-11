@@ -7,17 +7,17 @@ from entity_disambiguation.ed_dataset import EntityDisambiguationDataset
 
 
 @click.command()
-@click.argument('dataset_dir', type=click.Path(exists=True))
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.argument('out_file', type=click.File('w'))
+@click.option('--data-dir', type=click.Path(exists=True), default='data/entity-disambiguation')
 @click.option('--max-candidate-size', default=None, type=int)
-def main(dataset_dir, dump_db_file, out_file, max_candidate_size):
+def main(dump_db_file, out_file, data_dir, max_candidate_size):
     dump_db = DumpDB(dump_db_file)
 
     titles = set()
     valid_titles = frozenset(dump_db.titles())
 
-    reader = EntityDisambiguationDataset(dataset_dir)
+    reader = EntityDisambiguationDataset(data_dir)
     for documents in reader.get_all_datasets():
         for document in documents:
             for mention in document.mentions:
