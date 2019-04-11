@@ -82,6 +82,9 @@ class EntityVocab(Vocab):
     def get_title_by_id(self, id_):
         return self.inv_vocab[id_]
 
+    def get_occurrence_count(self, key):
+        return self.vocab[key][0][1]
+
     def _load_vocab(self, vocab_input):
         vocab = RecordTrie('II')
         vocab.load(vocab_input)
