@@ -24,6 +24,7 @@ def cli(verbose):
         logging.basicConfig(level=logging.INFO, format=fmt)
 
 
+
 @cli.command()
 @click.argument('dump_file', type=click.Path(exists=True))
 @click.argument('out_file', type=click.Path())
@@ -66,9 +67,9 @@ def build_mention_db(dump_db_file, out_file, **kwargs):
 @click.option('--target', type=click.Choice(['abstract', 'full']), default='full')
 @click.option('--uncased/--cased', default=True)
 @click.option('--min-prior-prob', default=0.1)
-@click.option('--min-sentence-len', default=10)
+@click.option('--min-sentence-len', default=5)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
-def build_corpus_data(dump_db_file, mention_db_file, word_vocab_file, uncased, min_prior_prob,
+def build_wiki_corpus(dump_db_file, mention_db_file, word_vocab_file, uncased, min_prior_prob,
                       **kwargs):
     from utils.vocab import WordPieceVocab
     from utils.word_tokenizer import WordPieceTokenizer
@@ -91,13 +92,14 @@ def build_corpus_data(dump_db_file, mention_db_file, word_vocab_file, uncased, m
 @click.argument('corpus_data_file', type=click.Path())
 @click.argument('out_file', type=click.Path())
 @click.option('--vocab-size', default=1000000)
-@click.option('-i', '--include', type=click.File(), multiple=True)
-def build_entity_vocab(corpus_data_file, include, **kwargs):
+@click.option('-w', '--white-list', type=click.File(), multiple=True)
+@click.option('--white-list-only', is_flag=True)
+def build_entity_vocab(corpus_data_file, white_list, **kwargs):
     from wiki_corpus import WikiCorpus
     from utils.vocab import EntityVocab
 
     corpus = WikiCorpus(corpus_data_file)
-    white_list = [line.rstrip() for f in include for line in f]
+    white_list = [line.rstrip() for f in white_list for line in f]
     EntityVocab.build_vocab(corpus, white_list=white_list, **kwargs)
 
 
@@ -128,6 +130,7 @@ def common_training_options(func):
     @click.option('--entity-emb-size', default=768)
     @click.option('--bert-model-name', default='bert-base-uncased')
     @click.option('--model-file', type=click.Path(exists=True), default=None)
+    @click.option('--allocate-gpu-for-optimizer', is_flag=True)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -226,7 +229,7 @@ def _resume_training(train_func, json_data, output_dir, global_step, **kwargs):
 
     if global_step is None:
         # get the latest data file
-        data_file = sorted([f for f in os.listdir(output_dir) if f.startswith('data_')])[-1]
+        data_file = sorted([f for f in os.listdir(output_dir) if f.startswith('data_') and 'step' in f])[-1]
         global_step = int(data_file.replace('data_step', '').replace('.pkl', ''))
     else:
         data_file = 'data_step%07d.pkl' % global_step
@@ -235,6 +238,7 @@ def _resume_training(train_func, json_data, output_dir, global_step, **kwargs):
 
     args = data['args']
     args['global_step'] = data['global_step']
+    args['epoch'] = data.get('epoch', 0)
     args['page_chunks'] = data['page_chunks']
 
     model_file = data_file.replace('.pkl', '.bin').replace('data', 'model')
@@ -250,114 +254,6 @@ def _resume_training(train_func, json_data, output_dir, global_step, **kwargs):
             args[key] = value
 
     train_func(**args)
-
-
-def task_common_options(func):
-    @click.argument('model_file', type=click.Path(exists=True))
-    @click.option('--output-dir', type=click.Path())
-    @click.option('--data-dir', type=click.Path(exists=True), default='data')
-    @click.option('--max-seq-length', default=512)
-    @click.option('--batch-size', default=32)
-    @click.option('--learning-rate', default=3e-5)
-    @click.option('--iteration', default=4.0)
-    @click.option('--eval-batch-size', default=8)
-    @click.option('--warmup-proportion', default=0.1)
-    @click.option('--lr-decay/--no-lr-decay', default=True)
-    @click.option('--seed', default=42)
-    @click.option('--gradient-accumulation-steps', default=1)
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-
-@cli.command()
-@click.argument('dump_db_file', type=click.Path(exists=True))
-@click.option('--max-entity-length', default=128)
-@click.option('--max-candidate-size', default=30)
-@click.option('--max-mention-length', default=20)
-@click.option('--min-context-prior-prob', default=0.9)
-@click.option('--prior-prob-bin-size', default=20)
-@click.option('--fix-entity-emb/--update-entity-emb', default=True)
-@click.option('--fix-entity-bias/--update-entity-bias', default=False)
-@click.option('-t', '--test-set', default=['test_a'], multiple=True)
-@task_common_options
-def entity_disambiguation(dump_db_file, data_dir, **kwargs):
-    from entity_disambiguation.main import run
-
-    dump_db = DumpDB(dump_db_file)
-    data_dir = os.path.join(data_dir, 'entity-disambiguation')
-
-    run(data_dir, dump_db, **kwargs)
-
-
-def glue_options(func):
-    @task_common_options
-    @click.option('-t', '--task-name', default='mrpc', type=click.Choice(['cola', 'mnli', 'qnli',
-        'mrpc', 'rte', 'qqp', 'scitail', 'sts-b']))
-    @click.option('--max-entity-length', default=128)
-    @click.option('--min-prior-prob', default=[0.1, 0.3, 0.9], type=float, multiple=True)
-    @click.option('--fix-entity-emb/--update-entity-emb', default=[True, False], multiple=True)
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-
-def multi_choice_qa_options(func):
-    @task_common_options
-    @click.option('-t', '--task-name', type=click.Choice(['swag', 'arc-easy', 'arc-challenge',
-        'openbookqa']), default='swag')
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-
-@cli.command()
-@glue_options
-@click.option('-j', '--json-data', default=None)
-def glue(**kwargs):
-    from glue import run
-    run_task(run, **kwargs)
-
-
-@cli.command()
-@multi_choice_qa_options
-@click.option('-j', '--json-data', default=None)
-def multi_choice_qa(**kwargs):
-    from multi_choice_qa import run
-    run_task(run, **kwargs)
-
-
-def run_task(run_func, word_vocab_file, mention_db_file, json_data, **kwargs):
-    from utils.vocab import WordPieceVocab
-    from utils.word_tokenizer import WordPieceTokenizer
-    from utils.entity_linker import MentionDB, EntityLinker
-
-    if json_data is not None:
-        kwargs.update(json.loads(json_data))
-
-    word_vocab = WordPieceVocab(word_vocab_file)
-    uncased = kwargs.pop('uncased')
-    tokenizer = WordPieceTokenizer(word_vocab, lowercase=uncased)
-
-    mention_db = MentionDB.load(mention_db_file)
-    entity_linker = EntityLinker(mention_db)
-
-    learning_rates = kwargs.pop('learning_rate')
-    iterations = kwargs.pop('iteration')
-    batch_sizes = kwargs.pop('batch_size')
-    min_prior_probs = kwargs.pop('min_prior_prob')
-    fix_entity_embs = kwargs.pop('fix_entity_emb')
-    for learing_rate in learning_rates:
-        for iteration in iterations:
-            for batch_size in batch_sizes:
-                for min_prior_prob in min_prior_probs:
-                    for fix_entity_emb in fix_entity_embs:
-                        run_func(tokenizer, entity_linker, learning_rate=learing_rate,
-                                 iteration=iteration, min_prior_prob=min_prior_prob,
-                                 batch_size=batch_size, fix_entity_emb=fix_entity_emb, **kwargs)
 
 
 if __name__ == '__main__':

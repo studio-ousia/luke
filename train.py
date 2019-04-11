@@ -27,7 +27,7 @@ def run_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, bat
     gradient_accumulation_steps, max_seq_length, max_entity_length, short_seq_prob, masked_lm_prob,
     max_predictions_per_seq, masked_entity_prob, max_entity_predictions_per_seq, update_all_weights,
     entity_emb_size, bert_model_name, single_token_per_mention=False, max_mention_length=100,
-    model_file=None, **train_kwargs):
+    model_file=None, allocate_gpu_for_optimizer=True, **train_kwargs):
     train_args = train_kwargs.copy()
     for arg in inspect.getfullargspec(run_training).args:
         train_args[arg] = locals()[arg]
@@ -72,14 +72,14 @@ def run_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, bat
         mmap=mmap)
 
     _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
-           allocate_gpu_for_optimizer=True, **train_kwargs)
+           allocate_gpu_for_optimizer=allocate_gpu_for_optimizer, **train_kwargs)
 
 
 def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence, batch_size,
     gradient_accumulation_steps, max_seq_length, max_entity_length, short_seq_prob, masked_lm_prob,
     max_predictions_per_seq, link_prob_bin_size, prior_prob_bin_size, entity_emb_size,
     entity_classification, bert_model_name, single_token_per_mention=False, max_mention_length=100,
-    model_file=None, pretrained_model_file=None, **train_kwargs):
+    model_file=None, pretrained_model_file=None, allocate_gpu_for_optimizer=False, **train_kwargs):
     train_args = train_kwargs.copy()
     for arg in inspect.getfullargspec(run_e2e_training).args:
         train_args[arg] = locals()[arg]
@@ -123,13 +123,13 @@ def run_e2e_training(corpus_data_file, entity_vocab_file, mmap, single_sentence,
         mmap=mmap)
 
     _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
-           allocate_gpu_for_optimizer=False, **train_kwargs)
+           allocate_gpu_for_optimizer=allocate_gpu_for_optimizer, **train_kwargs)
 
 
 def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumulation_steps,
            output_dir, log_dir, learning_rate, lr_decay, warmup_steps, num_train_steps,
-           num_page_chunks, save_every, allocate_gpu_for_optimizer, global_step=0, page_chunks=[],
-           optimizer_file=None, sparse_optimizer_file=None):
+           num_page_chunks, save_every, allocate_gpu_for_optimizer, epoch=0, global_step=0,
+           page_chunks=[], optimizer_file=None, sparse_optimizer_file=None):
     device = torch.device('cuda:0')
     n_gpu = torch.cuda.device_count()
 
@@ -190,7 +190,7 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
 
     model.train()
 
-    def save_model(model, suffix, global_step, page_chunks):
+    def save_model(model, suffix, epoch, global_step, page_chunks):
         if n_gpu > 1:
             torch.save(model.module.state_dict(), os.path.join(output_dir, 'model_%s.bin' % suffix))
             config_dict = model.module.config.to_dict()
@@ -208,6 +208,7 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
 
         data = {}
         data['args'] = train_args
+        data['epoch'] = epoch
         data['global_step'] = global_step
         data['page_chunks'] = page_chunks
         data['config'] = config_dict
@@ -300,12 +301,16 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
                     break
 
                 if global_step != 0 and global_step % save_every == 0:
-                    save_model(model, 'step%07d' % (global_step,), global_step, page_chunks)
+                    save_model(model, 'step%07d' % (global_step,), epoch, global_step, page_chunks)
 
                 global_step += 1
                 pbar.update(1)
 
-        save_model(model, 'step%07d' % (global_step,), global_step, page_chunks)
+        save_model(model, 'step%07d' % (global_step,), epoch, global_step, page_chunks)
+        if not page_chunks:
+            save_model(model, 'epoch%03d' % (epoch,), epoch, global_step, page_chunks)
+            epoch += 1
+
         if global_step == num_train_steps:
             break
 

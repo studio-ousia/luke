@@ -56,7 +56,7 @@ class EntityEmbeddings(nn.Module):
 
         else:
             position_embeddings = self.position_embeddings(position_ids.clamp(min=0))
-            position_embedding_mask = (position_ids != -1).float().unsqueeze(-1)
+            position_embedding_mask = (position_ids != -1).type_as(position_embeddings).unsqueeze(-1)
             position_embeddings = position_embeddings * position_embedding_mask
 
             position_embeddings = torch.sum(position_embeddings, dim=2, keepdim=False)
