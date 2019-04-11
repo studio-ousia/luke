@@ -91,7 +91,7 @@ class EntityVocab(Vocab):
         return vocab
 
     @staticmethod
-    def build_vocab(wiki_corpus, vocab_size, out_file, white_list=[]):
+    def build_vocab(wiki_corpus, out_file, vocab_size, white_list=[], white_list_only=False):
         counter = Counter()
         for link in wiki_corpus.iterate_links():
             counter[link.title] += 1
@@ -105,10 +105,11 @@ class EntityVocab(Vocab):
             if counter[title] != 0:
                 title_dict[title] = counter[title]
 
-        for (title, count) in counter.most_common():
-            title_dict[title] = count
-            if len(title_dict) == vocab_size:
-                break
+        if not white_list_only:
+            for (title, count) in counter.most_common():
+                title_dict[title] = count
+                if len(title_dict) == vocab_size:
+                    break
 
         def item_generator():
             for (ind, (title, count)) in enumerate(title_dict.items()):
