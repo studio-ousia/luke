@@ -109,6 +109,7 @@ def load_documents(csv_path, conll_path, person_names):
     # merge with the mention_data
     punc_remover = re.compile(r'[\W]+')
     for (doc_name, mentions) in mention_data.items():
+        # This document is excluded in Le and Titov 2018: https://github.com/lephong/mulrel-nel/blob/db14942450f72c87a4d46349860e96ef2edf353d/nel/dataset.py#L221
         if doc_name == 'Jiří_Třanovský Jiří_Třanovský':
             continue
         document = document_data[doc_name.split()[0]]
@@ -116,7 +117,7 @@ def load_documents(csv_path, conll_path, person_names):
         mention_span_index = 0
         for mention in mentions:
             if not mention['title']:
-                mention['title'] = '--NIL--'
+                mention['title'] = '-'
             mention_text = punc_remover.sub('', mention['text'].lower())
 
             while True:
