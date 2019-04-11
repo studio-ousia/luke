@@ -8,7 +8,7 @@ import random
 from itertools import chain, repeat
 import numpy as np
 
-from wiki_corpus import WikiCorpus
+from luke.wiki_corpus import WikiCorpus
 
 logger = logging.getLogger(__name__)
 

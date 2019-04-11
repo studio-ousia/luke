@@ -12,13 +12,13 @@ from pytorch_pretrained_bert.modeling import BertForPreTraining
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
-from batch_generator import LukeBatchGenerator, LukeE2EBatchGenerator
-from model_common import LayerNorm
-from model import LukeConfig, LukePretrainingModel
-from model_e2e import LukeE2EConfig, LukeE2EPretrainingModel
-from optimization import BertAdam, SparseBertAdam
-from utils.vocab import EntityVocab
-from wiki_corpus import WikiCorpus
+from luke.batch_generator import LukeBatchGenerator, LukeE2EBatchGenerator
+from luke.model_common import LayerNorm
+from luke.model import LukeConfig, LukePretrainingModel
+from luke.model_e2e import LukeE2EConfig, LukeE2EPretrainingModel
+from luke.optimization import BertAdam, SparseBertAdam
+from luke.utils.vocab import EntityVocab
+from luke.wiki_corpus import WikiCorpus
 
 logger = logging.getLogger(__name__)
 

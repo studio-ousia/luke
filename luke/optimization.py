@@ -196,7 +196,6 @@ class BertAdam(Optimizer):
         self.__setstate__({'state': state, 'param_groups': param_groups})
 
 
-
 class SparseBertAdam(BertAdam):
     def __init__(self, *args, **kwargs):
         super(SparseBertAdam, self).__init__(*args, **kwargs)

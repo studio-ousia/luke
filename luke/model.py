@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
-from model_common import BaseConfig, BaseModel, WordEmbeddings, LayerNorm, Encoder, Pooler,\
+from luke.model_common import BaseConfig, BaseModel, WordEmbeddings, LayerNorm, Encoder, Pooler,\
     PredictionHeadTransform, BertPreTrainingHeads
 
 logger = logging.getLogger(__name__)

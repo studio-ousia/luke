@@ -16,12 +16,12 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, Sequentia
 from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
 
-from batch_generator import create_word_data
-from model_common import LayerNorm
-from optimization import BertAdam
-from utils import clean_text
-from utils.vocab import EntityVocab, MASK_TOKEN, PAD_TOKEN
-from wiki_corpus import WikiCorpus
+from luke.batch_generator import create_word_data
+from luke.model_common import LayerNorm
+from luke.optimization import BertAdam
+from luke.utils import clean_text
+from luke.utils.vocab import EntityVocab, MASK_TOKEN, PAD_TOKEN
+from luke.wiki_corpus import WikiCorpus
 
 from entity_disambiguation.ed_dataset import EntityDisambiguationDataset
 from entity_disambiguation.ed_model import LukeForEntityDisambiguation, LukeConfigForEntityDisambiguation
@@ -61,6 +61,9 @@ def run(data_dir, dump_db_file, model_file, output_file, max_seq_length, max_ent
         entity_prior_bin_size, batch_size, eval_batch_size, learning_rate, iteration,
         warmup_proportion, lr_decay, seed, gradient_accumulation_steps, fix_word_emb,
         fix_entity_emb, fix_entity_bias, evaluate_every_epoch, test_set):
+    logging.basicConfig(level=logging.INFO,
+        format='[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)')
+
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -165,8 +168,8 @@ def run(data_dir, dump_db_file, model_file, output_file, max_seq_length, max_ent
     for (module_name, module) in model.named_modules():
         if isinstance(module, LayerNorm):
             no_decay_parameters['params'].extend(list(module.parameters(recurse=False)))
-        elif 'bias_embeddings' in module_name:
-            no_decay_parameters['params'].extend(list(module.parameters(recurse=False)))
+        # elif 'bias_embeddings' in module_name:
+        #     no_decay_parameters['params'].extend(list(module.parameters(recurse=False)))
         else:
             for (name, param) in module.named_parameters(recurse=False):
                 if param in params_set:

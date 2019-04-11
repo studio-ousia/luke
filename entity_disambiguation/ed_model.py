@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
-from model import LukeConfig, LukeModel, EntityPredictionHead
+from luke.model import LukeConfig, LukeModel, EntityPredictionHead
 
 
 class LukeConfigForEntityDisambiguation(LukeConfig):

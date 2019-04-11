@@ -32,7 +32,7 @@ def cli(verbose):
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', type=int, default=100)
 def build_dump_db(dump_file, out_file, strip_accents, **kwargs):
-    from utils import clean_text
+    from luke.utils import clean_text
 
     dump_reader = WikiDumpReader(dump_file)
     func = clean_text
@@ -52,7 +52,7 @@ def build_dump_db(dump_file, out_file, strip_accents, **kwargs):
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', default=30)
 def build_mention_db(dump_db_file, out_file, **kwargs):
-    from utils.entity_linker import MentionDB
+    from luke.utils.entity_linker import MentionDB
 
     dump_db = DumpDB(dump_db_file)
     mention_db = MentionDB.build(dump_db, **kwargs)
@@ -71,11 +71,11 @@ def build_mention_db(dump_db_file, out_file, **kwargs):
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 def build_wiki_corpus(dump_db_file, mention_db_file, word_vocab_file, uncased, min_prior_prob,
                       **kwargs):
-    from utils.vocab import WordPieceVocab
-    from utils.word_tokenizer import WordPieceTokenizer
-    from utils.sentence_tokenizer import OpenNLPSentenceTokenizer
-    from utils.entity_linker import MentionDB, EntityLinker
-    from wiki_corpus import WikiCorpus
+    from luke.utils.vocab import WordPieceVocab
+    from luke.utils.word_tokenizer import WordPieceTokenizer
+    from luke.utils.sentence_tokenizer import OpenNLPSentenceTokenizer
+    from luke.utils.entity_linker import MentionDB, EntityLinker
+    from luke.wiki_corpus import WikiCorpus
 
     dump_db = DumpDB(dump_db_file)
     word_vocab = WordPieceVocab(word_vocab_file)
@@ -95,8 +95,8 @@ def build_wiki_corpus(dump_db_file, mention_db_file, word_vocab_file, uncased, m
 @click.option('-w', '--white-list', type=click.File(), multiple=True)
 @click.option('--white-list-only', is_flag=True)
 def build_entity_vocab(corpus_data_file, white_list, **kwargs):
-    from wiki_corpus import WikiCorpus
-    from utils.vocab import EntityVocab
+    from luke.wiki_corpus import WikiCorpus
+    from luke.utils.vocab import EntityVocab
 
     corpus = WikiCorpus(corpus_data_file)
     white_list = [line.rstrip() for f in white_list for line in f]
@@ -163,7 +163,7 @@ def run_e2e_training_options(func):
 @run_training_options
 @click.option('-j', '--json-data', default=None)
 def run_training(json_data, **kwargs):
-    import train
+    from luke import train
     _run_training(train.run_training, json_data, **kwargs)
 
 
@@ -172,7 +172,7 @@ def run_training(json_data, **kwargs):
 @run_e2e_training_options
 @click.option('-j', '--json-data', default=None)
 def run_e2e_training(json_data, **kwargs):
-    import train
+    from luke import train
     _run_training(train.run_e2e_training, json_data, **kwargs)
 
 
@@ -211,7 +211,7 @@ def resume_training_options(func):
 @resume_training_options
 @click.option('-j', '--json-data', default=None)
 def resume_training(json_data, **kwargs):
-    import train
+    from luke import train
     _resume_training(train.run_training, json_data, **kwargs)
 
 
@@ -219,7 +219,7 @@ def resume_training(json_data, **kwargs):
 @resume_training_options
 @click.option('-j', '--json-data', default=None)
 def resume_e2e_training(json_data, **kwargs):
-    import train
+    from luke import train
     _resume_training(train.run_e2e_training, json_data, **kwargs)
 
 
@@ -254,7 +254,3 @@ def _resume_training(train_func, json_data, output_dir, global_step, **kwargs):
             args[key] = value
 
     train_func(**args)
-
-
-if __name__ == '__main__':
-    cli()
