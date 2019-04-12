@@ -22,7 +22,7 @@ class LukeForEntityDisambiguation(LukeModel):
             self.entity_embeddings.entity_embeddings.weight)
         if config.prior_prob_bin_size != 0:
             self.prior_prob_bias_embeddings = nn.Embedding(config.prior_prob_bin_size, 1)
-        if config.entity_emb_size != 0:
+        if config.entity_prior_bin_size != 0:
             self.entity_prior_bias_embeddings = nn.Embedding(config.entity_prior_bin_size, 1)
 
         self.apply(self.init_weights)

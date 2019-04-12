@@ -24,7 +24,8 @@ from luke.utils.vocab import EntityVocab, MASK_TOKEN, PAD_TOKEN
 from luke.wiki_corpus import WikiCorpus
 
 from entity_disambiguation.ed_dataset import EntityDisambiguationDataset
-from entity_disambiguation.ed_model import LukeForEntityDisambiguation, LukeConfigForEntityDisambiguation
+from entity_disambiguation.ed_model import LukeForEntityDisambiguation,\
+    LukeConfigForEntityDisambiguation
 
 DATASET_CACHE_FILE = 'entity_disambiguation_dataset.pkl'
 
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 @click.command()
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.argument('model_file', type=click.Path(exists=True))
+@click.option('-v', '--verbose', is_flag=True)
 @click.option('--output-file', type=click.Path())
 @click.option('--data-dir', type=click.Path(exists=True), default='data/entity-disambiguation')
 @click.option('--max-seq-length', default=512)
@@ -56,13 +58,16 @@ logger = logging.getLogger(__name__)
 @click.option('--fix-entity-bias/--update-entity-bias', default=False)
 @click.option('--evaluate-every-epoch', is_flag=True)
 @click.option('-t', '--test-set', default=['test_a'], multiple=True)
-def run(data_dir, dump_db_file, model_file, output_file, max_seq_length, max_entity_length,
+def run(data_dir, dump_db_file, model_file, verbose, output_file, max_seq_length, max_entity_length,
         max_candidate_size, max_mention_length, min_context_prior_prob, prior_prob_bin_size,
         entity_prior_bin_size, batch_size, eval_batch_size, learning_rate, iteration,
         warmup_proportion, lr_decay, seed, gradient_accumulation_steps, fix_word_emb,
         fix_entity_emb, fix_entity_bias, evaluate_every_epoch, test_set):
-    logging.basicConfig(level=logging.INFO,
-        format='[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)')
+    log_format = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG, format=log_format)
+    else:
+        logging.basicConfig(level=logging.INFO, format=log_format)
 
     random.seed(seed)
     np.random.seed(seed)
