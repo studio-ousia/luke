@@ -119,7 +119,7 @@ def common_training_options(func):
     @click.option('--lr-decay/--no-lr-decay', default=False)
     @click.option('--warmup-steps', default=10000)
     @click.option('--max-seq-length', default=512)  # BERT default=512
-    @click.option('--max-entity-length', default=256)
+    @click.option('--max-entity-length', default=128)
     @click.option('--max-mention-length', default=100)
     @click.option('--short-seq-prob', default=0.1)
     @click.option('--masked-lm-prob', default=0.15)
@@ -139,7 +139,7 @@ def common_training_options(func):
 
 def run_training_options(func):
     @click.option('--masked-entity-prob', default=0.15)
-    @click.option('--max-entity-predictions-per-seq', default=38)  # 256 * 0.15
+    @click.option('--max-entity-predictions-per-seq', default=19)  # 256 * 0.15
     @click.option('--update-all-weights', is_flag=True)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):

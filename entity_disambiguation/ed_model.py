@@ -20,14 +20,15 @@ class LukeForEntityDisambiguation(LukeModel):
 
         self.entity_predictions = EntityPredictionHead(config,
             self.entity_embeddings.entity_embeddings.weight)
-        if config.prior_prob_bin_size != 0:
-            self.prior_prob_bias_embeddings = nn.Embedding(config.prior_prob_bin_size, 1)
-        if config.entity_prior_bin_size != 0:
-            self.entity_prior_bias_embeddings = nn.Embedding(config.entity_prior_bin_size, 1)
 
         self.apply(self.init_weights)
-        self.prior_prob_bias_embeddings.weight.data.fill_(0)
-        self.entity_prior_bias_embeddings.weight.data.fill_(0)
+
+        if config.prior_prob_bin_size != 0:
+            self.prior_prob_bias_embeddings = nn.Embedding(config.prior_prob_bin_size, 1)
+            self.prior_prob_bias_embeddings.weight.data.fill_(0)
+        if config.entity_prior_bin_size != 0:
+            self.entity_prior_bias_embeddings = nn.Embedding(config.entity_prior_bin_size, 1)
+            self.entity_prior_bias_embeddings.weight.data.fill_(0)
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
                 entity_position_ids, entity_segment_ids, entity_attention_mask,

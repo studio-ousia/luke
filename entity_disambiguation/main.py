@@ -87,7 +87,6 @@ def run(data_dir, dump_db_file, model_file, verbose, output_file, max_seq_length
     corpus = WikiCorpus(model_data['args']['corpus_data_file'])
     tokenizer = corpus.tokenizer
     orig_entity_vocab = EntityVocab(model_data['args']['entity_vocab_file'])
-    single_token_per_mention = model_data['args']['single_token_per_mention']
 
     logger.info('Loading dataset...')
 
@@ -155,8 +154,7 @@ def run(data_dir, dump_db_file, model_file, verbose, output_file, max_seq_length
 
     train_data = generate_features(dataset.train, tokenizer, entity_vocab, max_seq_length,
                                    max_entity_length, max_candidate_size, min_context_prior_prob,
-                                   prior_prob_bin_size, entity_prior_bin_size,
-                                   single_token_per_mention, max_mention_length)
+                                   prior_prob_bin_size, entity_prior_bin_size, max_mention_length)
     train_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in train_data], dtype=torch.long)
                                     for k in model_arg_names])
     train_dataloader = DataLoader(train_tensors, sampler=RandomSampler(train_tensors),
@@ -200,8 +198,7 @@ def run(data_dir, dump_db_file, model_file, verbose, output_file, max_seq_length
         documents = getattr(dataset, dataset_name)
         eval_data = generate_features(documents, tokenizer, entity_vocab, max_seq_length,
                                       max_entity_length, max_candidate_size, min_context_prior_prob,
-                                      prior_prob_bin_size, entity_prior_bin_size,
-                                      single_token_per_mention, max_mention_length)
+                                      prior_prob_bin_size, entity_prior_bin_size, max_mention_length)
         eval_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in eval_data],
                                        dtype=torch.long) for k in model_arg_names])
         eval_dataloader = DataLoader(eval_tensors, sampler=SequentialSampler(eval_tensors),
@@ -260,7 +257,7 @@ def run(data_dir, dump_db_file, model_file, verbose, output_file, max_seq_length
 
 def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_entity_length,
                       max_candidate_size, min_context_prior_prob, prior_prob_bin_size,
-                      entity_prior_bin_size, single_token_per_mention, max_mention_length):
+                      entity_prior_bin_size, max_mention_length):
     ret = []
     max_num_tokens = max_seq_length - 2
     for document in documents:
@@ -307,14 +304,9 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
             entity_ids = np.zeros(max_entity_length, dtype=np.int)
             entity_ids[0] = entity_vocab[MASK_TOKEN][0]
 
-            if single_token_per_mention:
-                entity_position_ids = np.full((max_entity_length, max_mention_length), -1,
-                                              dtype=np.int)
-                entity_position_ids[0][:mention_length] = range(left_context_size + 1,
-                                                                left_context_size + mention_length + 1)
-            else:
-                entity_position_ids = np.zeros(max_entity_length, dtype=np.int)
-                entity_position_ids[0] = left_context_size + 1
+            entity_position_ids = np.full((max_entity_length, max_mention_length), -1, dtype=np.int)
+            entity_position_ids[0][:mention_length] = range(left_context_size + 1,
+                                                            left_context_size + mention_length + 1)
 
             entity_index = 1
             for mention in document.mentions:

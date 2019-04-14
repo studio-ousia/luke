@@ -2,6 +2,7 @@
 
 import gc
 import inspect
+import json
 import logging
 import os
 import time
@@ -205,6 +206,10 @@ def _train(model, batch_generator, train_args, corpus_data_file, gradient_accumu
             sparse_optimizer_file = 'sparse_optimizer_%s.bin' % suffix
             torch.save(sparse_optimizer.state_dict(),
                        os.path.join(output_dir, sparse_optimizer_file))
+
+        json_data = dict(model_config=config_dict, epoch=epoch, global_step=global_step)
+        with open(os.path.join(output_dir, 'model_%s.json' % suffix), 'w') as f:
+            json.dump(json_data, f, indent=2, sort_keys=True)
 
         data = {}
         data['args'] = train_args
