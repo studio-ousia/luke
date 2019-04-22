@@ -69,9 +69,10 @@ def run(data_dir, dump_db_file, model_file, verbose, output_file, max_seq_length
     else:
         logging.basicConfig(level=logging.INFO, format=log_format)
 
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
     dump_db = DumpDB(dump_db_file)
 
@@ -247,7 +248,7 @@ def run(data_dir, dump_db_file, model_file, verbose, output_file, max_seq_length
                 global_step += 1
 
     for dataset_name in test_set:
-        evaluate(model, dataset_name, n_iter)
+        results.append(evaluate(model, dataset_name, n_iter))
 
     if output_file:
         writer.close()
