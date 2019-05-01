@@ -116,8 +116,6 @@ def load_documents(csv_path, conll_path, person_names):
 
         mention_span_index = 0
         for mention in mentions:
-            if not mention['title']:
-                mention['title'] = '-'
             mention_text = punc_remover.sub('', mention['text'].lower())
 
             while True:
@@ -160,6 +158,9 @@ def load_mentions_from_csv_file(path, person_names):
                 title = ','.join(title[2:])
             else:
                 title = ','.join(title[3:])
+
+            if not title:
+                continue
 
             mention_data[doc_name].append(dict(text=mention_text, candidates=candidates,
                                                title=title))

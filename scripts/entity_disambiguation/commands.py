@@ -3,15 +3,18 @@
 import click
 from wikipedia2vec.dump_db import DumpDB
 
-from entity_disambiguation.ed_dataset import EntityDisambiguationDataset
+from ed_dataset import EntityDisambiguationDataset
+
+@click.group()
+def cli():
+    pass
 
 
-@click.command()
+@cli.command()
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.argument('out_file', type=click.File('w'))
 @click.option('--data-dir', type=click.Path(exists=True), default='data/entity-disambiguation')
-@click.option('--max-candidate-size', default=None, type=int)
-def main(dump_db_file, out_file, data_dir, max_candidate_size):
+def create_candidate_list(dump_db_file, out_file, data_dir):
     dump_db = DumpDB(dump_db_file)
 
     titles = set()
@@ -22,9 +25,6 @@ def main(dump_db_file, out_file, data_dir, max_candidate_size):
         for document in documents:
             for mention in document.mentions:
                 candidates = mention.candidates
-                if max_candidate_size:
-                    candidates = sorted(mention.candidates, key=lambda c: c.prior_prob,
-                                        reverse=True)[:max_candidate_size]
                 for candidate in candidates:
                     title = dump_db.resolve_redirect(candidate.title)
                     if title in valid_titles:
@@ -34,5 +34,15 @@ def main(dump_db_file, out_file, data_dir, max_candidate_size):
         out_file.write(title + '\n')
 
 
+@cli.command()
+@click.argument('dump_db_file', type=click.Path(exists=True))
+@click.argument('out_file', type=click.File(mode='w'))
+def create_redirect_tsv(dump_db_file, out_file):
+    dump_db = DumpDB(dump_db_file)
+
+    for (src, dest) in dump_db.redirects():
+        out_file.write(f'{src}\t{dest}\n')
+
+
 if __name__ == '__main__':
-    main()
+    cli()

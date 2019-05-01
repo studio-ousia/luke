@@ -24,11 +24,12 @@ class LukeForEntityDisambiguation(LukeModel):
         self.apply(self.init_weights)
 
         if config.prior_prob_bin_size != 0:
-            self.prior_prob_bias_embeddings = nn.Embedding(config.prior_prob_bin_size, 1)
-            self.prior_prob_bias_embeddings.weight.data.fill_(0)
+            self.prior_prob_embeddings = nn.Embedding(config.prior_prob_bin_size, 1)
+            self.prior_prob_embeddings.weight.data.fill_(0)
+
         if config.entity_prior_bin_size != 0:
-            self.entity_prior_bias_embeddings = nn.Embedding(config.entity_prior_bin_size, 1)
-            self.entity_prior_bias_embeddings.weight.data.fill_(0)
+            self.entity_prior_embeddings = nn.Embedding(config.entity_prior_bin_size, 1)
+            self.entity_prior_embeddings.weight.data.fill_(0)
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
                 entity_position_ids, entity_segment_ids, entity_attention_mask,
@@ -40,21 +41,22 @@ class LukeForEntityDisambiguation(LukeModel):
         entity_output = encoded_layers[1][:, 0]
 
         logits = self.entity_predictions(entity_output).view(-1, self.config.entity_vocab_size)
+
+        if self.config.prior_prob_bin_size != 0:
+            prior_prob_emb = self.prior_prob_embeddings(entity_prior_prob_ids).squeeze(-1)
+            prior_prob_val = logits.new_full(logits.size(), 0)
+            prior_prob_val.scatter_(dim=1, index=entity_candidate_ids, src=prior_prob_emb)
+            logits = logits + prior_prob_val
+
+        if self.config.entity_prior_bin_size != 0:
+            entity_prior_emb = self.entity_prior_embeddings(entity_prior_ids).squeeze(-1)
+            entity_prior_val = logits.new_full(logits.size(), 0)
+            entity_prior_val.scatter_(dim=1, index=entity_candidate_ids, src=entity_prior_emb)
+            logits = logits + entity_prior_val
+
         entity_candidate_mask = logits.new_full(logits.size(), 0, dtype=torch.uint8)
         entity_candidate_mask.scatter_(dim=1, index=entity_candidate_ids,
                                        src=(entity_candidate_ids != 0))
-        if self.config.prior_prob_bin_size != 0:
-            prior_prob_emb = self.prior_prob_bias_embeddings(entity_prior_prob_ids).squeeze(-1)
-            prior_prob_bias = logits.new_full(logits.size(), 0)
-            prior_prob_bias.scatter_(dim=1, index=entity_candidate_ids, src=prior_prob_emb)
-            logits = logits + prior_prob_bias
-
-        if self.config.entity_prior_bin_size != 0:
-            entity_prior_emb = self.entity_prior_bias_embeddings(entity_prior_ids).squeeze(-1)
-            entity_prior_bias = logits.new_full(logits.size(), 0)
-            entity_prior_bias.scatter_(dim=1, index=entity_candidate_ids, src=entity_prior_emb)
-            logits = logits + entity_prior_bias
-
         masked_logits = logits.masked_fill((1 - entity_candidate_mask), -1e32)
 
         if entity_label is not None:
