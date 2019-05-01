@@ -159,7 +159,9 @@ def load_mentions_from_csv_file(path, person_names):
             else:
                 title = ','.join(title[3:])
 
-            if not title:
+            title = title.replace('&amp;', '&')
+
+            if not title:  # we use only mentions with valid referent entities
                 continue
 
             mention_data[doc_name].append(dict(text=mention_text, candidates=candidates,

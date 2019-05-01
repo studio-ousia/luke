@@ -32,7 +32,8 @@ logger = logging.getLogger(__name__)
 @click.command()
 @click.argument('word_vocab_file', type=click.Path(exists=True))
 @click.argument('entity_vocab_file', type=click.Path(exists=True))
-@click.argument('wikipedia_redirects_file', type=click.File())
+@click.argument('wikipedia_titles_file', type=click.Path(exists=True))
+@click.argument('wikipedia_redirects_file', type=click.Path(exists=True))
 @click.argument('model_file', type=click.Path())
 @click.option('-v', '--verbose', is_flag=True)
 @click.option('--data-dir', type=click.Path(exists=True), default='data/entity-disambiguation')
@@ -46,7 +47,7 @@ logger = logging.getLogger(__name__)
 @click.option('--lr-decay/--no-lr-decay', default=True)
 @click.option('--seed', default=42)
 @click.option('--gradient-accumulation-steps', default=32)
-@click.option('--max-entity-length', default=64)
+@click.option('--max-entity-length', default=128)
 @click.option('--max-candidate-size', default=30)
 @click.option('--max-mention-length', default=20)
 @click.option('--min-context-prior-prob', default=0.7)
@@ -58,7 +59,7 @@ logger = logging.getLogger(__name__)
 @click.option('--evaluate-every-epoch', is_flag=True)
 @click.option('--in-domain/--out-domain', default=True)
 @click.option('-t', '--test-set', default=None, multiple=True)
-def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_redirects_file,
+def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wikipedia_redirects_file,
         model_file, verbose, cased, max_seq_length, max_entity_length, max_candidate_size,
         max_mention_length, min_context_prior_prob, prior_prob_bin_size, entity_prior_bin_size,
         batch_size, eval_batch_size, learning_rate, iteration, warmup_proportion, lr_decay, seed,
@@ -103,21 +104,32 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_redirects_file,
             (dataset, entity_titles) = pickle.load(f)
     else:
         dataset = EntityDisambiguationDataset(data_dir)
+        with open(wikipedia_titles_file) as f:
+            valid_titles = frozenset([l.rstrip() for l in f])
         redirects = {}
-        for line in wikipedia_redirects_file:
-            (src, dest) = line.rstrip().split('\t')
-            redirects[src] = dest
+        with open(wikipedia_redirects_file) as f:
+            for line in f:
+                (src, dest) = line.rstrip().split('\t')
+                redirects[src] = dest
 
         # build entity vocabulary and resolve Wikipedia redirects
         entity_titles = set([MASK_TOKEN])
         for documents in dataset.get_all_datasets():
             for document in documents:
+                new_mentions = []
                 for mention in document.mentions:
                     mention.title = redirects.get(mention.title, mention.title)
+                    if mention.title not in valid_titles:
+                        logger.debug('Invalid title: %s', mention.title)
+                        continue
                     entity_titles.add(mention.title)
+                    new_mentions.append(mention)
                     for candidate in mention.candidates:
                         candidate.title = redirects.get(candidate.title, candidate.title)
+                        if candidate.title not in valid_titles:
+                            continue
                         entity_titles.add(candidate.title)
+                document.mentions = new_mentions
 
         with open(DATASET_CACHE_FILE, mode='wb') as f:
             pickle.dump((dataset, entity_titles), f)
@@ -166,9 +178,9 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_redirects_file,
                                                               dataset_name)
 
         logger.info("***** Eval results: %s *****", dataset_name)
+        logger.info("  F1 = %.3f", f1)
         logger.info("  precision = %.3f", precision)
         logger.info("  recall = %.3f", recall)
-        logger.info("  F1 = %.3f", f1)
 
         return (precision, recall, f1)
 

@@ -37,6 +37,16 @@ def create_candidate_list(dump_db_file, out_file, data_dir):
 @cli.command()
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.argument('out_file', type=click.File(mode='w'))
+def create_title_list(dump_db_file, out_file):
+    dump_db = DumpDB(dump_db_file)
+
+    for title in dump_db.titles():
+        out_file.write(f'{title}\n')
+
+
+@cli.command()
+@click.argument('dump_db_file', type=click.Path(exists=True))
+@click.argument('out_file', type=click.File(mode='w'))
 def create_redirect_tsv(dump_db_file, out_file):
     dump_db = DumpDB(dump_db_file)
 
