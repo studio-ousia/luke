@@ -2,7 +2,6 @@
 
 from collections import Counter, OrderedDict
 from marisa_trie import Trie, RecordTrie
-from tqdm import tqdm
 
 PAD_TOKEN = '[PAD]'
 UNK_TOKEN = '[UNK]'
@@ -10,9 +9,6 @@ MASK_TOKEN = '[MASK]'
 
 
 class Vocab(object):
-    def __init__(self, vocab_file):
-        self.vocab = self._load_vocab(vocab_file)
-
     @property
     def size(self):
         return len(self)
@@ -41,7 +37,7 @@ class Vocab(object):
 
 class WordPieceVocab(Vocab):
     def __init__(self, vocab_file):
-        super(WordPieceVocab, self).__init__(vocab_file)
+        self.vocab = self._load_vocab(vocab_file)
         self.inv_vocab = {v: k for k, v in self.vocab.items()}
 
         self._word_trie = Trie(w for w in self.vocab.keys() if not w.startswith('##'))
@@ -68,9 +64,8 @@ class WordPieceVocab(Vocab):
 
 
 class EntityVocab(Vocab):
-    def __init__(self, vocab_file):
-        super(EntityVocab, self).__init__(vocab_file)
-
+    def __init__(self, vocab_file, vocab_format='bin'):
+        self.vocab = self._load_vocab(vocab_file, vocab_format)
         self.inv_vocab = {v[0]: k for k, v in self.vocab.items()}
 
     def __reduce__(self):
@@ -85,10 +80,27 @@ class EntityVocab(Vocab):
     def get_occurrence_count(self, key):
         return self.vocab[key][0][1]
 
-    def _load_vocab(self, vocab_input):
-        vocab = RecordTrie('II')
-        vocab.load(vocab_input)
+    def _load_vocab(self, vocab_file, vocab_format):
+        if vocab_format == 'bin':
+            vocab = RecordTrie('II')
+            vocab.load(vocab_file)
+        else:
+            def item_generator():
+                with open(vocab_file) as f:
+                    for line in f:
+                        (title, index, count) = line.rstrip().split('\t')
+                        yield (title, (int(index), int(count)))
+            vocab = RecordTrie('II', item_generator())
+
         return vocab
+
+    def save(self, out_file):
+        self.vocab.save(out_file)
+
+    def save_tsv(self, out_file):
+        with open(out_file, 'w') as f:
+            for (title, (index, count)) in self.vocab.items():
+                f.write(f'{title}\t{index}\t{count}\n')
 
     @staticmethod
     def build_vocab(wiki_corpus, out_file, vocab_size, white_list=[], white_list_only=False):
