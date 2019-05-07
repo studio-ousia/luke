@@ -4,7 +4,6 @@ import copy
 import inspect
 import json
 import logging
-import math
 import os
 import pickle
 import random
@@ -15,14 +14,14 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, Sequentia
 from tqdm import tqdm
 
 from luke.batch_generator import create_word_data
-from luke.model_common import LayerNorm
+from luke.model import LukeConfig
 from luke.optimization import BertAdam
 from luke.utils import clean_text
 from luke.utils.vocab import WordPieceVocab, EntityVocab, MASK_TOKEN, PAD_TOKEN
 from luke.utils.word_tokenizer import WordPieceTokenizer
 
 from ed_dataset import EntityDisambiguationDataset
-from ed_model import LukeForEntityDisambiguation, LukeConfigForEntityDisambiguation
+from ed_model import LukeForEntityDisambiguation
 
 DATASET_CACHE_FILE = 'entity_disambiguation_dataset.pkl'
 
@@ -51,8 +50,6 @@ logger = logging.getLogger(__name__)
 @click.option('--max-candidate-size', default=30)
 @click.option('--max-mention-length', default=20)
 @click.option('--min-context-prior-prob', default=0.7)
-@click.option('--prior-prob-bin-size', default=10)
-@click.option('--entity-prior-bin-size', default=10)
 @click.option('--fix-word-emb/--update-word-emb', default=False)
 @click.option('--fix-entity-emb/--update-entity-emb', default=True)
 @click.option('--fix-entity-bias/--update-entity-bias', default=True)
@@ -61,10 +58,9 @@ logger = logging.getLogger(__name__)
 @click.option('-t', '--test-set', default=None, multiple=True)
 def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wikipedia_redirects_file,
         model_file, verbose, cased, max_seq_length, max_entity_length, max_candidate_size,
-        max_mention_length, min_context_prior_prob, prior_prob_bin_size, entity_prior_bin_size,
-        batch_size, eval_batch_size, learning_rate, iteration, warmup_proportion, lr_decay, seed,
-        gradient_accumulation_steps, fix_word_emb, fix_entity_emb, fix_entity_bias,
-        evaluate_every_epoch, in_domain, test_set):
+        max_mention_length, min_context_prior_prob, batch_size, eval_batch_size, learning_rate,
+        iteration, warmup_proportion, lr_decay, seed, gradient_accumulation_steps, fix_word_emb,
+        fix_entity_emb, fix_entity_bias, evaluate_every_epoch, in_domain, test_set):
     log_format = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format=log_format)
@@ -89,9 +85,7 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
     with open(json_file) as f:
         model_data = json.load(f)
 
-    config = LukeConfigForEntityDisambiguation(prior_prob_bin_size=prior_prob_bin_size,
-                                               entity_prior_bin_size=entity_prior_bin_size,
-                                               **model_data['model_config'])
+    config = LukeConfig(**model_data['model_config'])
     word_vocab = WordPieceVocab(word_vocab_file)
     tokenizer = WordPieceTokenizer(word_vocab, not cased)
     orig_entity_vocab = EntityVocab(entity_vocab_file, 'tsv')
@@ -162,13 +156,13 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
 
     model_arg_names = inspect.getfullargspec(LukeForEntityDisambiguation.forward)[0][1:]
 
-    def evaluate(model, dataset_name, n_iter):
+    def evaluate(model, dataset_name):
         model.eval()
 
         documents = getattr(dataset, dataset_name)
         eval_data = generate_features(documents, tokenizer, entity_vocab, max_seq_length,
                                       max_entity_length, max_candidate_size, min_context_prior_prob,
-                                      prior_prob_bin_size, entity_prior_bin_size, max_mention_length)
+                                      max_mention_length)
         eval_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in eval_data],
                                        dtype=torch.long) for k in model_arg_names])
         eval_dataloader = DataLoader(eval_tensors, sampler=SequentialSampler(eval_tensors),
@@ -206,7 +200,7 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
 
         train_data = generate_features(dataset.train, tokenizer, entity_vocab, max_seq_length,
                                        max_entity_length, max_candidate_size, min_context_prior_prob,
-                                       prior_prob_bin_size, entity_prior_bin_size, max_mention_length)
+                                       max_mention_length)
         train_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in train_data], dtype=torch.long)
                                         for k in model_arg_names])
         train_dataloader = DataLoader(train_tensors, sampler=RandomSampler(train_tensors),
@@ -214,31 +208,21 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
 
         num_train_steps = int(len(train_tensors) / batch_size * iteration)
 
-        parameters = {'params': [], 'weight_decay': 0.01}
-        no_decay_parameters = {'params': [], 'weight_decay': 0.0}
-
-        params_set = set()
-        for (module_name, module) in model.named_modules():
-            if isinstance(module, LayerNorm):
-                no_decay_parameters['params'].extend(list(module.parameters(recurse=False)))
-            else:
-                for (name, param) in module.named_parameters(recurse=False):
-                    if param in params_set:
-                        continue
-                    params_set.add(param)
-
-                    if 'bias' in name:
-                        no_decay_parameters['params'].append(param)
-                    else:
-                        parameters['params'].append(param)
-
-        optimizer = BertAdam([parameters, no_decay_parameters], lr=learning_rate,
-                             warmup=warmup_proportion, lr_decay=lr_decay, t_total=num_train_steps)
+        param_optimizer = list(model.named_parameters())
+        no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+        optimizer_parameters = [
+            {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+            'weight_decay': 0.01},
+            {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
+            'weight_decay': 0.0}
+        ]
+        optimizer = BertAdam(optimizer_parameters, lr=learning_rate, warmup=warmup_proportion,
+                             lr_decay=lr_decay, t_total=num_train_steps)
 
         for n_iter in range(int(iteration)):
             if evaluate_every_epoch:
                 for dataset_name in test_set:
-                    results.append(evaluate(model, dataset_name, n_iter))
+                    results.append(evaluate(model, dataset_name))
 
             model.train()
             logger.info("***** Epoch: %d/%d *****", n_iter + 1, iteration)
@@ -256,14 +240,13 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
                     model.zero_grad()
 
     for dataset_name in test_set:
-        results.append(evaluate(model, dataset_name, n_iter))
+        results.append(evaluate(model, dataset_name))
 
     return results
 
 
 def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_entity_length,
-                      max_candidate_size, min_context_prior_prob, prior_prob_bin_size,
-                      entity_prior_bin_size, max_mention_length):
+                      max_candidate_size, min_context_prior_prob, max_mention_length):
     ret = []
     max_num_tokens = max_seq_length - 2
     for document in documents:
@@ -343,21 +326,9 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
             entity_attention_mask[:entity_index] = 1
 
             entity_candidate_ids = np.zeros(max_candidate_size, dtype=np.int)
-            entity_prior_prob_ids = np.zeros(max_candidate_size, dtype=np.int)
-            entity_prior_ids = np.zeros(max_candidate_size, dtype=np.int)
 
             candidates = target_mention.candidates[:max_candidate_size]
             entity_candidate_ids[:len(candidates)] = [entity_vocab[c.title][0] for c in candidates]
-
-            if prior_prob_bin_size != 0:
-                entity_prior_prob_ids[:len(candidates)] = [
-                    min(int(c.prior_prob * prior_prob_bin_size), prior_prob_bin_size - 1)
-                    for c in candidates]
-
-            if entity_prior_bin_size != 0:
-                entity_prior_ids[:len(candidates)] = [min(int(
-                    min(math.log(entity_vocab[c.title][1] + 1), 10.0) / 10 * entity_prior_bin_size
-                ), entity_prior_bin_size - 1) for c in candidates]
 
             entity_label = entity_vocab[target_mention.title][0]
 
@@ -369,8 +340,6 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
                            entity_segment_ids=entity_segment_ids,
                            entity_attention_mask=entity_attention_mask,
                            entity_candidate_ids=entity_candidate_ids,
-                           entity_prior_prob_ids=entity_prior_prob_ids,
-                           entity_prior_ids=entity_prior_ids,
                            entity_label=entity_label)
 
             ret.append((document, target_mention, feature))
