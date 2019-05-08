@@ -70,12 +70,6 @@ class BertAdam(Optimizer):
         return lr
 
     def step(self, closure=None):
-        """Performs a single optimization step.
-
-        Arguments:
-            closure (callable, optional): A closure that reevaluates the model
-                and returns the loss.
-        """
         loss = None
         if closure is not None:
             loss = closure()
@@ -85,8 +79,6 @@ class BertAdam(Optimizer):
                 if p.grad is None:
                     continue
                 grad = p.grad.data
-                if grad.is_sparse:
-                    raise RuntimeError('Adam does not support sparse gradients, please consider SparseAdam instead')
 
                 state = self.state[p]
 
@@ -105,38 +97,74 @@ class BertAdam(Optimizer):
                 if group['max_grad_norm'] > 0:
                     clip_grad_norm_(p, group['max_grad_norm'])
 
-                grad = grad.to(self.device)
-
-                # Decay the first and second moment running average coefficient
-                # In-place operations to update the averages at the same time
-                next_m.mul_(beta1).add_(1 - beta1, grad)
-                next_v.mul_(beta2).addcmul_(1 - beta2, grad, grad)
-                update = next_m / (next_v.sqrt() + group['e'])
-
-                update = update.to(p.device)
-
-                if group['weight_decay_rate'] > 0.0:
-                    update += group['weight_decay_rate'] * p.data
-
                 if group['t_total'] != -1:
                     lr_scheduled = group['lr'] * warmup_linear(state['step'] / group['t_total'],
-                                                               group['warmup'], group.get('lr_decay', False))
+                                                            group['warmup'], group.get('lr_decay', False))
                 else:
                     lr_scheduled = group['lr']
 
-                update_with_lr = lr_scheduled * update
-                p.data.add_(-update_with_lr)
+                if grad.is_sparse:
+                    grad = grad.coalesce()  # the update is non-linear so indices must be unique
 
+                    p_data = p.data.sparse_mask(grad).to(self.device)
+                    grad = grad.to(self.device)
+
+                    grad_indices = grad._indices()
+                    grad_values = grad._values()
+                    size = grad.size()
+
+                    def make_sparse(values):
+                        constructor = grad.new
+                        if grad_indices.dim() == 0 or values.dim() == 0:
+                            return constructor().resize_as_(grad)
+                        return constructor(grad_indices, values, size)
+
+                    next_m, next_v = state['next_m'], state['next_v']
+                    beta1, beta2 = group['b1'], group['b2']
+
+                    old_next_m_values = next_m.sparse_mask(grad)._values()
+                    next_m_update_values = grad_values.sub(old_next_m_values).mul_(1 - beta1)
+                    next_m.add_(make_sparse(next_m_update_values))
+                    old_next_v_values = next_v.sparse_mask(grad)._values()
+                    next_v_update_values = grad_values.pow(2).sub_(old_next_v_values).mul_(1 - beta2)
+                    next_v.add_(make_sparse(next_v_update_values))
+
+                    # Dense addition again is intended, avoiding another sparse_mask
+                    numer = next_m_update_values.add_(old_next_m_values)
+                    next_v_update_values.add_(old_next_v_values)
+                    denom = next_v_update_values.sqrt_().add_(group['e'])
+                    del next_m_update_values, next_v_update_values
+
+                    update_values = numer / denom
+
+                    if group['weight_decay_rate'] > 0.0:
+                        update_values += group['weight_decay_rate'] * p_data._values()
+
+                    update_with_lr = -lr_scheduled * update_values
+                    update_with_lr = make_sparse(update_with_lr).to(p.device)
+
+                else:
+                    grad = grad.to(self.device)
+
+                    # Decay the first and second moment running average coefficient
+                    # In-place operations to update the averages at the same time
+                    next_m.mul_(beta1).add_(1 - beta1, grad)
+                    next_v.mul_(beta2).addcmul_(1 - beta2, grad, grad)
+                    update = next_m / (next_v.sqrt() + group['e'])
+
+                    update = update.to(p.device)
+
+                    if group['weight_decay_rate'] > 0.0:
+                        update += group['weight_decay_rate'] * p.data
+
+                    update_with_lr = -lr_scheduled * update
+
+                p.data.add_(update_with_lr)
                 state['step'] += 1
 
         return loss
 
     def load_state_dict(self, state_dict):
-        r"""Loads the optimizer state.
-        Arguments:
-            state_dict (dict): optimizer state. Should be an object returned
-                from a call to :meth:`state_dict`.
-        """
         # originally obtained from: https://github.com/pytorch/pytorch/blob/7956e9718b72e6399f89a2b9cdaf489df22cacc4/torch/optim/optimizer.py#L95
 
         # deepcopy, to be consistent with module API
@@ -194,93 +222,3 @@ class BertAdam(Optimizer):
         param_groups = [
             update_group(g, ng) for g, ng in zip(groups, saved_groups)]
         self.__setstate__({'state': state, 'param_groups': param_groups})
-
-
-class SparseBertAdam(BertAdam):
-    def __init__(self, *args, **kwargs):
-        super(SparseBertAdam, self).__init__(*args, **kwargs)
-
-    def step(self, closure=None):
-        """Performs a single optimization step.
-
-        Arguments:
-            closure (callable, optional): A closure that reevaluates the model
-                and returns the loss.
-        """
-        loss = None
-        if closure is not None:
-            loss = closure()
-
-        for group in self.param_groups:
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                grad = p.grad.data
-                if not grad.is_sparse:
-                    raise RuntimeError('SparseAdam does not support sparse gradients, please consider Adam instead')
-
-                state = self.state[p]
-
-                # State initialization
-                if len(state) == 0:
-                    state['step'] = 0
-                    # Exponential moving average of gradient values
-                    state['next_m'] = torch.zeros_like(p.data, device=self.device)
-                    # Exponential moving average of squared gradient values
-                    state['next_v'] = torch.zeros_like(p.data, device=self.device)
-
-                state['step'] += 1
-
-                # Add grad clipping
-                if group['max_grad_norm'] > 0:
-                    clip_grad_norm_(p, group['max_grad_norm'])
-
-                grad = grad.coalesce()  # the update is non-linear so indices must be unique
-
-                p_data = p.data.sparse_mask(grad).to(self.device)
-                grad = grad.to(self.device)
-
-                grad_indices = grad._indices()
-                grad_values = grad._values()
-                size = grad.size()
-
-                def make_sparse(values):
-                    constructor = grad.new
-                    if grad_indices.dim() == 0 or values.dim() == 0:
-                        return constructor().resize_as_(grad)
-                    return constructor(grad_indices, values, size)
-
-                next_m, next_v = state['next_m'], state['next_v']
-                beta1, beta2 = group['b1'], group['b2']
-
-                old_next_m_values = next_m.sparse_mask(grad)._values()
-                next_m_update_values = grad_values.sub(old_next_m_values).mul_(1 - beta1)
-                next_m.add_(make_sparse(next_m_update_values))
-                old_next_v_values = next_v.sparse_mask(grad)._values()
-                next_v_update_values = grad_values.pow(2).sub_(old_next_v_values).mul_(1 - beta2)
-                next_v.add_(make_sparse(next_v_update_values))
-
-                # Dense addition again is intended, avoiding another sparse_mask
-                numer = next_m_update_values.add_(old_next_m_values)
-                next_v_update_values.add_(old_next_v_values)
-                denom = next_v_update_values.sqrt_().add_(group['e'])
-                del next_m_update_values, next_v_update_values
-
-                update_values = numer / denom
-
-                if group['weight_decay_rate'] > 0.0:
-                    update_values += group['weight_decay_rate'] * p_data._values()
-
-                if group['t_total'] != -1:
-                    lr_scheduled = group['lr'] * warmup_linear(state['step'] / group['t_total'],
-                                                               group['warmup'], group.get('lr_decay', False))
-                else:
-                    lr_scheduled = group['lr']
-
-                update_with_lr = -lr_scheduled * update_values
-                update_with_lr = make_sparse(update_with_lr).to(p.device)
-                p.data.add_(update_with_lr)
-
-                state['step'] += 1
-
-        return loss
