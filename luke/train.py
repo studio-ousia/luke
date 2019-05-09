@@ -183,7 +183,7 @@ def run_training(corpus_data_file, entity_vocab_file, output_dir, bert_model_nam
                 step = 0
 
                 summary = {}
-                summary['learning_rate'] = optimizer.get_lr()[0]
+                summary['learning_rate'] = max(optimizer.get_lr())
 
                 summary['loss'] = tr_loss
                 tr_loss = 0

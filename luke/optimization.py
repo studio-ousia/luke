@@ -60,13 +60,16 @@ class BertAdam(Optimizer):
             for p in group['params']:
                 state = self.state[p]
                 if len(state) == 0:
-                    return [0]
+                    lr.append(0)
+                    continue
+
                 if group['t_total'] != -1:
                     lr_scheduled = group['lr'] * warmup_linear(state['step'] / group['t_total'],
                                                                group['warmup'], group.get('lr_decay', False))
                 else:
                     lr_scheduled = group['lr']
                 lr.append(lr_scheduled)
+
         return lr
 
     def step(self, closure=None):
