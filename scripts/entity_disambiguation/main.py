@@ -71,6 +71,7 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
 
     if not test_set:
         if in_domain:
@@ -120,8 +121,6 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
                     new_mentions.append(mention)
                     for candidate in mention.candidates:
                         candidate.title = redirects.get(candidate.title, candidate.title)
-                        if candidate.title not in valid_titles:
-                            continue
                         entity_titles.add(candidate.title)
                 document.mentions = new_mentions
 
@@ -133,15 +132,15 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
     orig_entity_bias = state_dict['entity_predictions.bias']
     entity_emb = orig_entity_emb.new_zeros((len(entity_titles) + 1, config.entity_emb_size))
     entity_bias = orig_entity_bias.new_zeros(len(entity_titles) + 1)
-    entity_vocab = {PAD_TOKEN: (0, 0)}
+    entity_vocab = {PAD_TOKEN: 0}
     for (n, title) in enumerate(entity_titles, 1):
         if title in orig_entity_vocab:
-            entity_vocab[title] = (n, orig_entity_vocab.get_occurrence_count(title))
+            entity_vocab[title] = n
             orig_index = orig_entity_vocab[title]
             entity_emb[n] = orig_entity_emb[orig_index]
             entity_bias[n] = orig_entity_bias[orig_index]
         else:
-            entity_vocab[title] = (n, 0)
+            entity_vocab[title] = n
 
     config.entity_vocab_size = len(entity_vocab)
     state_dict['entity_embeddings.entity_embeddings.weight'] = entity_emb
@@ -199,8 +198,7 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
         train_batch_size = int(batch_size / gradient_accumulation_steps)
 
         train_data = generate_features(dataset.train, tokenizer, entity_vocab, max_seq_length,
-                                       max_entity_length, max_candidate_size, min_context_prior_prob,
-                                       max_mention_length)
+            max_entity_length, max_candidate_size, min_context_prior_prob, max_mention_length)
         train_tensors = TensorDataset(*[torch.tensor([f[k] for (_, _, f) in train_data], dtype=torch.long)
                                         for k in model_arg_names])
         train_dataloader = DataLoader(train_tensors, sampler=RandomSampler(train_tensors),
@@ -227,14 +225,12 @@ def run(data_dir, word_vocab_file, entity_vocab_file, wikipedia_titles_file, wik
             model.train()
             logger.info("***** Epoch: %d/%d *****", n_iter + 1, iteration)
 
-            nb_tr_steps = 0
             for (step, batch) in enumerate(tqdm(train_dataloader, desc='train')):
                 batch = tuple(t.to('cuda') for t in batch)
                 loss = model(*batch)
                 if gradient_accumulation_steps > 1:
                     loss = loss / gradient_accumulation_steps
                 loss.backward()
-                nb_tr_steps += 1
                 if (step + 1) % gradient_accumulation_steps == 0:
                     optimizer.step()
                     model.zero_grad()
@@ -291,7 +287,7 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
             word_data = create_word_data(target_tokens, None, tokenizer.vocab, max_seq_length)
 
             entity_ids = np.zeros(max_entity_length, dtype=np.int)
-            entity_ids[0] = entity_vocab[MASK_TOKEN][0]
+            entity_ids[0] = entity_vocab[MASK_TOKEN]
 
             entity_position_ids = np.full((max_entity_length, max_mention_length), -1, dtype=np.int)
             entity_position_ids[0][:mention_length] = range(left_context_size + 1,
@@ -315,7 +311,7 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
                 for candidate in mention.candidates:
                     if candidate.prior_prob <= min_context_prior_prob:
                         continue
-                    entity_ids[entity_index] = entity_vocab[candidate.title][0]
+                    entity_ids[entity_index] = entity_vocab[candidate.title]
                     entity_position_ids[entity_index][:mention_length] = range(start + 1, end + 1)  # +1 for [CLS]
                     entity_index += 1
                     if entity_index == max_entity_length:
@@ -328,9 +324,9 @@ def generate_features(documents, tokenizer, entity_vocab, max_seq_length, max_en
             entity_candidate_ids = np.zeros(max_candidate_size, dtype=np.int)
 
             candidates = target_mention.candidates[:max_candidate_size]
-            entity_candidate_ids[:len(candidates)] = [entity_vocab[c.title][0] for c in candidates]
+            entity_candidate_ids[:len(candidates)] = [entity_vocab[c.title] for c in candidates]
 
-            entity_label = entity_vocab[target_mention.title][0]
+            entity_label = entity_vocab[target_mention.title]
 
             feature = dict(word_ids=word_data['word_ids'],
                            word_segment_ids=word_data['word_segment_ids'],
