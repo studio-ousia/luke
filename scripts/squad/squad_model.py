@@ -9,8 +9,6 @@ class LukeForQuestionAnswering(LukeModel):
         super(LukeForQuestionAnswering, self).__init__(config)
 
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
-        self.apply(self.init_bert_weights)
-
         self.apply(self.init_weights)
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,

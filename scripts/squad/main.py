@@ -315,7 +315,6 @@ def _compute_softmax(scores):
 @click.option('--iteration', default=3.0)
 @click.option('--warmup-proportion', default=0.1)
 @click.option('--lr-decay/--no-lr-decay', default=True)
-@click.option('--lr-decay/--no-lr-decay', default=True)
 @click.option('--seed', default=42)
 @click.option('--gradient-accumulation-steps', default=32)
 @click.option('--fix-entity-emb/--update-entity-emb', default=True)
@@ -324,7 +323,7 @@ def _compute_softmax(scores):
 @click.option('--n-best-size', default=20)
 @click.option('--max-answer-length', default=30)
 @click.option('--version-2-with-negative', default=False)
-@click.option('--version-2-with-negative', default=False)
+@click.option('--null_score_diff_threshold', default=0.0)
 def run(word_vocab_file, entity_vocab_file, mention_db_file, model_file,
         train_file_path, dev_file_path, cased, output_dir,
         max_seq_length, max_entity_length, max_mention_length, batch_size, eval_batch_size,
@@ -362,7 +361,7 @@ def run(word_vocab_file, entity_vocab_file, mention_db_file, model_file,
         {k: v for k, v in state_dict.items() if k in model_state_dict})
     model.load_state_dict(model_state_dict)
     # model.load_state_dict(state_dict, strict=False)
-    del state_dict, model_state_dict
+    # del state_dict, model_state_dict
 
     logger.info('Fix entity embeddings during training: %s', fix_entity_emb)
     model.embeddings.word_embeddings.sparse = True
@@ -428,7 +427,7 @@ def run(word_vocab_file, entity_vocab_file, mention_db_file, model_file,
         train_data, sampler=train_sampler, batch_size=train_batch_size)
 
     eval_examples = read_squad_examples(
-        input_file=dev_file_path, is_training=True, version_2_with_negative=version_2_with_negative)
+        input_file=dev_file_path, is_training=False, version_2_with_negative=version_2_with_negative)
 
     eval_features = convert_examples_to_features(
         examples=eval_examples, tokenizer=tokenizer, max_seq_length=max_seq_length,
@@ -484,8 +483,8 @@ def run(word_vocab_file, entity_vocab_file, mention_db_file, model_file,
                                                                :max_entity_size],
                          entity_attention_mask=entity_attention_mask[:,
                                                                      :max_entity_size],
-                         start_position=start_position,
-                         end_position=start_position)
+                         start_positions=start_position,
+                         end_positions=start_position)
 
             if gradient_accumulation_steps > 1:
                 loss = loss / gradient_accumulation_steps
