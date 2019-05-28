@@ -266,7 +266,6 @@ class STSProcessor(DataProcessor):
     #         self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
 
     def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
             if i == 0:

@@ -18,7 +18,7 @@ from luke.utils.vocab import WordPieceVocab, EntityVocab
 from luke.utils.word_tokenizer import WordPieceTokenizer
 from glue_dataset import ColaProcessor, MnliProcessor, QnliProcessor, MrpcProcessor, QqpProcessor,\
     SciTailProcessor, RTEProcessor, STSProcessor, convert_examples_to_features
-from glue_model import LukeForSequenceClassification
+from glue_model import LukeForSequenceClassification, LukeForSequenceRegression
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ def run(word_vocab_file, entity_vocab_file, mention_db_file, model_file, data_di
     else:  # regression
         label_list = None  # scoring task
         label_dtype = torch.float
-        # model = LukeForSequenceRegression(config)
+        model = LukeForSequenceRegression(config)
 
     state_dict = torch.load(model_file + '.bin', map_location='cpu')
     model_state_dict = model.state_dict()
