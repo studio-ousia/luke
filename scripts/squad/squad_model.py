@@ -4,9 +4,9 @@ from torch.nn import CrossEntropyLoss
 from luke.model import LukeModel
 
 
-class LukeForSequenceQuestionAnswering(LukeModel):
+class LukeForQuestionAnswering(LukeModel):
     def __init__(self, config):
-        super(LukeForSequenceQuestionAnswering, self).__init__(config)
+        super(LukeForQuestionAnswering, self).__init__(config)
 
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
         self.apply(self.init_bert_weights)
@@ -16,7 +16,7 @@ class LukeForSequenceQuestionAnswering(LukeModel):
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
                 entity_position_ids, entity_segment_ids, entity_attention_mask,
                 start_positions, end_positions):
-        (sequence_output, _) = super(LukeForSequenceQuestionAnswering, self).forward(
+        (sequence_output, _) = super(LukeForQuestionAnswering, self).forward(
             word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
             entity_segment_ids, entity_attention_mask, output_all_encoded_layers=False)
 
