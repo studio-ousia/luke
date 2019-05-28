@@ -252,9 +252,6 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
             word_segment_ids.append(0)
 
             # Store entity information from questions
-            # TODO: This is implanted from the GLEU codes, where paragraphs are truncated based on the max length.
-            # How we should deal with the entities when we need to
-            # handle the lengthy paragraphs with sliding window approach?
             entity_ids = np.zeros(max_entity_length, dtype=np.int)
             entity_position_ids = np.full(
                 (max_entity_length, max_mention_length), -1, dtype=np.int)
@@ -263,18 +260,25 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
                 entity_position_ids[n][:end -
                                        start] = range(start + 1, end + 1)[:max_mention_length]
 
+            num_entities_inside_window = 0
+            # adding entities. index starts from len(query_entities)
             for (n, ((start, end), entity_id)) in enumerate(entities, len(query_entities)):
-                entity_ids[n] = entity_id
-                ofs = len(query_tokens) + 2
-                entity_position_ids[n][:end - start] = range(
-                    start + ofs, end + ofs)[:max_mention_length]
+                # only add entity existing inside the window.
+                if start > doc_span.start and end < max_seq_length:
+                    entity_ids[n] = entity_id
+                    ofs = len(query_tokens) + 2
+                    entity_position_ids[n][:end - start] = range(
+                        start + ofs, end + ofs)[:max_mention_length]
+                    # keep track with the number of entities which are included in the sliding window.
+                    num_entities_inside_window += 1
 
             entity_attention_mask = np.ones(max_entity_length, dtype=np.int)
-            entity_attention_mask[len(query_entities) + len(entities):] = 0
+            entity_attention_mask[len(
+                query_entities) + num_entities_inside_window:] = 0
 
             entity_segment_ids = np.zeros(max_entity_length, dtype=np.int)
             entity_segment_ids[len(query_entities):len(
-                query_entities) + len(entities)] = 1
+                query_entities) + num_entities_inside_window] = 1
 
             # Store token information from paragraph, dividing paragraphs.
             for i in range(doc_span.length):
