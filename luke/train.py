@@ -61,7 +61,7 @@ def run_training(corpus_data_file, entity_vocab_file, output_dir, bert_model_nam
     batch_generator = LukeBatchGenerator(
         corpus_data_file=corpus_data_file,
         entity_vocab=entity_vocab,
-        batch_size=batch_size / gradient_accumulation_steps,
+        batch_size=int(batch_size / gradient_accumulation_steps),
         max_seq_length=max_seq_length,
         max_entity_length=max_entity_length,
         max_mention_length=max_mention_length,

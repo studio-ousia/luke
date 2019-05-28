@@ -102,7 +102,7 @@ class BatchWorker(multiprocessing.Process):
                 chunk_word_length += len(sentence.words)
 
                 if not sent_stack or\
-                    chunk_word_length + len(sent_stack[-1].words) >= target_seq_length:
+                        chunk_word_length + len(sent_stack[-1].words) >= target_seq_length:
                     if self._single_sentence:
                         a_sents = chunk_sents
                         b_sents = None
@@ -221,15 +221,15 @@ class BatchWorker(multiprocessing.Process):
             b_words = b_words[b_left_num_trunc:b_left_num_trunc + b_len]
 
         word_data = create_word_data(a_words, b_words, self._word_vocab, self._max_seq_length,
-            self._masked_lm_prob, self._max_predictions_per_seq)
+                                     self._masked_lm_prob, self._max_predictions_per_seq)
 
         if self._target_entity_annotation == 'link':
             entity_data = create_link_data(a_annotations, b_annotations, len(a_words),
-                self._entity_vocab, self._max_entity_length, self._masked_entity_prob,
-                self._max_entity_predictions_per_seq, self._max_mention_length)
+                                           self._entity_vocab, self._max_entity_length, self._masked_entity_prob,
+                                           self._max_entity_predictions_per_seq, self._max_mention_length)
         else:
             entity_data = create_mention_data(a_annotations, b_annotations, len(a_words),
-                self._entity_vocab, self._max_entity_length, self._max_mention_length)
+                                              self._entity_vocab, self._max_entity_length, self._max_mention_length)
 
         entity_size = np.sum(entity_data['entity_attention_mask'])
         if entity_size == 0:
@@ -254,13 +254,16 @@ class BatchWorker(multiprocessing.Process):
                 item['is_random_next'] = int(not is_next)
             buf.append(item)
 
-            if len(buf) == self._batch_size:
-                yield {k: np.stack([o[k] for o in buf]) for k in buf[0].keys()}
-                buf = []
+            if len(buf) % self._batch_size == 0:
                 current_entity_size = None
 
-        if buf:
-            yield {k: np.stack([o[k] for o in buf]) for k in buf[0].keys()}
+        batches = []
+        for i in range(0, len(buf), self._batch_size):
+            batches.append(
+                {k: np.stack([o[k] for o in buf[i:i + self._batch_size]]) for k in buf[0].keys()})
+        random.shuffle(batches)
+
+        return batches
 
 
 def create_word_data(a_words, b_words, word_vocab, max_seq_length, masked_lm_prob=0.0,
