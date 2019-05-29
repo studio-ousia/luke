@@ -98,11 +98,12 @@ class QqpProcessor(DataProcessor):
             if i == 0:
                 continue
             guid = "%s-%s" % (set_type, i)
-            if len(line) <= 5:
+            try:
+                text_a = line[3]
+                text_b = line[4]
+                label = line[5]
+            except IndexError:
                 continue
-            text_a = line[3]
-            text_b = line[4]
-            label = line[5]
             examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
 
         return examples
@@ -133,6 +134,38 @@ class MnliProcessor(DataProcessor):
             text_b = line[9]
             label = line[-1]
             examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+        return examples
+
+
+class MnliMismatchedProcessor(MnliProcessor):
+    def get_dev_examples(self, data_dir):
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "dev_mismatched.tsv")), "dev_matched")
+
+
+class Sst2Processor(DataProcessor):
+    @property
+    def task_type(self):
+        return 'classification'
+
+    def get_train_examples(self, data_dir):
+        return self._create_examples(self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+
+    def get_dev_examples(self, data_dir):
+        return self._create_examples(self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+
+    def get_labels(self):
+        return ["0", "1"]
+
+    def _create_examples(self, lines, set_type):
+        examples = []
+        for (i, line) in enumerate(lines):
+            if i == 0:
+                continue
+            guid = "%s-%s" % (set_type, i)
+            text_a = line[0]
+            label = line[1]
+            examples.append(InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
         return examples
 
 
@@ -246,7 +279,7 @@ class SciTailProcessor(DataProcessor):
         return examples
 
 
-class STSProcessor(DataProcessor):
+class StsProcessor(DataProcessor):
     @property
     def task_type(self):
         return 'regression'
@@ -276,6 +309,33 @@ class STSProcessor(DataProcessor):
             label = float(line[-1])
             examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
 
+        return examples
+
+
+class WnliProcessor(DataProcessor):
+    @property
+    def task_type(self):
+        return 'regression'
+
+    def get_train_examples(self, data_dir):
+        return self._create_examples(self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+
+    def get_dev_examples(self, data_dir):
+        return self._create_examples(self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+
+    def get_labels(self):
+        return ["0", "1"]
+
+    def _create_examples(self, lines, set_type):
+        examples = []
+        for (i, line) in enumerate(lines):
+            if i == 0:
+                continue
+            guid = "%s-%s" % (set_type, line[0])
+            text_a = line[1]
+            text_b = line[2]
+            label = line[-1]
+            examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
 

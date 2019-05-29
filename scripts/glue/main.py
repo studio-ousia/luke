@@ -8,7 +8,6 @@ import click
 import numpy as np
 import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-from scipy.stats import pearsonr, spearmanr
 from tqdm import tqdm, trange
 
 from luke.optimization import BertAdam
@@ -16,8 +15,10 @@ from luke.model import LukeConfig
 from luke.utils.entity_linker import EntityLinker, MentionDB
 from luke.utils.vocab import WordPieceVocab, EntityVocab
 from luke.utils.word_tokenizer import WordPieceTokenizer
-from glue_dataset import ColaProcessor, MnliProcessor, QnliProcessor, MrpcProcessor, QqpProcessor,\
-    SciTailProcessor, RTEProcessor, STSProcessor, convert_examples_to_features
+from glue_dataset import ColaProcessor, MnliProcessor, MnliMismatchedProcessor, QnliProcessor,\
+    MrpcProcessor, QqpProcessor, SciTailProcessor, RTEProcessor, Sst2Processor, StsProcessor,\
+    WnliProcessor, convert_examples_to_features
+from glue_metrics import compute_metrics
 from glue_model import LukeForSequenceClassification, LukeForSequenceRegression
 
 logger = logging.getLogger(__name__)
@@ -66,12 +67,15 @@ def run(word_vocab_file, entity_vocab_file, mention_db_file, model_file, data_di
     processors = {
         "cola": ColaProcessor,
         "mnli": MnliProcessor,
+        "mnli-mm": MnliMismatchedProcessor,
         "qnli": QnliProcessor,
         "mrpc": MrpcProcessor,
         "qqp": QqpProcessor,
-        "scitail": SciTailProcessor,
         "rte": RTEProcessor,
-        "sts-b": STSProcessor,
+        "scitail": SciTailProcessor,
+        "sst-2": Sst2Processor,
+        "sts-b": StsProcessor,
+        "wnli": WnliProcessor,
     }
     processor = processors[task_name]()
     data_dir = os.path.join(data_dir, task_name)
@@ -98,7 +102,6 @@ def run(word_vocab_file, entity_vocab_file, mention_db_file, model_file, data_di
     model_state_dict = model.state_dict()
     model_state_dict.update({k: v for k, v in state_dict.items() if k in model_state_dict})
     model.load_state_dict(model_state_dict)
-    # model.load_state_dict(state_dict, strict=False)
     del state_dict, model_state_dict
 
     logger.info('Fix entity embeddings during training: %s', fix_entity_emb)
@@ -218,22 +221,17 @@ def run(word_vocab_file, entity_vocab_file, mention_db_file, model_file, data_di
             eval_logits.append(logits.detach().cpu().numpy())
             eval_labels.append(labels.cpu().numpy())
 
-            # eval_loss += tmp_eval_loss.mean().item()
-
             nb_eval_examples += batch[0].size(0)
             nb_eval_steps += 1
-
-        # eval_loss = eval_loss / nb_eval_steps
 
         result = dict(train_loss=tr_loss / nb_tr_steps)
 
         if processor.task_type == 'classification':
             outputs = np.argmax(np.vstack(eval_logits), axis=1)
-            result['eval_accuracy'] = np.sum(outputs == np.concatenate(eval_labels)) / nb_eval_examples
         elif processor.task_type == 'regression':
             outputs = np.vstack(eval_logits).flatten()
-            result['eval_pearson'] = float(pearsonr(outputs, np.concatenate(eval_labels))[0])
-            result['eval_spearman'] = float(spearmanr(outputs, np.concatenate(eval_labels))[0])
+
+        result = compute_metrics(task_name, outputs, np.concatenate(eval_labels))
 
         logger.info("***** Eval results *****")
         for key in sorted(result.keys()):
