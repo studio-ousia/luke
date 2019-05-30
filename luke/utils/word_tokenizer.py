@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import re
 import unicodedata
 
@@ -40,14 +38,13 @@ class BasicTokenizer(object):
             (start, end) = match_obj.span()
             word_text = match_obj.group(0)
 
-            # iterate over characters and split the word if the character is a
-            # punctuation
+            # iterate over characters and split the word if the character is a # punctuation
             cur = start
             for (i, char) in enumerate(word_text, cur):
                 if self._is_punctuation(char):
                     if cur != i:
                         tokens.append(Token(text[cur:i], cur, i))
-                    tokens.append(Token(text[i:i+1], i, i + 1))
+                    tokens.append(Token(text[i:i + 1], i, i + 1))
                     cur = i + 1
             if cur != end:
                 tokens.append(Token(text[cur:end], cur, end))
@@ -56,15 +53,15 @@ class BasicTokenizer(object):
 
     @staticmethod
     def _is_punctuation(char):
-        # obtained from https://github.com/google-research/bert/blob/4a47cc2da23dcb4ab1bf5c08085910b6fd94a4cf/tokenization.py#L335
+        # obtained from
+        # https://github.com/google-research/bert/blob/4a47cc2da23dcb4ab1bf5c08085910b6fd94a4cf/tokenization.py#L335
 
         cp = ord(char)
         # We treat all non-letter/number ASCII as punctuation.
         # Characters such as "^", "$", and "`" are not in the Unicode
         # Punctuation class but we treat them as punctuation anyways, for
         # consistency.
-        if ((cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or
-                (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126)):
+        if ((cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126)):
             return True
         cat = unicodedata.category(char)
         if cat.startswith('P'):

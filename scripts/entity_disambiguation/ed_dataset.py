@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This code is based on the code obtained from here: https://github.com/lephong/mulrel-nel/blob/db14942450f72c87a4d46349860e96ef2edf353d/nel/dataset.py
 
 import os

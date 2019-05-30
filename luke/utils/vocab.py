@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from collections import Counter, OrderedDict
 from marisa_trie import Trie, RecordTrie
 

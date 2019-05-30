@@ -1,8 +1,4 @@
-"""
-This code converts MS MARCO train, dev and eval tsv data into the tfrecord files
-that will be consumed by BERT.
-Based on the code obtained from: https://github.com/nyu-dl/dl4marco-bert/blob/fcd3bf371870fcfa9697e092c80329d5e713865b/convert_msmarco_to_tfrecord.py
-"""
+# Based on the code obtained from: https://github.com/nyu-dl/dl4marco-bert/blob/fcd3bf371870fcfa9697e092c80329d5e713865b/convert_msmarco_to_tfrecord.py
 
 import collections
 import functools

@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from torch import nn
 from torch.nn import CrossEntropyLoss
 

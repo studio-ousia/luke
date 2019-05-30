@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import pkg_resources
 
 
@@ -18,9 +16,7 @@ class OpenNLPSentenceTokenizer(object):
         if not OpenNLPSentenceTokenizer._java_initialized:
             import jnius_config
             jnius_config.add_options('-Xrs')
-            jnius_config.set_classpath(pkg_resources.resource_filename(
-                __name__, '/resources/opennlp-tools-1.5.3.jar'
-            ))
+            jnius_config.set_classpath(pkg_resources.resource_filename(__name__, '/resources/opennlp-tools-1.5.3.jar'))
             OpenNLPSentenceTokenizer._java_initialized = True
 
         from jnius import autoclass

@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
-
-# The following code was obtained from https://github.com/google-research/bert/blob/f39e881b169b9d53bea03d2d341b31707a6c052b/tokenization.py
+# The following code was obtained from
+# https://github.com/google-research/bert/blob/f39e881b169b9d53bea03d2d341b31707a6c052b/tokenization.py
 
 import unicodedata
 

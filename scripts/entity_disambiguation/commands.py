@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import click
 from wikipedia2vec.dump_db import DumpDB
 

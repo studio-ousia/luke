@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import logging
 import re
 from collections import defaultdict, Counter
@@ -93,12 +91,11 @@ class MentionDB(object):
                 for args in self._data_trie[text.lower()]]
 
     def prefix_search(self, text, start=0):
-        target_text = text[start:start+self._max_mention_len].lower()
+        target_text = text[start:start + self._max_mention_len].lower()
         return sorted(self._mention_trie.prefixes(target_text), key=len, reverse=True)
 
     @staticmethod
-    def build(dump_db, min_link_prob, max_candidate_size, min_link_count, max_mention_len,
-              pool_size, chunk_size):
+    def build(dump_db, min_link_prob, max_candidate_size, min_link_count, max_mention_len, pool_size, chunk_size):
         name_dict = defaultdict(lambda: Counter())
         init_args = [dump_db, None]
 
@@ -222,7 +219,7 @@ def _count_occurrences(title, max_mention_len):
 
         for token in tokens:
             start = token.start
-            for prefix in _name_trie.prefixes(text[start:start+max_mention_len]):
+            for prefix in _name_trie.prefixes(text[start:start + max_mention_len]):
                 if (start + len(prefix)) in end_offsets:
                     ret.append(prefix)
 
