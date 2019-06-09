@@ -3,23 +3,20 @@ import functools
 import multiprocessing
 import queue
 import random
-from itertools import chain, repeat
+from itertools import chain, islice, repeat
 import numpy as np
 
-from luke.wiki_corpus import WikiCorpus
+from luke.utils.wiki_corpus import WikiCorpus
 
 logger = logging.getLogger(__name__)
 
 
-class LukeBatchGenerator(object):
-    def __init__(self, **kwargs):
-        self._worker_cls = functools.partial(BatchWorker, **kwargs)
-
-    def generate_batches(self, page_indices=None, queue_size=100):
+class BasePretrainingBatchGenerator(object):
+    def generate_batches(self, page_indices=None, queue_size=10000):
         output_queue = multiprocessing.Queue(queue_size)
         is_finished = multiprocessing.Event()
 
-        worker = self._worker_cls(output_queue, is_finished, page_indices)
+        worker = self._create_worker(output_queue, is_finished, page_indices)
         worker.daemon = True
         worker.start()
 
@@ -30,7 +27,7 @@ class LukeBatchGenerator(object):
                 except queue.Empty:
                     if is_finished.is_set():
                         break
-                    logger.debug('The queue is empty')
+                    logger.debug('Queue is empty')
 
                     if not worker.is_alive():
                         raise RuntimeError('Worker exited unexpectedly')
@@ -39,44 +36,87 @@ class LukeBatchGenerator(object):
             worker.terminate()
             output_queue.close()
 
+    def _create_worker(self, output_queue, is_finished, page_indices):
+        raise NotImplementedError()
 
-class BatchWorker(multiprocessing.Process):
-    def __init__(self, output_queue, is_finished, page_indices, target_entity_annotation,
-                 corpus_data_file, entity_vocab, batch_size, max_seq_length, max_entity_length,
-                 short_seq_prob, masked_lm_prob, max_predictions_per_seq, masked_entity_prob,
-                 max_entity_predictions_per_seq, single_sentence, max_mention_length,
-                 batch_buffer_size=1000, mmap=None):
-        super(BatchWorker, self).__init__()
+
+class LukePretrainingBatchGenerator(BasePretrainingBatchGenerator):
+    def __init__(self, corpus_file, entity_vocab, batch_size, max_seq_length, max_entity_length, max_mention_length,
+                 short_seq_prob, masked_lm_prob, masked_entity_prob, single_sentence, batch_buffer_size=1000,
+                 mmap_mode=None):
+        self._worker_cls = functools.partial(LukePretrainingBatchWorker,
+                                             corpus_file=corpus_file,
+                                             entity_vocab=entity_vocab,
+                                             batch_size=batch_size,
+                                             max_seq_length=max_seq_length,
+                                             max_entity_length=max_entity_length,
+                                             max_mention_length=max_mention_length,
+                                             short_seq_prob=short_seq_prob,
+                                             masked_lm_prob=masked_lm_prob,
+                                             masked_entity_prob=masked_entity_prob,
+                                             single_sentence=single_sentence,
+                                             batch_buffer_size=batch_buffer_size,
+                                             mmap_mode=mmap_mode)
+
+    def _create_worker(self, output_queue, is_finished, page_indices):
+        return self._worker_cls(output_queue, is_finished, page_indices)
+
+
+class LukeE2EPretrainingBatchGenerator(BasePretrainingBatchGenerator):
+    def __init__(self, corpus_file, entity_vocab, batch_size, max_seq_length, max_entity_length, max_mention_length,
+                 max_candidate_length, short_seq_prob, masked_lm_prob, masked_entity_prob, single_sentence,
+                 min_candidate_prior_prob, batch_buffer_size=1000, mmap_mode=None):
+        self._worker_cls = functools.partial(LukeE2EPretrainingBatchWorker,
+                                             corpus_file=corpus_file,
+                                             entity_vocab=entity_vocab,
+                                             batch_size=batch_size,
+                                             max_seq_length=max_seq_length,
+                                             max_entity_length=max_entity_length,
+                                             max_mention_length=max_mention_length,
+                                             max_candidate_length=max_candidate_length,
+                                             short_seq_prob=short_seq_prob,
+                                             masked_lm_prob=masked_lm_prob,
+                                             masked_entity_prob=masked_entity_prob,
+                                             single_sentence=single_sentence,
+                                             min_candidate_prior_prob=min_candidate_prior_prob,
+                                             batch_buffer_size=batch_buffer_size,
+                                             mmap_mode=mmap_mode)
+
+    def _create_worker(self, output_queue, is_finished, page_indices):
+        return self._worker_cls(output_queue, is_finished, page_indices)
+
+
+class BaseBatchWorker(multiprocessing.Process):
+    def __init__(self, output_queue, is_finished, page_indices, corpus_file, batch_size, max_seq_length, short_seq_prob,
+                 masked_lm_prob, single_sentence, batch_buffer_size, mmap_mode):
+        super(BaseBatchWorker, self).__init__()
 
         self._output_queue = output_queue
         self._is_finished = is_finished
         self._page_indices = page_indices
-        self._target_entity_annotation = target_entity_annotation
-        self._corpus_data_file = corpus_data_file
-        self._entity_vocab = entity_vocab
+        self._corpus_file = corpus_file
         self._batch_size = batch_size
         self._max_seq_length = max_seq_length
-        self._max_entity_length = max_entity_length
         self._short_seq_prob = short_seq_prob
         self._masked_lm_prob = masked_lm_prob
-        self._max_predictions_per_seq = max_predictions_per_seq
-        self._masked_entity_prob = masked_entity_prob
-        self._max_entity_predictions_per_seq = max_entity_predictions_per_seq
         self._single_sentence = single_sentence
-        self._max_mention_length = max_mention_length
         self._batch_buffer_size = batch_buffer_size
-        self._mmap = mmap
+        self._mmap_mode = mmap_mode
 
         if single_sentence:
-            self._max_num_tokens = max_seq_length - 2  # 2 for CLS and SEP
+            self._max_num_tokens = max_seq_length - 2  # 2 for [CLS] and [SEP]
         else:
-            self._max_num_tokens = max_seq_length - 3  # 3 for CLS, SEP, and SEP
+            self._max_num_tokens = max_seq_length - 3  # 3 for [CLS], [SEP], and [SEP]
 
     def run(self):
-        # WikiCorpus needs to be initialized here because the BatchWorker class is pickled when the
-        # worker starts, and the WikiCorpus instance is too large to be pickled
-        self._corpus = WikiCorpus(self._corpus_data_file, self._mmap)
-        self._word_vocab = self._corpus.word_vocab
+        # WikiCorpus needs to be initialized here because the BatchWorker class is pickled when the worker starts, and
+        # the WikiCorpus instance is too large to be pickled
+        self._corpus = WikiCorpus(self._corpus_file, self._mmap_mode)
+        self._word_vocab = self._corpus.tokenizer.vocab
+
+        self._cls_id = self._word_vocab['[CLS]']
+        self._sep_id = self._word_vocab['[SEP]']
+        self._mask_id = self._word_vocab['[MASK]']
 
         buf = []
         total_pages = self._corpus.page_size
@@ -95,12 +135,11 @@ class BatchWorker(multiprocessing.Process):
             chunk_word_length = 0
 
             while sent_stack:
-                sentence = sent_stack.pop()
-                chunk_sents.append(sentence)
-                chunk_word_length += len(sentence.words)
+                sent = sent_stack.pop()
+                chunk_sents.append(sent)
+                chunk_word_length += len(sent.words)
 
-                if not sent_stack or\
-                        chunk_word_length + len(sent_stack[-1].words) >= target_seq_length:
+                if not sent_stack or chunk_word_length + len(sent_stack[-1].words) >= target_seq_length:
                     if self._single_sentence:
                         a_sents = chunk_sents
                         b_sents = None
@@ -134,7 +173,7 @@ class BatchWorker(multiprocessing.Process):
                             is_next = True
                             b_sents = chunk_sents[a_end:]
 
-                    item = self._create_item(a_sents, b_sents, is_next, target_seq_length)
+                    item = self._create_batch_item(a_sents, b_sents, is_next, target_seq_length)
                     if item is not None:
                         buf.append(item)
 
@@ -152,88 +191,63 @@ class BatchWorker(multiprocessing.Process):
 
         self._is_finished.set()
 
-    def _create_item(self, a_sents, b_sents, is_next, target_seq_length):
+    def _create_batch_item(self, a_sents, b_sents, is_next, target_seq_length):
         if b_sents is None:
-            a_orig_len = sum([len(s.words) for s in a_sents])
-            a_len = min(a_orig_len, target_seq_length)
-            a_left_num_trunc = random.randint(0, a_orig_len - a_len)
+            a_orig_length = sum([len(s.words) for s in a_sents])
+            a_length = min(a_orig_length, target_seq_length)
+            a_left_num_trunc = random.randint(0, a_orig_length - a_length)
+            b_length = 0
+            b_left_num_trunc = 0
 
-        else:
-            a_orig_len = sum([len(s.words) for s in a_sents])
-            b_orig_len = sum([len(s.words) for s in b_sents])
-
-            half_target_len = round(target_seq_length / 2)
-            if a_orig_len < b_orig_len:
-                a_len = min(half_target_len, a_orig_len)
-                b_len = min(target_seq_length - a_len, b_orig_len)
-            else:
-                b_len = min(half_target_len, b_orig_len)
-                a_len = min(target_seq_length - b_len, a_orig_len)
-
-            a_left_num_trunc = random.randint(0, a_orig_len - a_len)
-            b_left_num_trunc = random.randint(0, b_orig_len - b_len)
-
-        a_words = []
-        a_annotations = []
-        for sent in a_sents:
-            ofs = len(a_words) - a_left_num_trunc
-            a_words.extend(sent.words)
-
-            if self._target_entity_annotation == 'link':
-                annotations = sent.links
-            else:
-                annotations = sent.mentions
-
-            for annotation in annotations:
-                annotation.start += ofs
-                annotation.end += ofs
-                if annotation.start < 0 or annotation.end > a_len:
-                    continue
-                a_annotations.append(annotation)
-
-        a_words = a_words[a_left_num_trunc:a_left_num_trunc + a_len]
-
-        if b_sents is None:
+            a_words = [w for s in a_sents for w in s.words][a_left_num_trunc:a_left_num_trunc + a_length]
             b_words = None
-            b_annotations = None
-        else:
-            b_words = []
-            b_annotations = []
 
+        else:
+            a_orig_length = sum([len(s.words) for s in a_sents])
+            b_orig_length = sum([len(s.words) for s in b_sents])
+
+            half_target_length = round(target_seq_length / 2)
+            if a_orig_length < b_orig_length:
+                a_length = min(half_target_length, a_orig_length)
+                b_length = min(target_seq_length - a_length, b_orig_length)
+            else:
+                b_length = min(half_target_length, b_orig_length)
+                a_length = min(target_seq_length - b_length, a_orig_length)
+            a_left_num_trunc = random.randint(0, a_orig_length - a_length)
+            b_left_num_trunc = random.randint(0, b_orig_length - b_length)
+
+            a_words = [w for s in a_sents for w in s.words][a_left_num_trunc:a_left_num_trunc + a_length]
+            b_words = [w for s in b_sents for w in s.words][b_left_num_trunc:b_left_num_trunc + b_length]
+
+        a_links = []
+        offset = -a_left_num_trunc
+        for sent in a_sents:
+            for link in sent.links:
+                if link.start + offset >= 0 and link.end + offset <= a_length:
+                    link.start += offset + 1  # 1 for [CLS]
+                    link.end += offset + 1
+                    a_links.append(link)
+            offset += len(sent.words)
+
+        b_links = []
+        if b_sents is not None:
+            offset = -b_left_num_trunc
             for sent in b_sents:
-                ofs = len(b_words) - b_left_num_trunc
-                b_words.extend(sent.words)
+                for link in sent.links:
+                    if link.start + offset >= 0 and link.end + offset <= b_length:
+                        link.start += offset + a_length + 2  # 2 for [CLS] and [SEP]
+                        link.end += offset + a_length + 2
+                        b_links.append(link)
+                offset += len(sent.words)
 
-                if self._target_entity_annotation == 'link':
-                    annotations = sent.links
-                else:
-                    annotations = sent.mentions
+        word_inputs = self._create_word_inputs(a_words, b_words)
+        entity_inputs = self._create_entity_inputs(a_links, b_links)
 
-                for annotation in annotations:
-                    annotation.start += ofs
-                    annotation.end += ofs
-                    if annotation.start < 0 or annotation.end > b_len:
-                        continue
-                    b_annotations.append(annotation)
-
-            b_words = b_words[b_left_num_trunc:b_left_num_trunc + b_len]
-
-        word_data = create_word_data(a_words, b_words, self._word_vocab, self._max_seq_length,
-                                     self._masked_lm_prob, self._max_predictions_per_seq)
-
-        if self._target_entity_annotation == 'link':
-            entity_data = create_link_data(a_annotations, b_annotations, len(a_words),
-                                           self._entity_vocab, self._max_entity_length, self._masked_entity_prob,
-                                           self._max_entity_predictions_per_seq, self._max_mention_length)
-        else:
-            entity_data = create_mention_data(a_annotations, b_annotations, len(a_words),
-                                              self._entity_vocab, self._max_entity_length, self._max_mention_length)
-
-        entity_size = np.sum(entity_data['entity_attention_mask'])
+        entity_size = np.sum(entity_inputs['entity_attention_mask'])
         if entity_size == 0:
             return None
 
-        return (entity_size, word_data, entity_data, is_next)
+        return (entity_size, word_inputs, entity_inputs, is_next)
 
     def _create_batches(self, items):
         items.sort(reverse=True, key=lambda o: o[0])
@@ -242,7 +256,7 @@ class BatchWorker(multiprocessing.Process):
         current_entity_size = None
         for (entity_size, word_data, entity_data, is_next) in items:
             if current_entity_size is None:
-                current_entity_size = entity_size
+                current_entity_size = max(entity_size, 1)
 
             entity_data = {k: v[:current_entity_size] for (k, v) in entity_data.items()}
 
@@ -257,175 +271,190 @@ class BatchWorker(multiprocessing.Process):
 
         batches = []
         for i in range(0, len(buf), self._batch_size):
-            batches.append(
-                {k: np.stack([o[k] for o in buf[i:i + self._batch_size]]) for k in buf[0].keys()})
+            batches.append({k: np.stack([o[k] for o in buf[i:i + self._batch_size]]) for k in buf[0].keys()})
+
         random.shuffle(batches)
 
         return batches
 
+    def _create_word_inputs(self, a_words, b_words):
+        word_ids = [self._cls_id] + [w.id for w in a_words] + [self._sep_id]
+        if b_words is not None:
+            word_ids += [w.id for w in b_words] + [self._sep_id]
 
-def create_word_data(a_words, b_words, word_vocab, max_seq_length, masked_lm_prob=0.0,
-                     max_predictions_per_seq=0):
-    cls_id = word_vocab['[CLS]']
-    sep_id = word_vocab['[SEP]']
-    mask_id = word_vocab['[MASK]']
+        ret = {}
+        if self._masked_lm_prob != 0.0:
+            masked_lm_labels = np.full(self._max_seq_length, -1, dtype=np.int)
+            ret['masked_lm_labels'] = masked_lm_labels
 
-    word_ids = [cls_id]
-    word_ids += [w.id for w in a_words]
-    word_ids.append(sep_id)
-    word_len = len(a_words)
-    if b_words is not None:
-        word_ids += [w.id for w in b_words]
-        word_ids.append(sep_id)
-        word_len += len(b_words)
+            num_to_predict = max(1, int(round((len(a_words) + len(b_words)) * self._masked_lm_prob)))
 
-    ret = {}
+            for index in np.random.permutation(len(word_ids)):
+                if word_ids[index] in (self._cls_id, self._sep_id):
+                    continue
 
-    if masked_lm_prob != 0.0:
-        masked_lm_labels = np.full(max_seq_length, -1, dtype=np.int)
-        ret['masked_lm_labels'] = masked_lm_labels
+                masked_lm_labels[index] = word_ids[index]
+                p = random.random()
+                if p < 0.8:
+                    word_ids[index] = self._mask_id
+                elif p < 0.9:
+                    word_ids[index] = random.randint(0, len(self._word_vocab) - 1)
 
-        num_to_predict = min(max_predictions_per_seq, max(1, int(round(word_len * masked_lm_prob))))
+                num_to_predict -= 1
+                if num_to_predict == 0:
+                    break
 
-        for index in np.random.permutation(len(word_ids)):
-            if word_ids[index] in (cls_id, sep_id):
-                continue
+        ret['word_ids'] = np.zeros(self._max_seq_length, dtype=np.int)
+        ret['word_ids'][:len(word_ids)] = word_ids
 
-            masked_lm_labels[index] = word_ids[index]
-            p = random.random()
-            if p < 0.8:
-                word_ids[index] = mask_id
-            elif p < 0.9:
-                word_ids[index] = random.randint(0, len(word_vocab) - 1)
+        ret['word_attention_mask'] = np.ones(self._max_seq_length, dtype=np.int)
+        ret['word_attention_mask'][len(word_ids):] = 0
 
-            num_to_predict -= 1
-            if num_to_predict == 0:
-                break
+        ret['word_segment_ids'] = np.zeros(self._max_seq_length, dtype=np.int)
+        if b_words is not None:
+            ret['word_segment_ids'][len(a_words) + 2:len(word_ids)] = 1  # 2 for [CLS] and [SEP]
 
-    output_word_ids = np.zeros(max_seq_length, dtype=np.int)
-    output_word_ids[:len(word_ids)] = word_ids
-    ret['word_ids'] = output_word_ids
+        return ret
 
-    word_attention_mask = np.ones(max_seq_length, dtype=np.int)
-    word_attention_mask[len(word_ids):] = 0
-    ret['word_attention_mask'] = word_attention_mask
-
-    word_segment_ids = np.zeros(max_seq_length, dtype=np.int)
-    if b_words is not None:
-        word_segment_ids[len(a_words) + 2:len(word_ids)] = 1  # 2 for CLS and SEP
-    ret['word_segment_ids'] = word_segment_ids
-
-    return ret
+    def _create_entity_inputs(self, a_links, b_links):
+        raise NotImplementedError()
 
 
-def create_link_data(a_links, b_links, a_word_length, entity_vocab, max_entity_length,
-                     masked_entity_prob, max_entity_predictions_per_seq, max_mention_length):
-    entity_ids = np.zeros(max_entity_length, dtype=np.int)
-    entity_segment_ids = np.zeros(max_entity_length, dtype=np.int)
-    entity_attention_mask = np.ones(max_entity_length, dtype=np.int)
-    entity_position_ids = np.full((max_entity_length, max_mention_length), -1, dtype=np.int)
+class LukePretrainingBatchWorker(BaseBatchWorker):
+    def __init__(self, output_queue, is_finished, page_indices, corpus_file, entity_vocab, batch_size, max_seq_length,
+                 max_entity_length, max_mention_length, short_seq_prob, masked_lm_prob, masked_entity_prob,
+                 single_sentence, batch_buffer_size, mmap_mode):
+        super(LukePretrainingBatchWorker, self).__init__(
+            output_queue, is_finished, page_indices, corpus_file, batch_size, max_seq_length, short_seq_prob,
+            masked_lm_prob, single_sentence, batch_buffer_size, mmap_mode)
 
-    for link in a_links:
-        link.start += 1  # 1 for CLS
-        link.end += 1
-    a_links = [l for l in a_links if l.title in entity_vocab]
+        self._entity_vocab = entity_vocab
+        self._max_entity_length = max_entity_length
+        self._max_mention_length = max_mention_length
+        self._masked_entity_prob = masked_entity_prob
 
-    if b_links is None:
-        b_links = []
-    else:
-        for link in b_links:
-            link.start += 2 + a_word_length  # 2 for CLS and SEP
-            link.end += 2 + a_word_length
-        b_links = [l for l in b_links if l.title in entity_vocab]
+        self._entity_mask_id = self._entity_vocab['[MASK]']
 
-    entity_len = len(a_links) + len(b_links)
+    def _create_entity_inputs(self, a_links, b_links):
+        a_links = [link for link in a_links if link.title in self._entity_vocab]
+        b_links = [link for link in b_links if link.title in self._entity_vocab]
+        entity_len = len(a_links) + len(b_links)
 
-    if masked_entity_prob != 0.0:
-        num_to_predict = min(max_entity_predictions_per_seq,
-                             max(1, int(round(entity_len * masked_entity_prob))))
-        mask_indices = frozenset(np.random.permutation(range(entity_len))[:num_to_predict])
-        masked_entity_labels = np.full(max_entity_length, -1, dtype=np.int)
-    else:
-        masked_entity_labels = None
-
-    index = 0
-    mask_id = entity_vocab['[MASK]']
-    for (link_index, (link, segment_id)) in enumerate(chain(zip(a_links, repeat(0)),
-                                                            zip(b_links, repeat(1)))):
-        entity_id = entity_vocab.get_id(link.title)
-        if index >= max_entity_length:
-            break
-
-        if masked_entity_prob != 0.0 and link_index in mask_indices:
-            entity_ids[index] = mask_id
-            masked_entity_labels[index] = entity_id
+        if self._masked_entity_prob != 0.0:
+            num_to_predict = max(1, int(round(entity_len * self._masked_entity_prob)))
+            mask_indices = frozenset(np.random.permutation(range(entity_len))[:num_to_predict])
+            masked_entity_labels = np.full(self._max_entity_length, -1, dtype=np.int)
         else:
-            entity_ids[index] = entity_id
+            mask_indices = frozenset()
+            masked_entity_labels = None
 
-        entity_segment_ids[index] = segment_id
-        mention_len = min(max_mention_length, link.end - link.start)
-        entity_position_ids[index][:mention_len] = range(link.start, link.start + mention_len)
+        entity_ids = np.zeros(self._max_entity_length, dtype=np.int)
+        entity_segment_ids = np.zeros(self._max_entity_length, dtype=np.int)
+        entity_position_ids = np.full((self._max_entity_length, self._max_mention_length), -1, dtype=np.int)
 
-        index += 1
+        for (index, (link, segment_id)) in enumerate(islice(chain(zip(a_links, repeat(0)), zip(b_links, repeat(1))),
+                                                            self._max_entity_length)):
+            entity_id = self._entity_vocab.get_id(link.title)
 
-    entity_attention_mask[index:] = 0
+            if index in mask_indices:
+                entity_ids[index] = self._entity_mask_id
+                masked_entity_labels[index] = entity_id
+            else:
+                entity_ids[index] = entity_id
 
-    ret = dict(
-        entity_ids=entity_ids,
-        entity_position_ids=entity_position_ids,
-        entity_segment_ids=entity_segment_ids,
-        entity_attention_mask=entity_attention_mask,
-    )
-    if masked_entity_prob != 0.0:
-        ret['masked_entity_labels'] = masked_entity_labels
+            entity_segment_ids[index] = segment_id
+            mention_len = min(self._max_mention_length, link.end - link.start)
+            entity_position_ids[index][:mention_len] = range(link.start, link.start + mention_len)
 
-    return ret
+        entity_attention_mask = np.ones(self._max_entity_length, dtype=np.int)
+        entity_attention_mask[entity_len:] = 0
+
+        ret = dict(
+            entity_ids=entity_ids,
+            entity_position_ids=entity_position_ids,
+            entity_segment_ids=entity_segment_ids,
+            entity_attention_mask=entity_attention_mask,
+        )
+        if masked_entity_labels is not None:
+            ret['masked_entity_labels'] = masked_entity_labels
+
+        return ret
 
 
-def create_mention_data(a_mentions, b_mentions, a_word_length, entity_vocab, max_entity_length,
-                        max_mention_length):
-    entity_ids = np.zeros(max_entity_length, dtype=np.int)
-    entity_segment_ids = np.zeros(max_entity_length, dtype=np.int)
-    # entity_labels = np.full(max_entity_length, -1, dtype=np.int)
+class LukeE2EPretrainingBatchWorker(BaseBatchWorker):
+    def __init__(self, output_queue, is_finished, page_indices, corpus_file, entity_vocab, batch_size,
+                 max_seq_length, max_entity_length, max_mention_length, max_candidate_length, short_seq_prob,
+                 masked_lm_prob, masked_entity_prob, single_sentence, min_candidate_prior_prob, batch_buffer_size,
+                 mmap_mode):
+        super(LukeE2EPretrainingBatchWorker, self).__init__(
+            output_queue, is_finished, page_indices, corpus_file, batch_size, max_seq_length, short_seq_prob,
+            masked_lm_prob, single_sentence, batch_buffer_size, mmap_mode)
 
-    entity_position_ids = np.full((max_entity_length, max_mention_length), -1, dtype=np.int)
+        self._entity_vocab = entity_vocab
+        self._max_entity_length = max_entity_length
+        self._max_mention_length = max_mention_length
+        self._max_candidate_length = max_candidate_length
+        self._masked_entity_prob = masked_entity_prob
+        self._min_candidate_prior_prob = min_candidate_prior_prob
 
-    for mention in a_mentions:
-        mention.start += 1  # 1 for CLS
-        mention.end += 1
-    a_mentions = [m for m in a_mentions if m.title in entity_vocab]
+        self._entity_mask_id = self._entity_vocab['[MASK]']
 
-    if b_mentions is None:
-        b_mentions = []
+    def _create_entity_inputs(self, a_links, b_links):
+        for link in (a_links + b_links):
+            link.candidates = [c for c in link.candidates if c.prior_prob >= self._min_candidate_prior_prob]
 
-    else:
-        for mention in b_mentions:
-            mention.start += 2 + a_word_length  # 2 for CLS and SEP
-            mention.end += 2 + a_word_length
-        b_mentions = [m for m in b_mentions if m.title in entity_vocab]
+        a_links = [link for link in a_links if link.title in self._entity_vocab and link.candidates]
+        b_links = [link for link in b_links if link.title in self._entity_vocab and link.candidates]
+        entity_len = len(a_links) + len(b_links)
 
-    index = 0
-    for (mention, segment_id) in chain(zip(a_mentions, repeat(0)), zip(b_mentions, repeat(1))):
-        entity_id = entity_vocab.get_id(mention.title)
-        if index >= max_entity_length:
-            break
+        if self._masked_entity_prob != 0.0:
+            num_to_predict = max(1, int(round(entity_len * self._masked_entity_prob)))
+            mask_indices = frozenset(np.random.permutation(range(entity_len))[:num_to_predict])
+            masked_entity_labels = np.full(self._max_entity_length, -1, dtype=np.int)
+        else:
+            mask_indices = frozenset()
+            masked_entity_labels = None
 
-        entity_ids[index] = entity_id
-        entity_segment_ids[index] = segment_id
+        entity_candidate_ids = np.zeros((self._max_entity_length, self._max_candidate_length + 1), dtype=np.int)
+        entity_segment_ids = np.zeros(self._max_entity_length, dtype=np.int)
+        entity_position_ids = np.full((self._max_entity_length, self._max_mention_length), -1, dtype=np.int)
+        entity_candidate_labels = np.full(self._max_entity_length, -1, dtype=np.int)
 
-        mention_len = min(max_mention_length, mention.end - mention.start)
-        entity_position_ids[index][:mention_len] = range(mention.start, mention.start + mention_len)
-        # entity_labels[index] = mention.label
+        for (index, (link, segment_id)) in enumerate(islice(chain(zip(a_links, repeat(0)), zip(b_links, repeat(1))),
+                                                            self._max_entity_length)):
+            entity_candidate_ids[index, 0] = 1  # [UNK]
+            entity_candidate_labels[index] = 0  # [UNK]
+            candidate_index = 1
+            for candidate in link.candidates:
+                if candidate.prior_prob >= self._min_candidate_prior_prob and candidate.title in self._entity_vocab:
+                    entity_candidate_ids[index, candidate_index] = self._entity_vocab[candidate.title]
+                    if candidate.title == link.title:
+                        entity_candidate_labels[index] = candidate_index
 
-        index += 1
+                    candidate_index += 1
+                    if candidate_index == self._max_candidate_length + 1:
+                        break
 
-    entity_attention_mask = np.ones(max_entity_length, dtype=np.int)
-    entity_attention_mask[index:] = 0
+            entity_segment_ids[index] = segment_id
 
-    return dict(
-        entity_ids=entity_ids,
-        entity_position_ids=entity_position_ids,
-        entity_segment_ids=entity_segment_ids,
-        entity_attention_mask=entity_attention_mask,
-        # entity_labels=entity_labels
-    )
+            mention_len = min(self._max_mention_length, link.end - link.start)
+            entity_position_ids[index][:mention_len] = range(link.start, link.start + mention_len)
+
+            if index in mask_indices:
+                masked_entity_labels[index] = self._entity_vocab[link.title]
+
+        entity_attention_mask = np.ones(self._max_entity_length, dtype=np.int)
+        entity_attention_mask[entity_len:] = 0
+
+        ret = dict(
+            entity_candidate_ids=entity_candidate_ids,
+            entity_position_ids=entity_position_ids,
+            entity_segment_ids=entity_segment_ids,
+            entity_attention_mask=entity_attention_mask,
+            entity_candidate_labels=entity_candidate_labels,
+        )
+
+        if self._masked_entity_prob != 0.0:
+            ret['masked_entity_labels'] = masked_entity_labels
+
+        return ret
