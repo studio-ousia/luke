@@ -4,6 +4,7 @@ import tqdm
 PAD_TOKEN = '[PAD]'
 UNK_TOKEN = '[UNK]'
 MASK_TOKEN = '[MASK]'
+MASK2_TOKEN = '[MASK2]'
 
 
 class EntityVocab(object):
@@ -61,6 +62,7 @@ class EntityVocab(object):
         title_dict[PAD_TOKEN] = 0
         title_dict[UNK_TOKEN] = 0
         title_dict[MASK_TOKEN] = 0
+        title_dict[MASK2_TOKEN] = 0
 
         for title in white_list:
             if counter[title] != 0:

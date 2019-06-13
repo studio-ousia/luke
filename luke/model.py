@@ -530,7 +530,7 @@ class LukeE2EModel(LukeBaseModel):
         extended_attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
 
         word_embedding_output = self.embeddings(word_ids, word_segment_ids)
-        entity_ids = entity_attention_mask * 2  # index of [MASK] token is 2
+        entity_ids = entity_attention_mask * 3  # index of [MASK2] token is 3
         mask_entity_embedding_output = self.entity_embeddings(entity_ids, entity_position_ids, entity_segment_ids)
 
         t_encoded_layers = self.encoder(word_embedding_output, mask_entity_embedding_output, extended_attention_mask,
