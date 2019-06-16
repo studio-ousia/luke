@@ -103,3 +103,11 @@ class BertDenseSparseAdam(BertAdam):
         if indices.dim() == 0 or values.dim() == 0:
             return sparse_tensor.new().resize_as_(sparse_tensor)
         return sparse_tensor.new(indices, values, sparse_tensor.size())
+
+    def load_state_dict(self, state_dict):
+        super(BertDenseSparseAdam, self).load_state_dict(state_dict)
+
+        for state in self.state.values():
+            if 'next_m' in state:
+                state['next_m'] = state['next_m'].to(self.device)
+                state['next_v'] = state['next_v'].to(self.device)
