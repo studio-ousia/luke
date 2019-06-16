@@ -71,26 +71,30 @@ def run_training(corpus_file, entity_vocab_file, output_dir, bert_model_name, si
 
 def run_e2e_training(corpus_file, entity_vocab_file, output_dir, bert_model_name, single_sentence, max_seq_length,
                      max_entity_length, max_mention_length, max_candidate_length, short_seq_prob, masked_lm_prob,
-                     masked_entity_prob, min_candidate_prior_prob, num_t_hidden_layers, entity_selector_softmax_temp,
+                     masked_entity_prob, min_candidate_prior_prob, num_el_hidden_layers, entity_selector_softmax_temp,
                      batch_size, gradient_accumulation_steps, learning_rate, lr_schedule, warmup_steps,
                      fix_bert_weights, optimizer_on_cpu, num_train_steps, num_page_chunks, log_dir=None,
                      model_file=None, optimizer_file=None, epoch=0, global_step=0, page_chunks=[]):
     train_args = {}
-    for arg in inspect.getfullargspec(run_training).args:
+    for arg in inspect.getfullargspec(run_e2e_training).args:
         train_args[arg] = locals()[arg]
 
     entity_vocab = EntityVocab(entity_vocab_file)
     bert_model = BertForPreTraining.from_pretrained(bert_model_name)
 
     config = LukeE2EConfig(entity_vocab_size=entity_vocab.size,
-                           num_t_hidden_layers=num_t_hidden_layers,
+                           num_el_hidden_layers=num_el_hidden_layers,
                            entity_selector_softmax_temp=entity_selector_softmax_temp,
                            **bert_model.config.to_dict())
     logger.info('Model configuration: %s', config)
 
     model = LukeE2EPretrainingModel(config)
     if model_file is None:
-        model.load_bert_weights(bert_model.state_dict())
+        bert_state_dict = bert_model.state_dict()
+        for key in tuple(bert_state_dict.keys()):
+            if key.startswith('bert.encoder.layer.') and int(key.split('.')[3]) < num_el_hidden_layers:
+                bert_state_dict['el_encoder.' + key[13:]] = bert_state_dict[key]
+        model.load_bert_weights(bert_state_dict)
     else:
         model.load_state_dict(torch.load(model_file, map_location='cpu'))
 
@@ -106,6 +110,8 @@ def run_e2e_training(corpus_file, entity_vocab_file, output_dir, bert_model_name
         for param in model.entity_predictions.parameters():
             param.requires_grad = True
         for param in model.entity_selector.parameters():
+            param.requires_grad = True
+        for param in model.el_encoder.parameters():
             param.requires_grad = True
 
     batch_generator = LukeE2EPretrainingBatchGenerator(
