@@ -42,7 +42,7 @@ class BasePretrainingBatchGenerator(object):
 
 class LukePretrainingBatchGenerator(BasePretrainingBatchGenerator):
     def __init__(self, corpus_file, entity_vocab, batch_size, max_seq_length, max_entity_length, max_mention_length,
-                 short_seq_prob, masked_lm_prob, masked_entity_prob, single_sentence, batch_buffer_size=1000,
+                 short_seq_prob, masked_lm_prob, masked_entity_prob, single_sentence, batch_buffer_size=100,
                  mmap_mode=None):
         self._worker_cls = functools.partial(LukePretrainingBatchWorker,
                                              corpus_file=corpus_file,
@@ -65,7 +65,7 @@ class LukePretrainingBatchGenerator(BasePretrainingBatchGenerator):
 class LukeE2EPretrainingBatchGenerator(BasePretrainingBatchGenerator):
     def __init__(self, corpus_file, entity_vocab, batch_size, max_seq_length, max_entity_length, max_mention_length,
                  max_candidate_length, short_seq_prob, masked_lm_prob, masked_entity_prob, single_sentence,
-                 min_candidate_prior_prob, batch_buffer_size=1000, mmap_mode=None):
+                 min_candidate_prior_prob, batch_buffer_size=100, mmap_mode=None):
         self._worker_cls = functools.partial(LukeE2EPretrainingBatchWorker,
                                              corpus_file=corpus_file,
                                              entity_vocab=entity_vocab,
@@ -279,15 +279,17 @@ class BaseBatchWorker(multiprocessing.Process):
 
     def _create_word_inputs(self, a_words, b_words):
         word_ids = [self._cls_id] + [w.id for w in a_words] + [self._sep_id]
+        word_len = len(a_words)
         if b_words is not None:
             word_ids += [w.id for w in b_words] + [self._sep_id]
+            word_len += len(b_words)
 
         ret = {}
         if self._masked_lm_prob != 0.0:
             masked_lm_labels = np.full(self._max_seq_length, -1, dtype=np.int)
             ret['masked_lm_labels'] = masked_lm_labels
 
-            num_to_predict = max(1, int(round((len(a_words) + len(b_words)) * self._masked_lm_prob)))
+            num_to_predict = max(1, int(round(word_len * self._masked_lm_prob)))
 
             for index in np.random.permutation(len(word_ids)):
                 if word_ids[index] in (self._cls_id, self._sep_id):
