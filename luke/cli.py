@@ -38,13 +38,27 @@ def build_dump_db(dump_file, out_file, **kwargs):
 @click.option('--max-mention-length', default=20)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', default=100)
-def build_entity_linker(dump_db_file, **kwargs):
+def build_entity_linker_from_wikipedia(dump_db_file, **kwargs):
     from luke.utils.entity_linker import EntityLinker, BertLowercaseNormalizer
 
     dump_db = DumpDB(dump_db_file)
     tokenizer = BasicTokenizer(do_lower_case=False)
     normalizer = BertLowercaseNormalizer()
-    EntityLinker.build(dump_db, tokenizer, normalizer, **kwargs)
+    EntityLinker.build_from_wikipedia(dump_db, tokenizer, normalizer, **kwargs)
+
+
+@cli.command()
+@click.argument('p_e_m_file', type=click.Path(exists=True))
+@click.argument('dump_db_file', type=click.Path(exists=True))
+@click.argument('out_file', type=click.Path())
+@click.option('--max-mention-length', default=20)
+def build_entity_linker_from_p_e_m_file(p_e_m_file, dump_db_file, **kwargs):
+    from luke.utils.entity_linker import EntityLinker, BertLowercaseNormalizer
+
+    dump_db = DumpDB(dump_db_file)
+    tokenizer = BasicTokenizer(do_lower_case=False)
+    normalizer = BertLowercaseNormalizer()
+    EntityLinker.build_from_p_e_m_file(p_e_m_file, dump_db, tokenizer, normalizer, **kwargs)
 
 
 @cli.command()

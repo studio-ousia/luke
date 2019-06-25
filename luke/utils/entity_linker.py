@@ -118,8 +118,8 @@ class EntityLinker(object):
             return []
 
     @staticmethod
-    def build(dump_db, tokenizer, normalizer, out_file, min_link_prob, max_candidate_size, min_link_count,
-              max_mention_length, pool_size, chunk_size):
+    def build_from_wikipedia(dump_db, tokenizer, normalizer, out_file, min_link_prob, max_candidate_size,
+                             min_link_count, max_mention_length, pool_size, chunk_size):
         logger.info('Iteration 1/2: Extracting all entity names...')
 
         name_dict = defaultdict(Counter)
@@ -164,6 +164,47 @@ class EntityLinker(object):
                     if link_count < min_link_count:
                         continue
                     yield (name, (title_trie[title], link_count, total_link_count, doc_count))
+
+        data_trie = marisa_trie.RecordTrie('<IIII', item_generator())
+        mention_trie = marisa_trie.Trie(data_trie.keys())
+
+        joblib.dump(dict(title_trie=title_trie,
+                         mention_trie=mention_trie,
+                         data_trie=data_trie,
+                         tokenizer=tokenizer,
+                         normalizer=normalizer,
+                         max_mention_length=max_mention_length), out_file)
+
+    @staticmethod
+    def build_from_p_e_m_file(p_e_m_file, dump_db, tokenizer, normalizer, out_file, max_mention_length):
+        with open(p_e_m_file) as f:
+            lines = f.readlines()
+
+        name_dict = defaultdict(Counter)
+
+        for line in tqdm.tqdm(lines):
+            (text, total_count, *data) = line.rstrip().split('\t')
+            total_count = int(total_count)
+            text = text.replace(SEP_CHAR, REP_CHAR)
+            tokens = [normalizer.normalize(t) for t in tokenizer.tokenize(text)]
+            if len(tokens) <= max_mention_length:
+                key = SEP_CHAR.join(tokens)
+                for entry in data:
+                    (_, prob, *title_parts) = entry.split(',')
+                    title = ','.join(title_parts).replace('_', ' ')
+                    title = dump_db.resolve_redirect(title)
+                    count = int(float(prob) * total_count)
+                    name_dict[key][title] += count
+
+        titles = frozenset([title for entity_counter in name_dict.values() for title in entity_counter.keys()])
+        title_trie = marisa_trie.Trie(titles)
+
+        def item_generator():
+            for (name, entity_counter) in name_dict.items():
+                total_link_count = sum(entity_counter.values())
+
+                for (title, link_count) in entity_counter.most_common():
+                    yield (name, (title_trie[title], link_count, total_link_count, 0))
 
         data_trie = marisa_trie.RecordTrie('<IIII', item_generator())
         mention_trie = marisa_trie.Trie(data_trie.keys())
