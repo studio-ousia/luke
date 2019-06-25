@@ -96,7 +96,11 @@ def run_e2e_training(corpus_file, entity_vocab_file, output_dir, bert_model_name
                 bert_state_dict['el_encoder.' + key[13:]] = bert_state_dict[key]
         model.load_bert_weights(bert_state_dict)
     else:
-        model.load_state_dict(torch.load(model_file, map_location='cpu'))
+        model_state_dict = torch.load(model_file, map_location='cpu')
+        for key in tuple(model_state_dict.keys()):
+            if key.startswith('bert.encoder.layer.') and int(key.split('.')[3]) < num_el_hidden_layers:
+                model_state_dict['el_encoder.' + key[13:]] = model_state_dict[key]
+        model.load_state_dict(model_state_dict, strict=False)
 
     if masked_entity_prob == 0.0:
         model.entity_embeddings.entity_embeddings.sparse = True

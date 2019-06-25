@@ -543,7 +543,7 @@ class LukeE2EModel(LukeBaseModel):
         # entity_selector_scores: [batch_size, entity_length, entity_candidate_length]
         entity_selector_scores = self.entity_selector(el_entity_sequence_output, entity_candidate_ids)
         entity_selector_scores = entity_selector_scores / self.config.entity_selector_softmax_temp
-        entity_attention_probs = F.softmax(entity_selector_scores, dim=-1).detach()
+        entity_attention_probs = F.softmax(entity_selector_scores, dim=-1)
 
         # entity_candidate_ids: [batch_size, entity_length, entity_candidate_length]
         # entity_segment_ids: [batch_size, entity_length]
@@ -556,8 +556,9 @@ class LukeE2EModel(LukeBaseModel):
         if masked_entity_labels is not None:
             mask_entity_ids = entity_segment_ids.new_full(entity_segment_ids.size(), 2)  # index of [MASK] token is 2
             mask_embedding_output = self.entity_embeddings(mask_entity_ids, entity_position_ids, entity_segment_ids)
-            entity_embedding_output.masked_scatter_((masked_entity_labels != -1).unsqueeze(-1), mask_embedding_output)
-
+            mask_embedding_output = mask_embedding_output.masked_fill((masked_entity_labels == -1).unsqueeze(-1), 0)
+            entity_embedding_output = entity_embedding_output.masked_fill((masked_entity_labels != -1).unsqueeze(-1), 0)
+            entity_embedding_output = entity_embedding_output + mask_embedding_output
         encoded_layers = self.encoder(word_embedding_output, entity_embedding_output, extended_attention_mask,
                                       output_all_encoded_layers=output_all_encoded_layers)
 
