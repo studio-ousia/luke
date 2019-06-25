@@ -137,8 +137,8 @@ def run_training(**kwargs):
 
 
 @cli.command()
-@click.option('--max-candidate-length', default=5)
-@click.option('--min-candidate-prior-prob', default=0.05)
+@click.option('--max-candidate-length', default=10)
+@click.option('--min-candidate-prior-prob', default=0.01)
 @click.option('--num-el-hidden-layers', default=3)
 @click.option('--entity-selector-softmax-temp', default=0.1)
 @common_train_options
