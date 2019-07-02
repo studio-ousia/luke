@@ -64,17 +64,22 @@ _dump_db = _tokenizer = _normalizer = _max_mention_length = _name_trie = None
 
 
 class EntityLinker(object):
-    __slots__ = ('_title_trie', '_mention_trie', '_data_trie', '_tokenizer', '_normalizer', '_max_mention_length')
+    __slots__ = ('_entity_linker_file', '_title_trie', '_mention_trie', '_data_trie', '_tokenizer', '_normalizer',
+                 '_max_mention_length')
 
     def __init__(self, entity_linker_file):
-        data = joblib.load(entity_linker_file)
+        self._entity_linker_file = entity_linker_file
 
+        data = joblib.load(entity_linker_file)
         self._title_trie = data['title_trie']
         self._mention_trie = data['mention_trie']
         self._data_trie = data['data_trie']
         self._tokenizer = data['tokenizer']
         self._normalizer = data['normalizer']
         self._max_mention_length = data['max_mention_length']
+
+    def __reduce__(self):
+        return (self.__class__, (self._entity_linker_file,))
 
     def detect_mentions(self, text_or_tokens):
         if isinstance(text_or_tokens, str):
