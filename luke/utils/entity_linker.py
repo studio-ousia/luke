@@ -1,3 +1,4 @@
+import itertools
 import logging
 from collections import defaultdict, Counter
 from contextlib import closing
@@ -81,13 +82,17 @@ class EntityLinker(object):
     def __reduce__(self):
         return (self.__class__, (self._entity_linker_file,))
 
-    def detect_mentions(self, text_or_tokens):
+    def detect_mentions(self, text_or_tokens, subwords=None):
         if isinstance(text_or_tokens, str):
             tokens = self._tokenizer.tokenize(text_or_tokens)
         else:
             tokens = text_or_tokens
 
         tokens = [self._normalizer.normalize(t.replace(SEP_CHAR, REP_CHAR)) for t in tokens]
+        token_positions = list(range(len(tokens) + 1))
+        if subwords is not None:
+            assert len(tokens) == len(subwords)
+            token_positions = [0] + list(itertools.accumulate([len(s) for s in subwords]))
 
         cur = 0
         ret = []
@@ -101,7 +106,8 @@ class EntityLinker(object):
                     end = start + len(name.split(SEP_CHAR))
                     for args in self._data_trie[name]:
                         title = self._title_trie.restore_key(args[0])
-                        mention = Mention(title, name.replace(SEP_CHAR, ' '), start, end, *args[1:])
+                        mention = Mention(title, name.replace(SEP_CHAR, ' '), token_positions[start],
+                                          token_positions[end], *args[1:])
                         ret.append(mention)
 
                     cur = end
