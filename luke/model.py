@@ -112,8 +112,6 @@ class EntityEmbeddings(nn.Module):
 
         entity_embeddings = self.entity_embeddings(entity_ids)
 
-        # We first set all padding indices (i.e., -1) to 0, select embeddings using the indices, and then mask out the
-        # embeddings for padding tokens.
         position_embeddings = self.position_embeddings(position_ids.clamp(min=0))
         position_embedding_mask = (position_ids != -1).type_as(position_embeddings).unsqueeze(-1)
         position_embeddings = position_embeddings * position_embedding_mask
@@ -159,17 +157,11 @@ class SelfAttention(nn.Module):
         key_layer = self.transpose_for_scores(mixed_key_layer)
         value_layer = self.transpose_for_scores(mixed_value_layer)
 
-        # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
-        # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
         attention_scores = attention_scores + attention_mask
 
-        # Normalize the attention scores to probabilities.
         attention_probs = F.softmax(attention_scores, dim=-1)
-
-        # This is actually dropping out entire tokens to attend to, which might
-        # seem a bit unusual, but is taken from the original Transformer paper.
         attention_probs = self.dropout(attention_probs)
 
         context_layer = torch.matmul(attention_probs, value_layer)
@@ -349,13 +341,10 @@ class EntitySelector(nn.Module):
         self.embeddings = nn.Embedding(entity_embedding_weights.size(0), entity_embedding_weights.size(1),
                                        padding_idx=0)
         self.embeddings.weight = entity_embedding_weights
-        # be careful for weight decay!!
         self.bias = nn.Embedding(config.entity_vocab_size, 1, padding_idx=0)
 
     def forward(self, hidden_states, entity_candidate_ids):
-        # entity_embeddings: [batch_size, entity_length, entity_candidate_length, hidden_size]
         entity_embeddings = self.embeddings(entity_candidate_ids)
-        # entity_bias: [batch_size, entity_length, entity_candidate_length]
         entity_bias = self.bias(entity_candidate_ids).squeeze(-1)
 
         hidden_states = self.transform(hidden_states)
@@ -392,8 +381,6 @@ class LukeBaseModel(nn.Module):
 
     def init_weights(self, module):
         if isinstance(module, nn.Linear):
-            # Slightly different from the TF version which uses truncated_normal for initialization
-            # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
         elif isinstance(module, nn.Embedding):
             if module.embedding_dim == 1:  # embedding for bias parameters
@@ -411,7 +398,6 @@ class LukeBaseModel(nn.Module):
         unexpected_keys = []
         error_msgs = []
 
-        # copy state_dict so _load_from_state_dict can modify it
         state_dict = state_dict.copy()
         for key in list(state_dict.keys()):
             new_key = key.replace('gamma', 'weight').replace('beta', 'bias')
@@ -540,15 +526,10 @@ class LukeE2EModel(LukeBaseModel):
         el_encoded_layers = self.el_encoder(word_embedding_output, mask_entity_embedding_output,
                                             extended_attention_mask, output_all_encoded_layers=False)
         el_entity_sequence_output = el_encoded_layers[0][1]
-        # entity_selector_scores: [batch_size, entity_length, entity_candidate_length]
         entity_selector_scores = self.entity_selector(el_entity_sequence_output, entity_candidate_ids)
         entity_selector_scores = entity_selector_scores / self.config.entity_selector_softmax_temp
         entity_attention_probs = F.softmax(entity_selector_scores, dim=-1)
 
-        # entity_candidate_ids: [batch_size, entity_length, entity_candidate_length]
-        # entity_segment_ids: [batch_size, entity_length]
-        # entity_position_ids: [batch_size, entity_length, mention_length]
-        # entity_embedding_output: [batch_size, entity_length, entity_candidate_length, hidden_size]
         entity_embedding_output = self.entity_embeddings(entity_candidate_ids, entity_position_ids.unsqueeze(-2),
                                                          entity_segment_ids.unsqueeze(-1))
         entity_embedding_output = (entity_embedding_output * entity_attention_probs.unsqueeze(-1)).sum(-2)
