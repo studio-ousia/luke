@@ -17,6 +17,10 @@ class Word(object):
     def __repr__(self):
         return f'<Word {self.text}>'
 
+    @property
+    def is_subword(self):
+        return self.text.startswith('##')
+
 
 class Entity(object):
     __slots__ = ('title',)

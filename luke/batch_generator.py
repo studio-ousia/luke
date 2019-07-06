@@ -42,8 +42,8 @@ class BasePretrainingBatchGenerator(object):
 
 class LukePretrainingBatchGenerator(BasePretrainingBatchGenerator):
     def __init__(self, corpus_file, entity_vocab, batch_size, max_seq_length, max_entity_length, max_mention_length,
-                 short_seq_prob, masked_lm_prob, masked_entity_prob, single_sentence, batch_buffer_size=100,
-                 mmap_mode=None):
+                 short_seq_prob, masked_lm_prob, masked_entity_prob, whole_word_masking, single_sentence,
+                 batch_buffer_size=100, mmap_mode=None):
         self._worker_cls = functools.partial(LukePretrainingBatchWorker,
                                              corpus_file=corpus_file,
                                              entity_vocab=entity_vocab,
@@ -54,6 +54,7 @@ class LukePretrainingBatchGenerator(BasePretrainingBatchGenerator):
                                              short_seq_prob=short_seq_prob,
                                              masked_lm_prob=masked_lm_prob,
                                              masked_entity_prob=masked_entity_prob,
+                                             whole_word_masking=whole_word_masking,
                                              single_sentence=single_sentence,
                                              batch_buffer_size=batch_buffer_size,
                                              mmap_mode=mmap_mode)
@@ -64,8 +65,8 @@ class LukePretrainingBatchGenerator(BasePretrainingBatchGenerator):
 
 class LukeE2EPretrainingBatchGenerator(BasePretrainingBatchGenerator):
     def __init__(self, corpus_file, entity_vocab, batch_size, max_seq_length, max_entity_length, max_mention_length,
-                 max_candidate_length, short_seq_prob, masked_lm_prob, masked_entity_prob, single_sentence,
-                 min_candidate_prior_prob, batch_buffer_size=100, mmap_mode=None):
+                 max_candidate_length, short_seq_prob, masked_lm_prob, masked_entity_prob, whole_word_masking,
+                 single_sentence, min_candidate_prior_prob, batch_buffer_size=100, mmap_mode=None):
         self._worker_cls = functools.partial(LukeE2EPretrainingBatchWorker,
                                              corpus_file=corpus_file,
                                              entity_vocab=entity_vocab,
@@ -77,6 +78,7 @@ class LukeE2EPretrainingBatchGenerator(BasePretrainingBatchGenerator):
                                              short_seq_prob=short_seq_prob,
                                              masked_lm_prob=masked_lm_prob,
                                              masked_entity_prob=masked_entity_prob,
+                                             whole_word_masking=whole_word_masking,
                                              single_sentence=single_sentence,
                                              min_candidate_prior_prob=min_candidate_prior_prob,
                                              batch_buffer_size=batch_buffer_size,
@@ -88,7 +90,7 @@ class LukeE2EPretrainingBatchGenerator(BasePretrainingBatchGenerator):
 
 class BaseBatchWorker(multiprocessing.Process):
     def __init__(self, output_queue, is_finished, page_indices, corpus_file, batch_size, max_seq_length, short_seq_prob,
-                 masked_lm_prob, single_sentence, batch_buffer_size, mmap_mode):
+                 masked_lm_prob, whole_word_masking, single_sentence, batch_buffer_size, mmap_mode):
         super(BaseBatchWorker, self).__init__()
 
         self._output_queue = output_queue
@@ -99,6 +101,7 @@ class BaseBatchWorker(multiprocessing.Process):
         self._max_seq_length = max_seq_length
         self._short_seq_prob = short_seq_prob
         self._masked_lm_prob = masked_lm_prob
+        self._whole_word_masking = whole_word_masking
         self._single_sentence = single_sentence
         self._batch_buffer_size = batch_buffer_size
         self._mmap_mode = mmap_mode
@@ -291,18 +294,40 @@ class BaseBatchWorker(multiprocessing.Process):
 
             num_to_predict = max(1, int(round(word_len * self._masked_lm_prob)))
 
-            for index in np.random.permutation(len(word_ids)):
-                if word_ids[index] in (self._cls_id, self._sep_id):
+            if b_words is None:
+                target_word_seq = [None] + a_words + [None]
+            else:
+                target_word_seq = [None] + a_words + [None] + b_words + [None]
+
+            candidate_word_indices = []
+            for (i, word) in enumerate(target_word_seq):
+                if word is None:
                     continue
 
-                masked_lm_labels[index] = word_ids[index]
-                p = random.random()
-                if p < 0.8:
-                    word_ids[index] = self._mask_id
-                elif p < 0.9:
-                    word_ids[index] = random.randint(0, len(self._word_vocab) - 1)
+                if self._whole_word_masking and word.is_subword and candidate_word_indices:
+                    candidate_word_indices[-1].append(i)
+                else:
+                    candidate_word_indices.append([i])
 
-                num_to_predict -= 1
+            covered_indices = set()
+            for i in np.random.permutation(len(candidate_word_indices)):
+                indices = candidate_word_indices[i]
+                if len(indices) > num_to_predict:
+                    continue
+
+                if covered_indices.intersection(indices):
+                    continue
+                covered_indices.update(indices)
+
+                for index in indices:
+                    masked_lm_labels[index] = word_ids[index]
+                    p = random.random()
+                    if p < 0.8:
+                        word_ids[index] = self._mask_id
+                    elif p < 0.9:
+                        word_ids[index] = random.randint(0, len(self._word_vocab) - 1)
+                    num_to_predict -= 1
+
                 if num_to_predict == 0:
                     break
 
@@ -325,10 +350,10 @@ class BaseBatchWorker(multiprocessing.Process):
 class LukePretrainingBatchWorker(BaseBatchWorker):
     def __init__(self, output_queue, is_finished, page_indices, corpus_file, entity_vocab, batch_size, max_seq_length,
                  max_entity_length, max_mention_length, short_seq_prob, masked_lm_prob, masked_entity_prob,
-                 single_sentence, batch_buffer_size, mmap_mode):
+                 whole_word_masking, single_sentence, batch_buffer_size, mmap_mode):
         super(LukePretrainingBatchWorker, self).__init__(
             output_queue, is_finished, page_indices, corpus_file, batch_size, max_seq_length, short_seq_prob,
-            masked_lm_prob, single_sentence, batch_buffer_size, mmap_mode)
+            masked_lm_prob, whole_word_masking, single_sentence, batch_buffer_size, mmap_mode)
 
         self._entity_vocab = entity_vocab
         self._max_entity_length = max_entity_length
@@ -386,11 +411,11 @@ class LukePretrainingBatchWorker(BaseBatchWorker):
 class LukeE2EPretrainingBatchWorker(BaseBatchWorker):
     def __init__(self, output_queue, is_finished, page_indices, corpus_file, entity_vocab, batch_size,
                  max_seq_length, max_entity_length, max_mention_length, max_candidate_length, short_seq_prob,
-                 masked_lm_prob, masked_entity_prob, single_sentence, min_candidate_prior_prob, batch_buffer_size,
-                 mmap_mode):
+                 masked_lm_prob, masked_entity_prob, whole_word_masking, single_sentence, min_candidate_prior_prob,
+                 batch_buffer_size, mmap_mode):
         super(LukeE2EPretrainingBatchWorker, self).__init__(
             output_queue, is_finished, page_indices, corpus_file, batch_size, max_seq_length, short_seq_prob,
-            masked_lm_prob, single_sentence, batch_buffer_size, mmap_mode)
+            masked_lm_prob, whole_word_masking, single_sentence, batch_buffer_size, mmap_mode)
 
         self._entity_vocab = entity_vocab
         self._max_entity_length = max_entity_length

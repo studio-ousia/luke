@@ -111,6 +111,7 @@ def common_train_options(func):
     @click.option('--short-seq-prob', default=0.1)
     @click.option('--masked-lm-prob', default=0.15)
     @click.option('--masked-entity-prob', default=0.3)
+    @click.option('--whole-word-masking', is_flag=True)
     @click.option('--batch-size', default=256)
     @click.option('--gradient-accumulation-steps', default=1)
     @click.option('--learning-rate', default=1e-4)

@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 def run_training(corpus_file, entity_vocab_file, output_dir, bert_model_name, single_sentence, max_seq_length,
                  max_entity_length, max_mention_length, short_seq_prob, masked_lm_prob, masked_entity_prob,
                  batch_size, gradient_accumulation_steps, learning_rate, lr_schedule, warmup_steps, fix_bert_weights,
-                 optimizer_on_cpu, num_train_steps, num_page_chunks, log_dir=None, model_file=None,
-                 optimizer_file=None, epoch=0, global_step=0, page_chunks=[]):
+                 optimizer_on_cpu, num_train_steps, num_page_chunks, whole_word_masking=False, log_dir=None,
+                 model_file=None, optimizer_file=None, epoch=0, global_step=0, page_chunks=[]):
     train_args = {}
     for arg in inspect.getfullargspec(run_training).args:
         train_args[arg] = locals()[arg]
@@ -62,6 +62,7 @@ def run_training(corpus_file, entity_vocab_file, output_dir, bert_model_name, si
         short_seq_prob=short_seq_prob,
         masked_lm_prob=masked_lm_prob,
         masked_entity_prob=masked_entity_prob,
+        whole_word_masking=whole_word_masking,
         single_sentence=single_sentence)
 
     _run_training(model, batch_generator, train_args, corpus_file, output_dir, gradient_accumulation_steps,
@@ -73,8 +74,8 @@ def run_e2e_training(corpus_file, entity_vocab_file, output_dir, bert_model_name
                      max_entity_length, max_mention_length, max_candidate_length, short_seq_prob, masked_lm_prob,
                      masked_entity_prob, min_candidate_prior_prob, num_el_hidden_layers, entity_selector_softmax_temp,
                      batch_size, gradient_accumulation_steps, learning_rate, lr_schedule, warmup_steps,
-                     fix_bert_weights, optimizer_on_cpu, num_train_steps, num_page_chunks, log_dir=None,
-                     model_file=None, optimizer_file=None, epoch=0, global_step=0, page_chunks=[]):
+                     fix_bert_weights, optimizer_on_cpu, num_train_steps, num_page_chunks, whole_word_masking=False,
+                     log_dir=None, model_file=None, optimizer_file=None, epoch=0, global_step=0, page_chunks=[]):
     train_args = {}
     for arg in inspect.getfullargspec(run_e2e_training).args:
         train_args[arg] = locals()[arg]
@@ -129,6 +130,7 @@ def run_e2e_training(corpus_file, entity_vocab_file, output_dir, bert_model_name
         short_seq_prob=short_seq_prob,
         masked_lm_prob=masked_lm_prob,
         masked_entity_prob=masked_entity_prob,
+        whole_word_masking=whole_word_masking,
         single_sentence=single_sentence,
         min_candidate_prior_prob=min_candidate_prior_prob)
 
