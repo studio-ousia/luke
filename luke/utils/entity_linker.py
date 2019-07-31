@@ -6,7 +6,7 @@ from multiprocessing.pool import Pool
 import joblib
 import marisa_trie
 import tqdm
-from pytorch_pretrained_bert.tokenization import BasicTokenizer
+from pytorch_transformers.tokenization_bert import BasicTokenizer
 
 SEP_CHAR = '\u2581'
 REP_CHAR = '_'
@@ -82,7 +82,7 @@ class EntityLinker(object):
     def __reduce__(self):
         return (self.__class__, (self._entity_linker_file,))
 
-    def detect_mentions(self, text_or_tokens, subwords=None):
+    def detect_mentions(self, text_or_tokens, subwords_list=None):
         if isinstance(text_or_tokens, str):
             tokens = self._tokenizer.tokenize(text_or_tokens)
         else:
@@ -90,9 +90,9 @@ class EntityLinker(object):
 
         tokens = [self._normalizer.normalize(t.replace(SEP_CHAR, REP_CHAR)) for t in tokens]
         token_positions = list(range(len(tokens) + 1))
-        if subwords is not None:
-            assert len(tokens) == len(subwords)
-            token_positions = [0] + list(itertools.accumulate([len(s) for s in subwords]))
+        if subwords_list is not None:
+            assert len(tokens) == len(subwords_list)
+            token_positions = [0] + list(itertools.accumulate([len(s) for s in subwords_list]))
 
         cur = 0
         ret = []
@@ -187,7 +187,8 @@ class EntityLinker(object):
                          max_mention_length=max_mention_length), out_file)
 
     @staticmethod
-    def build_from_p_e_m_file(p_e_m_file, dump_db, tokenizer, normalizer, out_file, max_mention_length):
+    def build_from_p_e_m_file(p_e_m_file, dump_db, wiki_entity_linker, tokenizer, normalizer, out_file,
+                              max_mention_length):
         with open(p_e_m_file) as f:
             lines = f.readlines()
 
@@ -197,25 +198,32 @@ class EntityLinker(object):
             (text, total_count, *data) = line.rstrip().split('\t')
             total_count = int(total_count)
             text = text.replace(SEP_CHAR, REP_CHAR)
-            tokens = [normalizer.normalize(t) for t in tokenizer.tokenize(text)]
+            tokens = tuple(normalizer.normalize(t) for t in tokenizer.tokenize(text))
             if len(tokens) <= max_mention_length:
-                key = SEP_CHAR.join(tokens)
+                # key = SEP_CHAR.join(tokens)
                 for entry in data:
                     (_, prob, *title_parts) = entry.split(',')
                     title = ','.join(title_parts).replace('_', ' ')
                     title = dump_db.resolve_redirect(title)
                     count = int(float(prob) * total_count)
-                    name_dict[key][title] += count
+                    name_dict[tokens][title] += count
 
         titles = frozenset([title for entity_counter in name_dict.values() for title in entity_counter.keys()])
         title_trie = marisa_trie.Trie(titles)
 
         def item_generator():
-            for (name, entity_counter) in name_dict.items():
+            for (tokens, entity_counter) in name_dict.items():
+                name = SEP_CHAR.join(tokens)
                 total_link_count = sum(entity_counter.values())
 
+                wiki_mentions = wiki_entity_linker.query(tokens)
+                if wiki_mentions:
+                    doc_count = int(total_link_count / wiki_mentions[0].link_prob)
+                else:
+                    doc_count = 0
+
                 for (title, link_count) in entity_counter.most_common():
-                    yield (name, (title_trie[title], link_count, total_link_count, 0))
+                    yield (name, (title_trie[title], link_count, total_link_count, doc_count))
 
         data_trie = marisa_trie.RecordTrie('<IIII', item_generator())
         mention_trie = marisa_trie.Trie(data_trie.keys())
