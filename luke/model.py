@@ -12,8 +12,8 @@ EPS = 1e-12
 
 
 class LukeConfig(BertConfig):
-    def __init__(self, entity_vocab_size, **kwargs):
-        super(LukeConfig, self).__init__(**kwargs)
+    def __init__(self, vocab_size, entity_vocab_size, **kwargs):
+        super(LukeConfig, self).__init__(vocab_size, **kwargs)
 
         self.entity_vocab_size = entity_vocab_size
 
@@ -106,10 +106,6 @@ class LukeBaseModel(nn.Module):
             module.bias.data.zero_()
 
     def load_bert_weights(self, state_dict):
-        missing_keys = []
-        unexpected_keys = []
-        error_msgs = []
-
         state_dict = state_dict.copy()
         for key in list(state_dict.keys()):
             new_key = key.replace('gamma', 'weight').replace('beta', 'bias')
@@ -120,8 +116,19 @@ class LukeBaseModel(nn.Module):
                 state_dict[new_key] = state_dict[key]
                 del state_dict[key]
 
+        missing_keys = []
+        unexpected_keys = []
+        error_msgs = []
+
+        metadata = getattr(state_dict, '_metadata', None)
+        state_dict = state_dict.copy()
+        if metadata is not None:
+            state_dict._metadata = metadata
+
         def load(module, prefix=''):
-            module._load_from_state_dict(state_dict, prefix, {}, True, missing_keys, unexpected_keys, error_msgs)
+            local_metadata = {} if metadata is None else metadata.get(prefix[:-1], {})
+            module._load_from_state_dict(state_dict, prefix, local_metadata, True, missing_keys, unexpected_keys,
+                                         error_msgs)
             for name, child in module._modules.items():
                 if child is not None:
                     load(child, prefix + name + '.')
@@ -130,6 +137,9 @@ class LukeBaseModel(nn.Module):
         if len(unexpected_keys) > 0:
             logger.info("Weights from pretrained model not used in {}: {}".format(self.__class__.__name__,
                                                                                   sorted(unexpected_keys)))
+        if len(error_msgs) > 0:
+            raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(self.__class__.__name__,
+                                                                                     "\n\t".join(error_msgs)))
 
     def _compute_extended_attention_mask(self, word_attention_mask, entity_attention_mask):
         attention_mask = torch.cat([word_attention_mask, entity_attention_mask], dim=1)
