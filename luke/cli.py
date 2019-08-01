@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @click.group()
 @click.option('-v', '--verbose', is_flag=True)
-@click.option('--seed', default=None)
+@click.option('--seed', type=int, default=None)
 def cli(verbose, seed):
     fmt = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
     if verbose:
