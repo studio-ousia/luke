@@ -112,10 +112,11 @@ class BaseBatchWorker(multiprocessing.Process):
                     candidate_word_indices.append([i])
 
             masked_lm_labels = np.full(self._max_seq_length, -1, dtype=np.int)
+            num_masked_words = 0
 
             for i in np.random.permutation(len(candidate_word_indices)):
                 indices_to_mask = candidate_word_indices[i]
-                if len(indices_to_mask) > num_to_predict:
+                if len(indices_to_mask) > num_to_predict - num_masked_words:
                     continue
 
                 for index in indices_to_mask:
@@ -125,10 +126,17 @@ class BaseBatchWorker(multiprocessing.Process):
                         output_word_ids[index] = self._mask_id
                     elif p < 0.9:
                         output_word_ids[index] = random.randint(0, self._tokenizer.vocab_size - 1)
-                    num_to_predict -= 1
+                    num_masked_words += 1
 
-                if num_to_predict == 0:
+                if num_masked_words == num_to_predict:
                     break
+
+            # If whole-word-masking is enabled, it is possible that no word cannot be selected for masking.
+            # To deal with this, we randomly select one (sub-)word for masking if num_masked_words is zero.
+            if num_masked_words == 0:
+                random_index = random.randint(1, word_ids.size - 2)
+                masked_lm_labels[random_index] = output_word_ids[random_index]
+                output_word_ids[random_index] = self._mask_id
 
             ret['masked_lm_labels'] = masked_lm_labels
 

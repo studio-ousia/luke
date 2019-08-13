@@ -233,7 +233,6 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
 
             current_time = time.time()
             summary['batch_run_time'] = current_time - prev_step_time
-            tqdm.write(str(current_time - prev_step_time))
             prev_step_time = current_time
 
             for name in ('masked_lm', 'masked_entity', 'entity_selector'):
