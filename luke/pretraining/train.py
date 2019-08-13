@@ -118,6 +118,13 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
     optimizer = LukeDenseSparseAdam(optimizer_parameters, lr=learning_rate, betas=(adam_b1, adam_b2),
                                     max_grad_norm=max_grad_norm, grad_avg_device=grad_avg_device)
 
+    if fp16:
+        from apex import amp
+        model, optimizer = amp.initialize(model, optimizer, opt_level=fp16_opt_level)
+
+    if optimizer_file is not None:
+        optimizer.load_state_dict(torch.load(optimizer_file, map_location='cpu'))
+
     if lr_schedule == 'warmup_constant':
         scheduler = WarmupConstantSchedule(optimizer, warmup_steps=warmup_steps)
     elif lr_schedule == 'warmup_linear':
@@ -125,12 +132,6 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
     else:
         scheduler = ConstantLRSchedule(optimizer)
 
-    if fp16:
-        from apex import amp
-        model, optimizer = amp.initialize(model, optimizer, opt_level=fp16_opt_level)
-
-    if optimizer_file is not None:
-        optimizer.load_state_dict(torch.load(optimizer_file, map_location='cpu'))
     if scheduler_file is not None:
         scheduler.load_state_dict(torch.load(scheduler_file, map_location='cpu'))
 
