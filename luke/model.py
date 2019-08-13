@@ -1,14 +1,32 @@
 import copy
 import logging
+import pytorch_transformers
+from pytorch_transformers.modeling_bert import BertConfig, BertEmbeddings, BertEncoder, BertPooler,\
+    BertPredictionHeadTransform
 import torch
 import torch.nn.functional as F
 from torch import nn
-from pytorch_transformers.modeling_bert import BertConfig, BertLayerNorm, BertEmbeddings, BertEncoder, BertPooler,\
-    BertPredictionHeadTransform
 
 logger = logging.getLogger(__name__)
 
 EPS = 1e-12
+
+
+class BertLayerNorm(nn.Module):
+    def __init__(self, hidden_size, eps=1e-12):
+        super(BertLayerNorm, self).__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.bias = nn.Parameter(torch.zeros(hidden_size))
+        self.variance_epsilon = eps
+
+    def forward(self, x):
+        u = x.mean(-1, keepdim=True)
+        s = (x - u).pow(2).mean(-1, keepdim=True)
+        x = (x - u) / torch.sqrt(s + self.variance_epsilon)
+        return self.weight * x + self.bias
+
+# Override BertLayerNorm to avoid errors occurred on mixed precision training
+pytorch_transformers.modeling_bert.BertLayerNorm = BertLayerNorm
 
 
 class LukeConfig(BertConfig):
@@ -69,10 +87,9 @@ class EntitySelector(nn.Module):
         self.bias = nn.Embedding(config.entity_vocab_size, 1, padding_idx=0)
 
     def forward(self, hidden_states, entity_candidate_ids):
+        hidden_states = self.transform(hidden_states)
         entity_embeddings = self.embeddings(entity_candidate_ids)
         entity_bias = self.bias(entity_candidate_ids).squeeze(-1)
-
-        hidden_states = self.transform(hidden_states)
 
         scores = (hidden_states.unsqueeze(-2) * entity_embeddings).sum(-1) + entity_bias
         scores += (entity_candidate_ids == 0).to(dtype=scores.dtype) * -10000.0
@@ -176,7 +193,7 @@ class LukeE2EModel(LukeBaseModel):
         self.mask_entity_embeddings = EntityEmbeddings(config, 2)
         el_config = copy.copy(config)
         el_config.num_hidden_layers = config.num_el_hidden_layers
-        self.el_encoder = BertEncoder(config)
+        self.el_encoder = BertEncoder(el_config)
         self.entity_selector = EntitySelector(config)
         self.entity_selector.embeddings.weight = self.entity_embeddings.entity_embeddings.weight
 
@@ -205,9 +222,10 @@ class LukeE2EModel(LukeBaseModel):
         if masked_entity_labels is not None:
             mask_entity_ids = entity_segment_ids.new_full(entity_segment_ids.size(), 2)  # index of [MASK] token is 2
             mask_embedding_output = self.entity_embeddings(mask_entity_ids, entity_position_ids, entity_segment_ids)
-            mask_embedding_output = mask_embedding_output.masked_fill((masked_entity_labels == -1).unsqueeze(-1), 0)
-            entity_embedding_output = entity_embedding_output.masked_fill((masked_entity_labels != -1).unsqueeze(-1), 0)
+            mask_embedding_output = mask_embedding_output * (masked_entity_labels != -1).unsqueeze(-1).type_as(mask_embedding_output)
+            entity_embedding_output = entity_embedding_output * (masked_entity_labels == -1).unsqueeze(-1).type_as(entity_embedding_output)
             entity_embedding_output = entity_embedding_output + mask_embedding_output
+
         embedding_output = torch.cat([word_embedding_output, entity_embedding_output], dim=1)
         encoder_outputs = self.encoder(embedding_output, extended_attention_mask,
                                        [None] * self.config.num_hidden_layers)

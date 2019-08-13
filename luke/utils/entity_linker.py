@@ -2,11 +2,14 @@ import itertools
 import logging
 from collections import defaultdict, Counter
 from contextlib import closing
+import multiprocessing
 from multiprocessing.pool import Pool
+import click
 import joblib
 import marisa_trie
-import tqdm
 from pytorch_transformers.tokenization_bert import BasicTokenizer
+from tqdm import tqdm
+from wikipedia2vec.dump_db import DumpDB
 
 SEP_CHAR = '\u2581'
 REP_CHAR = '_'
@@ -128,31 +131,39 @@ class EntityLinker(object):
         except KeyError:
             return []
 
+    def save(self, out_file):
+        joblib.dump(dict(title_trie=self._title_trie,
+                         mention_trie=self._mention_trie,
+                         data_trie=self._data_trie,
+                         tokenizer=self._tokenizer,
+                         normalizer=self._normalizer,
+                         max_mention_length=self._max_mention_length), out_file)
+
     @staticmethod
     def build_from_wikipedia(dump_db, tokenizer, normalizer, out_file, min_link_prob, max_candidate_size,
                              min_link_count, max_mention_length, pool_size, chunk_size):
         logger.info('Iteration 1/2: Extracting all entity names...')
 
         name_dict = defaultdict(Counter)
-        with tqdm.tqdm(total=dump_db.page_size(), mininterval=0.5) as bar:
+        with tqdm(total=dump_db.page_size(), mininterval=0.5) as pbar:
             initargs = (dump_db, tokenizer, normalizer, max_mention_length)
             with closing(Pool(pool_size, initializer=EntityLinker._initialize_worker, initargs=initargs)) as pool:
                 for ret in pool.imap_unordered(EntityLinker._extract_name_entity_pairs, dump_db.titles(),
                                                chunksize=chunk_size):
                     for (name, title) in ret:
                         name_dict[name][title] += 1
-                    bar.update()
+                    pbar.update()
 
         logger.info('Iteration 2/2: Counting occurrences of entity names...')
 
-        with tqdm.tqdm(total=dump_db.page_size(), mininterval=0.5) as bar:
+        with tqdm(total=dump_db.page_size(), mininterval=0.5) as pbar:
             name_doc_counter = Counter()
             initargs = (dump_db, tokenizer, normalizer, max_mention_length, marisa_trie.Trie(name_dict.keys()))
             with closing(Pool(pool_size, initializer=EntityLinker._initialize_worker, initargs=initargs)) as pool:
                 for names in pool.imap_unordered(EntityLinker._extract_name_occurrences, dump_db.titles(),
                                                  chunksize=chunk_size):
                     name_doc_counter.update(names)
-                    bar.update()
+                    pbar.update()
 
         logger.info('Building DB...')
 
@@ -194,13 +205,12 @@ class EntityLinker(object):
 
         name_dict = defaultdict(Counter)
 
-        for line in tqdm.tqdm(lines):
+        for line in tqdm(lines):
             (text, total_count, *data) = line.rstrip().split('\t')
             total_count = int(total_count)
             text = text.replace(SEP_CHAR, REP_CHAR)
             tokens = tuple(normalizer.normalize(t) for t in tokenizer.tokenize(text))
             if len(tokens) <= max_mention_length:
-                # key = SEP_CHAR.join(tokens)
                 for entry in data:
                     (_, prob, *title_parts) = entry.split(',')
                     title = ','.join(title_parts).replace('_', ' ')
@@ -254,7 +264,6 @@ class EntityLinker(object):
                 tokens = [_normalizer.normalize(t) for t in _tokenizer.tokenize(text)]
                 if len(tokens) <= _max_mention_length:
                     ret.append((SEP_CHAR.join(tokens), title))
-
         return ret
 
     @staticmethod
@@ -268,5 +277,36 @@ class EntityLinker(object):
                 for name in _name_trie.prefixes(target_text):
                     if len(target_text) == len(name) or target_text[len(name)] == SEP_CHAR:
                         ret.append(name)
-
         return frozenset(ret)
+
+
+from luke.cli import cli
+
+@cli.command()
+@click.argument('dump_db_file', type=click.Path(exists=True))
+@click.argument('out_file', type=click.Path())
+@click.option('--min-link-prob', default=0.01)
+@click.option('--max-candidate-size', default=100)
+@click.option('--min-link-count', default=1)
+@click.option('--max-mention-length', default=20)
+@click.option('--pool-size', default=multiprocessing.cpu_count())
+@click.option('--chunk-size', default=100)
+def build_entity_linker_from_wikipedia(dump_db_file, **kwargs):
+    dump_db = DumpDB(dump_db_file)
+    tokenizer = BasicTokenizer(do_lower_case=False)
+    normalizer = BertLowercaseNormalizer()
+    EntityLinker.build_from_wikipedia(dump_db, tokenizer, normalizer, **kwargs)
+
+
+@cli.command()
+@click.argument('p_e_m_file', type=click.Path(exists=True))
+@click.argument('dump_db_file', type=click.Path(exists=True))
+@click.argument('wiki_entity_linker_file', type=click.Path(exists=True))
+@click.argument('out_file', type=click.Path())
+@click.option('--max-mention-length', default=20)
+def build_entity_linker_from_p_e_m_file(p_e_m_file, dump_db_file, wiki_entity_linker_file, **kwargs):
+    dump_db = DumpDB(dump_db_file)
+    tokenizer = BasicTokenizer(do_lower_case=False)
+    normalizer = BertLowercaseNormalizer()
+    wiki_entity_linker = EntityLinker(wiki_entity_linker_file)
+    EntityLinker.build_from_p_e_m_file(p_e_m_file, dump_db, wiki_entity_linker, tokenizer, normalizer, **kwargs)

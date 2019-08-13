@@ -3,8 +3,9 @@ from pytorch_transformers.optimization import AdamW
 
 
 class LukeDenseSparseAdam(AdamW):
-    def __init__(self, params, *args, grad_avg_device=None, **kwargs):
+    def __init__(self, params, *args, max_grad_norm=1.0, grad_avg_device=None, **kwargs):
         super(LukeDenseSparseAdam, self).__init__(params, *args, **kwargs)
+        self.max_grad_norm = max_grad_norm
         if grad_avg_device is None:
             self.grad_avg_device = self.param_groups[0]['params'][0].device
         else:
@@ -35,6 +36,9 @@ class LukeDenseSparseAdam(AdamW):
 
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
                 beta1, beta2 = group['betas']
+
+                if self.max_grad_norm:
+                    torch.nn.utils.clip_grad_norm_(p, self.max_grad_norm)
 
                 if grad.is_sparse:
                     grad = orig_grad = grad.coalesce()  # the update is non-linear so indices must be unique

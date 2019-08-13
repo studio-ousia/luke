@@ -1,6 +1,18 @@
 import pkg_resources
 
 
+class NLTKSentenceTokenizer(object):
+    def __init__(self):
+        import nltk
+        self._sentence_tokenizer = nltk.tokenize.punkt.PunktSentenceTokenizer()
+
+    def __reduce__(self):
+        return self.__class__, tuple()
+
+    def span_tokenize(self, text):
+        return list(self._sentence_tokenizer.span_tokenize(text))
+
+
 class OpenNLPSentenceTokenizer(object):
     _java_initialized = False
 
@@ -8,7 +20,7 @@ class OpenNLPSentenceTokenizer(object):
         self._initialized = False
 
     def __reduce__(self):
-        return (self.__class__, tuple())
+        return self.__class__, tuple()
 
     def initialize(self):
         # we need to delay the initialization of Java in order for this class to
