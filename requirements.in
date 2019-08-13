@@ -3,10 +3,7 @@ joblib==0.13.0
 marisa-trie==0.7.5
 numpy==1.15.4
 pytorch-transformers==1.0.0
-scipy==1.2.0
-scikit-learn==0.21.2
-seqeval==0.0.5
-tensorboardx==1.6
-torch==1.0.1
+tensorflow==1.14.0
+torch==1.2.0
 tqdm==4.28.1
 wikipedia2vec==1.0.1
