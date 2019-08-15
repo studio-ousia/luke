@@ -3,9 +3,8 @@ from pytorch_transformers.optimization import AdamW
 
 
 class LukeDenseSparseAdam(AdamW):
-    def __init__(self, params, *args, max_grad_norm=1.0, grad_avg_device=None, **kwargs):
+    def __init__(self, params, *args, grad_avg_device=None, **kwargs):
         super(LukeDenseSparseAdam, self).__init__(params, *args, **kwargs)
-        self.max_grad_norm = max_grad_norm
         if grad_avg_device is None:
             self.grad_avg_device = self.param_groups[0]['params'][0].device
         else:
@@ -34,15 +33,11 @@ class LukeDenseSparseAdam(AdamW):
 
                 state['step'] += 1
 
-                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+                exp_avg, exp_avg_sq = state['exp_avg'].to(p.device), state['exp_avg_sq'].to(p.device)
                 beta1, beta2 = group['betas']
-
-                if self.max_grad_norm:
-                    torch.nn.utils.clip_grad_norm_(p, self.max_grad_norm)
 
                 if grad.is_sparse:
                     grad = orig_grad = grad.coalesce()  # the update is non-linear so indices must be unique
-                    grad = grad.to(self.grad_avg_device)
                     grad_values = grad._values()
 
                     old_next_m_values = exp_avg.sparse_mask(grad)._values()
@@ -59,7 +54,6 @@ class LukeDenseSparseAdam(AdamW):
                     del next_m_update_values, next_v_update_values
 
                     update_values = numer / denom
-                    update_values = update_values.to(p.device)
 
                     if group['weight_decay'] > 0.0:
                         update_values += group['weight_decay'] * p.data.sparse_mask(orig_grad)._values()
@@ -68,13 +62,9 @@ class LukeDenseSparseAdam(AdamW):
                     update_with_lr = self._make_sparse(update_with_lr, orig_grad)
 
                 else:
-                    grad = grad.to(self.grad_avg_device)
-
                     exp_avg.mul_(beta1).add_(1.0 - beta1, grad)
                     exp_avg_sq.mul_(beta2).addcmul_(1.0 - beta2, grad, grad)
                     update = exp_avg / (exp_avg_sq.sqrt() + group['eps'])
-
-                    update = update.to(p.device)
 
                     if group['weight_decay'] > 0.0:
                         update += group['weight_decay'] * p.data
@@ -93,13 +83,6 @@ class LukeDenseSparseAdam(AdamW):
         return sparse_tensor.new(indices, values, sparse_tensor.size())
 
     def load_state_dict(self, state_dict):
-        for state in self.state.values():  # for backward compatibility
-            if 'next_m' in state:
-                state['exp_avg'] = state['next_m']
-                del state['next_m']
-                state['exp_avg_sq'] = state['next_v']
-                del state['next_v']
-
         super(LukeDenseSparseAdam, self).load_state_dict(state_dict)
 
         for state in self.state.values():

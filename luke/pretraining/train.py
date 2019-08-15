@@ -30,8 +30,9 @@ MASTER_PORT = '29502'
 def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, batch_size, gradient_accumulation_steps,
                     learning_rate, lr_schedule, warmup_steps, adam_b1, adam_b2, max_grad_norm, masked_lm_prob,
                     masked_entity_prob, whole_word_masking, fix_bert_weights, grad_avg_on_cpu, num_epochs, fp16,
-                    fp16_opt_level, local_rank, log_dir, model_file, optimizer_file, scheduler_file, save_interval_sec,
-                    num_el_hidden_layers=None, entity_selector_softmax_temp=None, global_step=0):
+                    fp16_opt_level, fp16_master_weights, local_rank, log_dir, model_file, optimizer_file,
+                    scheduler_file, master_weights_file, save_interval_sec, num_el_hidden_layers=None,
+                    entity_selector_softmax_temp=None, global_step=0):
     train_args = {}
     for arg in inspect.getfullargspec(run_pretraining).args:
         train_args[arg] = locals()[arg]
@@ -116,14 +117,26 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
     if grad_avg_on_cpu:
         grad_avg_device = torch.device('cpu')
     optimizer = LukeDenseSparseAdam(optimizer_parameters, lr=learning_rate, betas=(adam_b1, adam_b2),
-                                    max_grad_norm=max_grad_norm, grad_avg_device=grad_avg_device)
+                                    grad_avg_device=grad_avg_device)
 
     if fp16:
         from apex import amp
-        model, optimizer = amp.initialize(model, optimizer, opt_level=fp16_opt_level)
+        if fp16_opt_level == 'O2':
+            model, optimizer = amp.initialize(model, optimizer, opt_level=fp16_opt_level,
+                                              master_weights=fp16_master_weights)
+        else:
+            model, optimizer = amp.initialize(model, optimizer, opt_level=fp16_opt_level)
 
     if optimizer_file is not None:
         optimizer.load_state_dict(torch.load(optimizer_file, map_location='cpu'))
+        if fp16 and fp16_opt_level == 'O2' and master_weights_file:
+            # https://github.com/NVIDIA/DeepLearningExamples/blob/8546c7a6df2a6c2d338ddadaea210e7332e66af1/PyTorch/LanguageModeling/BERT/run_pretraining.py#L336
+            optimizer._lazy_init_maybe_master_weights()
+            optimizer._amp_stash.lazy_init_called = True
+            optimizer.load_state_dict(torch.load(optimizer_file, map_location='cpu'))
+            master_weights = torch.load(master_weights_file, map_location='cpu')
+            for param, saved_param in zip(amp.master_params(optimizer), master_weights):
+                param.data.copy_(saved_param.data)
 
     if lr_schedule == 'warmup_constant':
         scheduler = WarmupConstantSchedule(optimizer, warmup_steps=warmup_steps)
@@ -168,6 +181,10 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
                         model_file=model_file,
                         optimizer_file=optimizer_file,
                         scheduler_file=scheduler_file)
+        if fp16 and fp16_opt_level == 'O2' and fp16_master_weights:
+            master_weights_file = f'master_weights_{suffix}.bin'
+            torch.save(list(amp.master_params(optimizer)), os.path.join(output_dir, master_weights_file))
+            metadata['master_weights_file'] = master_weights_file
         with open(os.path.join(output_dir, f'metadata_{suffix}.json'), 'w') as f:
             json.dump(metadata, f, indent=2, sort_keys=True)
 
@@ -193,7 +210,8 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
                 loss = loss / gradient_accumulation_steps
 
             def maybe_no_sync():
-                if hasattr(model, 'no_sync') and num_workers > 1 and accumulation_count + 1 != gradient_accumulation_steps:
+                if hasattr(model, 'no_sync') and num_workers > 1 and\
+                    accumulation_count + 1 != gradient_accumulation_steps:
                     return model.no_sync()
                 else:
                     return contextlib.ExitStack()
@@ -202,8 +220,12 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
                 if fp16:
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
                         scaled_loss.backward()
+                    if accumulation_count + 1 == gradient_accumulation_steps and max_grad_norm != 0.0:
+                        torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), max_grad_norm)
                 else:
                     loss.backward()
+                    if accumulation_count + 1 == gradient_accumulation_steps and max_grad_norm != 0.0:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
 
         except RuntimeError:
             if prev_error:
@@ -323,12 +345,14 @@ from luke.cli import cli
 @click.option('--grad-avg-on-cpu', is_flag=True)
 @click.option('--num-epochs', default=5)
 @click.option('--fp16', is_flag=True)
-@click.option('--fp16-opt-level', default='O1', type=click.Choice(['O0', 'O1', 'O2', 'O3']))
+@click.option('--fp16-opt-level', default='O1', type=click.Choice(['O1', 'O2']))
+@click.option('--fp16-master-weights/--fp16-no-master-weights', default=True)
 @click.option('--local-rank', '--local_rank', default=-1)
 @click.option('--log-dir', type=click.Path(), default=None)
 @click.option('--model-file', type=click.Path(exists=True), default=None)
 @click.option('--optimizer-file', type=click.Path(exists=True), default=None)
 @click.option('--scheduler-file', type=click.Path(exists=True), default=None)
+@click.option('--master-weights-file', type=click.Path(exists=True), default=None)
 @click.option('--save-interval-sec', default=1800)
 def pretrain(**kwargs):
     run_pretraining(**kwargs)
@@ -350,6 +374,10 @@ def resume_pretraining(output_dir, **kwargs):
     args['model_file'] = os.path.join(output_dir, step_metadata['model_file'])
     args['optimizer_file'] = os.path.join(output_dir, step_metadata['optimizer_file'])
     args['scheduler_file'] = os.path.join(output_dir, step_metadata['scheduler_file'])
+    if 'master_weights_file' in step_metadata:
+        args['master_weights_file'] = os.path.join(output_dir, step_metadata['master_weights_file'])
+    else:
+        args['master_weights_file'] = None
     args['global_step'] = step_metadata['global_step']
 
     for key, value in kwargs.items():

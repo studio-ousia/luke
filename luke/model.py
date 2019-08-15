@@ -9,7 +9,7 @@ from torch import nn
 
 logger = logging.getLogger(__name__)
 
-EPS = 1e-12
+EPS = 1e-7
 
 
 class BertLayerNorm(nn.Module):
@@ -68,7 +68,7 @@ class EntityEmbeddings(nn.Module):
         position_embedding_mask = (position_ids != -1).type_as(position_embeddings).unsqueeze(-1)
         position_embeddings = position_embeddings * position_embedding_mask
         position_embeddings = torch.sum(position_embeddings, dim=-2)
-        position_embeddings = position_embeddings / (position_embedding_mask.sum(dim=-2) + EPS)
+        position_embeddings = position_embeddings / position_embedding_mask.sum(dim=-2).clamp(min=EPS)
 
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
@@ -212,7 +212,7 @@ class LukeE2EModel(LukeBaseModel):
                                              [None] * self.config.num_el_hidden_layers)
         el_entity_sequence_output = el_encoder_outputs[0][:, word_seq_size:, :]
         entity_selector_scores = self.entity_selector(el_entity_sequence_output, entity_candidate_ids)
-        entity_selector_scores = entity_selector_scores / self.config.entity_selector_softmax_temp
+        entity_selector_scores = (entity_selector_scores / self.config.entity_selector_softmax_temp).clamp(min=-10000)
         entity_attention_probs = F.softmax(entity_selector_scores, dim=-1)
 
         entity_embedding_output = self.entity_embeddings(entity_candidate_ids, entity_position_ids.unsqueeze(-2),

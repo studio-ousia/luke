@@ -26,7 +26,7 @@ lmdb==0.96                # via wikipedia2vec
 marisa-trie==0.7.5
 markdown==3.1.1           # via tensorboard
 mwparserfromhell==0.5.4   # via wikipedia2vec
-numpy==1.15.4
+numpy==1.16.4
 protobuf==3.9.1           # via tensorboard, tensorflow
 python-dateutil==2.8.0    # via botocore
 pytorch-transformers==1.0.0
@@ -47,3 +47,6 @@ werkzeug==0.15.5          # via tensorboard
 wheel==0.33.4             # via tensorboard, tensorflow
 wikipedia2vec==1.0.1
 wrapt==1.11.2             # via tensorflow
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools==41.1.0        # via markdown, protobuf, tensorboard

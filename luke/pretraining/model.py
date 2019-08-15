@@ -34,6 +34,8 @@ class LukePretrainingModel(LukeModel):
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
                 entity_segment_ids, entity_attention_mask, masked_entity_labels=None, masked_lm_labels=None,
                 **kwargs):
+        model_dtype = next(self.parameters()).dtype  # for fp16 compatibility
+
         output = super(LukePretrainingModel, self).forward(
             word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids, entity_segment_ids,
             entity_attention_mask
@@ -41,7 +43,7 @@ class LukePretrainingModel(LukeModel):
         word_sequence_output, entity_sequence_output = output[:2]
 
         loss_fn = CrossEntropyLoss(ignore_index=-1)
-        ret = dict(loss=0.0)
+        ret = dict(loss=word_ids.new_tensor(0.0, dtype=model_dtype))
 
         if masked_entity_labels is not None:
             entity_mask = (masked_entity_labels != -1)
@@ -58,7 +60,7 @@ class LukePretrainingModel(LukeModel):
                 ret['masked_entity_total'] = target_entity_labels.ne(-1).sum()
                 ret['loss'] += ret['masked_entity_loss']
             else:
-                ret['masked_entity_loss'] = word_ids.new_tensor(0.0, dtype=torch.float)
+                ret['masked_entity_loss'] = word_ids.new_tensor(0.0, dtype=model_dtype)
                 ret['masked_entity_correct'] = word_ids.new_tensor(0, dtype=torch.long)
                 ret['masked_entity_total'] = word_ids.new_tensor(0, dtype=torch.long)
 
@@ -77,7 +79,7 @@ class LukePretrainingModel(LukeModel):
                 ret['masked_lm_total'] = masked_lm_labels.ne(-1).sum()
                 ret['loss'] += ret['masked_lm_loss']
             else:
-                ret['masked_lm_loss'] = word_ids.new_tensor(0.0, dtype=torch.float)
+                ret['masked_lm_loss'] = word_ids.new_tensor(0.0, dtype=model_dtype)
                 ret['masked_lm_correct'] = word_ids.new_tensor(0, dtype=torch.long)
                 ret['masked_lm_total'] = word_ids.new_tensor(0, dtype=torch.long)
 
@@ -98,6 +100,8 @@ class LukeE2EPretrainingModel(LukeE2EModel):
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_candidate_ids, entity_position_ids,
                 entity_segment_ids, entity_attention_mask, entity_candidate_labels=None, masked_entity_labels=None,
                 masked_lm_labels=None, **kwargs):
+        model_dtype = next(self.parameters()).dtype  # for fp16 compatibility
+
         output = super(LukeE2EPretrainingModel, self).forward(
             word_ids, word_segment_ids, word_attention_mask, entity_candidate_ids, entity_position_ids,
             entity_segment_ids, entity_attention_mask, masked_entity_labels=masked_entity_labels,
@@ -106,7 +110,7 @@ class LukeE2EPretrainingModel(LukeE2EModel):
         word_sequence_output, entity_sequence_output, _, entity_selector_scores = output[:4]
 
         loss_fn = CrossEntropyLoss(ignore_index=-1)
-        ret = dict(loss=word_ids.new_tensor(0.0, dtype=torch.float))
+        ret = dict(loss=word_ids.new_tensor(0.0, dtype=model_dtype))
 
         if masked_entity_labels is not None:
             entity_mask = (masked_entity_labels != -1)
@@ -123,7 +127,7 @@ class LukeE2EPretrainingModel(LukeE2EModel):
                 ret['masked_entity_total'] = target_entity_labels.ne(-1).sum()
                 ret['loss'] += ret['masked_entity_loss']
             else:
-                ret['masked_entity_loss'] = word_ids.new_tensor(0.0, dtype=torch.float)
+                ret['masked_entity_loss'] = word_ids.new_tensor(0.0, dtype=model_dtype)
                 ret['masked_entity_correct'] = word_ids.new_tensor(0, dtype=torch.long)
                 ret['masked_entity_total'] = word_ids.new_tensor(0, dtype=torch.long)
 
@@ -142,8 +146,7 @@ class LukeE2EPretrainingModel(LukeE2EModel):
                 ret['masked_lm_total'] = masked_lm_labels.ne(-1).sum()
                 ret['loss'] += ret['masked_lm_loss']
             else:
-                print(word_ids, word_segment_ids, word_attention_mask)
-                ret['masked_lm_loss'] = word_ids.new_tensor(0.0, dtype=torch.float)
+                ret['masked_lm_loss'] = word_ids.new_tensor(0.0, dtype=model_dtype)
                 ret['masked_lm_correct'] = word_ids.new_tensor(0, dtype=torch.long)
                 ret['masked_lm_total'] = word_ids.new_tensor(0, dtype=torch.long)
 
@@ -157,7 +160,7 @@ class LukeE2EPretrainingModel(LukeE2EModel):
                 ret['entity_selector_total'] = (entity_candidate_labels != -1).sum()
                 ret['loss'] += ret['entity_selector_loss']
             else:
-                ret['entity_selector_loss'] = word_ids.new_tensor(0.0, dtype=torch.float)
+                ret['entity_selector_loss'] = word_ids.new_tensor(0.0, dtype=model_dtype)
                 ret['entity_selector_correct'] = word_ids.new_tensor(0, dtype=torch.long)
                 ret['entity_selector_total'] = word_ids.new_tensor(0, dtype=torch.long)
 
