@@ -321,9 +321,7 @@ def run_parallel_pretraining(**kwargs):
             process.terminate()
 
 
-from luke.cli import cli
-
-@cli.command()
+@click.command()
 @click.argument('dataset_dir', type=click.Path(file_okay=False, exists=True))
 @click.argument('output_dir', type=click.Path())
 @click.option('--mode', type=click.Choice(['default', 'e2e']), default='default')
@@ -359,7 +357,7 @@ def pretrain(**kwargs):
     run_pretraining(**kwargs)
 
 
-@cli.command()
+@click.command()
 @click.argument('output_dir', type=click.Path())
 @click.option('--batch-size', default=None, type=int)
 @click.option('--gradient-accumulation-steps', default=None, type=int)
@@ -389,7 +387,7 @@ def resume_pretraining(output_dir, **kwargs):
     run_pretraining(**args)
 
 
-@cli.command(hidden=True)
+@click.command(hidden=True)
 @click.option('--local-rank', type=int)
 @click.option('--kwargs', default='{}')
 def start_pretraining_worker(local_rank, kwargs):

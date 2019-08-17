@@ -109,9 +109,7 @@ class EntityVocab(object):
         return counter
 
 
-from luke.cli import cli
-
-@cli.command()
+@click.command()
 @click.argument('dump_db_file', type=click.Path())
 @click.argument('out_file', type=click.Path())
 @click.option('--vocab-size', default=1000000)

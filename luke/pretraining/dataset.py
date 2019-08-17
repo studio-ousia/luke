@@ -256,9 +256,7 @@ class WikipediaPretrainingDataset(object):
         return ret
 
 
-from luke.cli import cli
-
-@cli.command()
+@click.command()
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.argument('tokenizer_name')
 @click.argument('entity_vocab_file', type=click.Path(exists=True))

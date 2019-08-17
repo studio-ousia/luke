@@ -280,9 +280,7 @@ class EntityLinker(object):
         return frozenset(ret)
 
 
-from luke.cli import cli
-
-@cli.command()
+@click.command()
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.argument('out_file', type=click.Path())
 @click.option('--min-link-prob', default=0.01)
@@ -298,7 +296,7 @@ def build_entity_linker_from_wikipedia(dump_db_file, **kwargs):
     EntityLinker.build_from_wikipedia(dump_db, tokenizer, normalizer, **kwargs)
 
 
-@cli.command()
+@click.command()
 @click.argument('p_e_m_file', type=click.Path(exists=True))
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.argument('wiki_entity_linker_file', type=click.Path(exists=True))
