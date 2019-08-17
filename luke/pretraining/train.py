@@ -154,18 +154,19 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
 
     model.train()
 
-    dataset.tokenizer.save_pretrained(output_dir)
-    dataset.entity_vocab.save(os.path.join(output_dir, ENTITY_VOCAB_FILE))
-    dataset.entity_linker.save(os.path.join(output_dir, ENTITY_LINKER_FILE))
-    metadata = dict(model_config=config.to_dict(),
-                    max_seq_length=dataset.max_seq_length,
-                    max_entity_length=dataset.max_entity_length,
-                    max_mention_length=dataset.max_mention_length,
-                    arguments=train_args)
-    if mode == 'e2e':
-        metadata['max_candidate_length'] = dataset.max_candidate_length
-    with open(os.path.join(output_dir, 'metadata.json'), 'w') as metadata_file:
-        json.dump(metadata, metadata_file, indent=2, sort_keys=True)
+    if local_rank in (0, -1):
+        dataset.tokenizer.save_pretrained(output_dir)
+        dataset.entity_vocab.save(os.path.join(output_dir, ENTITY_VOCAB_FILE))
+        dataset.entity_linker.save(os.path.join(output_dir, ENTITY_LINKER_FILE))
+        metadata = dict(model_config=config.to_dict(),
+                        max_seq_length=dataset.max_seq_length,
+                        max_entity_length=dataset.max_entity_length,
+                        max_mention_length=dataset.max_mention_length,
+                        arguments=train_args)
+        if mode == 'e2e':
+            metadata['max_candidate_length'] = dataset.max_candidate_length
+        with open(os.path.join(output_dir, 'metadata.json'), 'w') as metadata_file:
+            json.dump(metadata, metadata_file, indent=2, sort_keys=True)
 
     def save_model(model, suffix):
         if local_rank != -1:
@@ -281,7 +282,7 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
 
             if local_rank in (0, -1):
                 if global_step % num_train_steps_per_epoch == 0:
-                    epoch = global_step / num_train_steps_per_epoch
+                    epoch = int(global_step / num_train_steps_per_epoch)
                     save_model(model, f'epoch{epoch}')
                 if save_interval_sec and time.time() - prev_save_time > save_interval_sec:
                     save_model(model, f'step{global_step:07}')
@@ -379,6 +380,7 @@ def resume_pretraining(output_dir, **kwargs):
     else:
         args['master_weights_file'] = None
     args['global_step'] = step_metadata['global_step']
+    args['local_rank'] = -1
 
     for key, value in kwargs.items():
         if value is not None:
