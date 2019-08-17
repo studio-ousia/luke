@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import inspect
 import json
 import logging
@@ -274,7 +275,9 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
             if local_rank in (0, -1):
                 for (name, value) in summary.items():
                     summary_writer.add_scalar(name, value, global_step)
-                desc = f'epoch: {int(global_step / num_train_steps_per_epoch)} loss: {summary["loss"]:.4f}'
+                desc = f'epoch: {int(global_step / num_train_steps_per_epoch)} '\
+                    f'loss: {summary["loss"]:.4f} '\
+                    f'time: {datetime.datetime.now().strftime("%H:%M:%S")}'
                 pbar.set_description(desc)
                 pbar.update()
 
