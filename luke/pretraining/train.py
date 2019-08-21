@@ -64,20 +64,20 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
     if mode == 'default':
         config = LukeConfig(entity_vocab_size=dataset.entity_vocab.size, **bert_config.to_dict())
         model = LukePretrainingModel(config)
-        batch_generator = LukePretrainingBatchGenerator(dataset_dir, mode, train_batch_size, masked_lm_prob,
-                                                        masked_entity_prob, whole_word_masking, num_workers=num_workers,
-                                                        worker_index=worker_index, skip=global_step * batch_size)
+
     elif mode == 'e2e':
         config = LukeE2EConfig(entity_vocab_size=dataset.entity_vocab.size,
                                num_el_hidden_layers=num_el_hidden_layers,
                                entity_selector_softmax_temp=entity_selector_softmax_temp,
                                **bert_config.to_dict())
         model = LukeE2EPretrainingModel(config)
-        batch_generator = LukePretrainingBatchGenerator(dataset_dir, mode, train_batch_size, masked_lm_prob,
-                                                        masked_entity_prob, whole_word_masking, num_workers=num_workers,
-                                                        worker_index=worker_index, skip=global_step * batch_size)
+
     else:
         raise RuntimeError(f'Invalid mode: {mode}')
+
+    batch_generator = LukePretrainingBatchGenerator(dataset_dir, mode, train_batch_size, masked_lm_prob,
+                                                    masked_entity_prob, whole_word_masking, num_workers=num_workers,
+                                                    worker_index=worker_index, skip=global_step * batch_size)
 
     logger.info('Model configuration: %s', config)
 
