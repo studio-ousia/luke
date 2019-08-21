@@ -71,6 +71,9 @@ class LukeDenseSparseAdam(AdamW):
 
                     update_with_lr = -group['lr'] * update
 
+                state['exp_avg'] = exp_avg.to(self.grad_avg_device)
+                state['exp_avg_sq'] = exp_avg_sq.to(self.grad_avg_device)
+
                 p.data.add_(update_with_lr)
 
         return loss
