@@ -1,6 +1,16 @@
-# -*- coding: utf-8 -*-
-
 import pkg_resources
+
+
+class NLTKSentenceTokenizer(object):
+    def __init__(self):
+        import nltk
+        self._sentence_tokenizer = nltk.tokenize.punkt.PunktSentenceTokenizer()
+
+    def __reduce__(self):
+        return self.__class__, tuple()
+
+    def span_tokenize(self, text):
+        return list(self._sentence_tokenizer.span_tokenize(text))
 
 
 class OpenNLPSentenceTokenizer(object):
@@ -10,7 +20,7 @@ class OpenNLPSentenceTokenizer(object):
         self._initialized = False
 
     def __reduce__(self):
-        return (self.__class__, tuple())
+        return self.__class__, tuple()
 
     def initialize(self):
         # we need to delay the initialization of Java in order for this class to
@@ -18,9 +28,7 @@ class OpenNLPSentenceTokenizer(object):
         if not OpenNLPSentenceTokenizer._java_initialized:
             import jnius_config
             jnius_config.add_options('-Xrs')
-            jnius_config.set_classpath(pkg_resources.resource_filename(
-                __name__, '/resources/opennlp-tools-1.5.3.jar'
-            ))
+            jnius_config.set_classpath(pkg_resources.resource_filename(__name__, '/resources/opennlp-tools-1.5.3.jar'))
             OpenNLPSentenceTokenizer._java_initialized = True
 
         from jnius import autoclass

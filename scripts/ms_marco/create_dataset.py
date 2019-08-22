@@ -1,8 +1,4 @@
-"""
-This code converts MS MARCO train, dev and eval tsv data into the tfrecord files
-that will be consumed by BERT.
-Based on the code obtained from: https://github.com/nyu-dl/dl4marco-bert/blob/fcd3bf371870fcfa9697e092c80329d5e713865b/convert_msmarco_to_tfrecord.py
-"""
+# Based on the code obtained from: https://github.com/nyu-dl/dl4marco-bert/blob/fcd3bf371870fcfa9697e092c80329d5e713865b/convert_msmarco_to_tfrecord.py
 
 import collections
 import functools
@@ -87,8 +83,8 @@ def convert_train_dataset(output_dir, train_dataset_path, tokenizer, entity_link
                              max_query_length=max_query_length)
 
     output_file = os.path.join(output_dir, 'dataset_train.tf')
-    # options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
-    with TFRecordWriter(output_file) as writer:
+    options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
+    with TFRecordWriter(output_file, options=options) as writer:
         with tqdm(total=num_lines) as pbar:
             with multiprocessing.pool.Pool(pool_size, initializer=init_worker,
                                            initargs=(tokenizer, entity_linker, entity_vocab)) as pool:
@@ -145,10 +141,9 @@ def convert_eval_dataset(set_name, output_dir, dataset_path, tokenizer, entity_l
     func = functools.partial(create_record, max_seq_length=max_seq_length,
                              max_query_length=max_query_length)
 
-    with TFRecordWriter(os.path.join(output_dir, 'dataset_' + set_name + '.tf')) as writer:
-    # options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
-    # with TFRecordWriter(os.path.join(output_dir, 'dataset_' + set_name + '.tf'),
-    #                     options=options) as writer:
+    options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
+    with TFRecordWriter(os.path.join(output_dir, 'dataset_' + set_name + '.tf'),
+                        options=options) as writer:
         with open(query_doc_ids_path, 'w') as ids_file:
             with tqdm(total=len(queries_docs)) as pbar:
                 with multiprocessing.pool.Pool(pool_size, initializer=init_worker,

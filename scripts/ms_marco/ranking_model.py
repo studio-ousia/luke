@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
-
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
 from luke.model import LukeModel, LukeConfig
+
 
 class LukeForRerankingConfig(LukeConfig):
     def __init__(self, scalar_mix, **kwargs):

@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from torch import nn
 from torch.nn import CrossEntropyLoss
 
@@ -18,12 +16,6 @@ class LukeForSequenceClassification(LukeModel):
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
                 entity_position_ids, entity_segment_ids, entity_attention_mask, labels=None):
-        # print('')
-        # print('')
-        # print(word_ids, word_segment_ids, word_attention_mask)
-        # print(entity_ids, entity_position_ids, entity_segment_ids, entity_attention_mask)
-        # print('')
-        # print('')
         (_, pooled_output) = super(LukeForSequenceClassification, self).forward(
             word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
             entity_segment_ids, entity_attention_mask, output_all_encoded_layers=False)
@@ -34,6 +26,32 @@ class LukeForSequenceClassification(LukeModel):
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            return loss
+
+        else:
+            return logits
+
+
+class LukeForSequenceRegression(LukeModel):
+    def __init__(self, config):
+        super(LukeForSequenceRegression, self).__init__(config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.regressor = nn.Linear(config.hidden_size, 1)
+
+        self.apply(self.init_weights)
+
+    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids,
+                entity_position_ids, entity_segment_ids, entity_attention_mask, labels=None):
+        (_, pooled_output) = super(LukeForSequenceRegression, self).forward(
+            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
+            entity_segment_ids, entity_attention_mask, output_all_encoded_layers=False)
+
+        pooled_output = self.dropout(pooled_output)
+        logits = self.regressor(pooled_output)
+
+        if labels is not None:
+            loss_fct = nn.MSELoss()
+            loss = loss_fct(logits.view(-1), labels.view(-1))
             return loss
 
         else:
