@@ -12,6 +12,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from pytorch_transformers.modeling_bert import BertConfig, BertForPreTraining
+from pytorch_transformers.modeling_roberta import RobertaConfig, RobertaForMaskedLM
 from pytorch_transformers.optimization import ConstantLRSchedule, WarmupLinearSchedule, WarmupConstantSchedule
 from tqdm import tqdm
 
@@ -54,7 +55,10 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
         worker_index = torch.distributed.get_rank()
 
     dataset = WikipediaPretrainingDataset(dataset_dir)
-    bert_config = BertConfig.from_pretrained(bert_model_name)
+    if bert_model_name.startswith('roberta'):
+        bert_config = RobertaConfig.from_pretrained(bert_model_name)
+    else:
+        bert_config = BertConfig.from_pretrained(bert_model_name)
 
     num_train_steps_per_epoch = math.ceil(len(dataset) / batch_size)
     num_train_steps = math.ceil(len(dataset) / batch_size * num_epochs)
@@ -62,11 +66,13 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
     train_batch_size = int(batch_size / gradient_accumulation_steps / num_workers)
 
     if mode == 'default':
-        config = LukeConfig(entity_vocab_size=dataset.entity_vocab.size, **bert_config.to_dict())
+        config = LukeConfig(entity_vocab_size=dataset.entity_vocab.size, bert_model_name=bert_model_name,
+                            **bert_config.to_dict())
         model = LukePretrainingModel(config)
 
     elif mode == 'e2e':
         config = LukeE2EConfig(entity_vocab_size=dataset.entity_vocab.size,
+                               bert_model_name=bert_model_name,
                                num_el_hidden_layers=num_el_hidden_layers,
                                entity_selector_softmax_temp=entity_selector_softmax_temp,
                                **bert_config.to_dict())
@@ -82,7 +88,10 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
     logger.info('Model configuration: %s', config)
 
     if model_file is None:
-        bert_model = BertForPreTraining.from_pretrained(bert_model_name)
+        if bert_model_name.startswith('roberta'):
+            bert_model = RobertaForMaskedLM.from_pretrained(bert_model_name)
+        else:
+            bert_model = BertForPreTraining.from_pretrained(bert_model_name)
         bert_state_dict = bert_model.state_dict()
         if mode == 'e2e':
             for key in tuple(bert_state_dict.keys()):

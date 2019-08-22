@@ -65,9 +65,9 @@ class BaseBatchWorker(multiprocessing.Process):
         self._max_entity_length = self._pretraining_dataset.max_entity_length
         self._max_mention_length = self._pretraining_dataset.max_mention_length
         self._max_candidate_length = self._pretraining_dataset.max_candidate_length
-        self._cls_id = self._tokenizer.vocab[self._tokenizer.cls_token]
-        self._sep_id = self._tokenizer.vocab[self._tokenizer.sep_token]
-        self._mask_id = self._tokenizer.vocab[self._tokenizer.mask_token]
+        self._cls_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.cls_token)
+        self._sep_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.sep_token)
+        self._mask_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.mask_token)
         self._entity_mask_id = self._pretraining_dataset.entity_vocab[MASK_TOKEN]
 
         buf = []

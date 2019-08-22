@@ -7,7 +7,7 @@ from contextlib import closing
 import multiprocessing
 from multiprocessing.pool import Pool
 import click
-from pytorch_transformers.tokenization_bert import BertTokenizer
+from pytorch_transformers import AutoTokenizer, BertTokenizer, RobertaTokenizer
 import tensorflow as tf
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Int64List
@@ -56,7 +56,10 @@ class WikipediaPretrainingDataset(object):
 
     @property
     def tokenizer(self):
-        return BertTokenizer.from_pretrained(self._dataset_dir)
+        if 'roberta' in self.metadata.get('tokenizer_class', '').lower():
+            return RobertaTokenizer.from_pretrained(self._dataset_dir)
+        else:
+            return BertTokenizer.from_pretrained(self._dataset_dir)
 
     @property
     def entity_vocab(self):
@@ -140,6 +143,7 @@ class WikipediaPretrainingDataset(object):
                 max_mention_length=max_mention_length,
                 min_sentence_length=min_sentence_length,
                 max_candidate_length=max_candidate_length,
+                tokenizer_class=tokenizer.__class__.__name__,
             ), metadata_file, indent=2)
 
     @staticmethod
@@ -274,7 +278,10 @@ class WikipediaPretrainingDataset(object):
 def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_vocab_file, entity_linker_file, output_dir,
                                         sentence_tokenizer, **kwargs):
     dump_db = DumpDB(dump_db_file)
-    tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
+    if 'roberta' in tokenizer_name:
+        tokenizer = RobertaTokenizer.from_pretrained(tokenizer_name)
+    else:
+        tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
     if sentence_tokenizer == 'opennlp':
         sentence_tokenizer = OpenNLPSentenceTokenizer()
     else:

@@ -3,6 +3,7 @@ import logging
 import pytorch_transformers
 from pytorch_transformers.modeling_bert import BertConfig, BertEmbeddings, BertEncoder, BertPooler,\
     BertPredictionHeadTransform
+from pytorch_transformers.modeling_roberta import RobertaEmbeddings
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -30,10 +31,11 @@ pytorch_transformers.modeling_bert.BertLayerNorm = BertLayerNorm
 
 
 class LukeConfig(BertConfig):
-    def __init__(self, vocab_size, entity_vocab_size, **kwargs):
+    def __init__(self, vocab_size, entity_vocab_size, bert_model_name, **kwargs):
         super(LukeConfig, self).__init__(vocab_size, **kwargs)
 
         self.entity_vocab_size = entity_vocab_size
+        self.bert_model_name = bert_model_name
 
 
 class LukeE2EConfig(LukeConfig):
@@ -105,7 +107,10 @@ class LukeBaseModel(nn.Module):
 
         self.encoder = BertEncoder(config)
         self.pooler = BertPooler(config)
-        self.embeddings = BertEmbeddings(config)
+        if self.config.bert_model_name and self.config.bert_model_name.startswith('roberta'):
+            self.embeddings = RobertaEmbeddings(config)
+        else:
+            self.embeddings = BertEmbeddings(config)
         self.entity_embeddings = EntityEmbeddings(config)
 
     def init_weights(self, module):
@@ -126,7 +131,9 @@ class LukeBaseModel(nn.Module):
         state_dict = state_dict.copy()
         for key in list(state_dict.keys()):
             new_key = key.replace('gamma', 'weight').replace('beta', 'bias')
-            if new_key.startswith('bert.'):
+            if new_key.startswith('roberta.'):
+                new_key = new_key[8:]
+            elif new_key.startswith('bert.'):
                 new_key = new_key[5:]
 
             if key != new_key:

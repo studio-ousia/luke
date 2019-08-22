@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
 from pytorch_transformers.modeling_bert import BertPreTrainingHeads, BertPredictionHeadTransform
+from pytorch_transformers.modeling_roberta import RobertaLMHead
 
 from luke.model import LukeModel, LukeE2EModel
 
@@ -24,12 +25,17 @@ class LukePretrainingModel(LukeModel):
     def __init__(self, config):
         super(LukePretrainingModel, self).__init__(config)
 
-        self.cls = BertPreTrainingHeads(config)
+        if self.config.bert_model_name and self.config.bert_model_name.startswith('roberta'):
+            self.lm_head = RobertaLMHead(config)
+            self.lm_head.decoder.weight = self.embeddings.word_embeddings.weight
+        else:
+            self.cls = BertPreTrainingHeads(config)
+            self.cls.predictions.decoder.weight = self.embeddings.word_embeddings.weight
+
         self.entity_predictions = EntityPredictionHead(config)
+        self.entity_predictions.decoder.weight = self.entity_embeddings.entity_embeddings.weight
 
         self.apply(self.init_weights)
-        self.cls.predictions.decoder.weight = self.embeddings.word_embeddings.weight
-        self.entity_predictions.decoder.weight = self.entity_embeddings.entity_embeddings.weight
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
                 entity_segment_ids, entity_attention_mask, masked_entity_labels=None, masked_lm_labels=None,
@@ -70,7 +76,10 @@ class LukePretrainingModel(LukeModel):
                 masked_word_sequence_output = torch.masked_select(word_sequence_output, masked_lm_mask.unsqueeze(-1))
                 masked_word_sequence_output = masked_word_sequence_output.view(-1, self.config.hidden_size)
 
-                masked_lm_scores = self.cls.predictions(masked_word_sequence_output)
+                if self.config.bert_model_name and self.config.bert_model_name.startswith('roberta'):
+                    masked_lm_scores = self.lm_head(masked_word_sequence_output)
+                else:
+                    masked_lm_scores = self.cls.predictions(masked_word_sequence_output)
                 masked_lm_scores = masked_lm_scores.view(-1, self.config.vocab_size)
                 masked_lm_labels = torch.masked_select(masked_lm_labels, masked_lm_mask)
 
@@ -90,12 +99,17 @@ class LukeE2EPretrainingModel(LukeE2EModel):
     def __init__(self, config):
         super(LukeE2EPretrainingModel, self).__init__(config)
 
-        self.cls = BertPreTrainingHeads(config)
-        self.cls.predictions.decoder.weight = self.embeddings.word_embeddings.weight
+        if self.config.bert_model_name and self.config.bert_model_name.startswith('roberta'):
+            self.lm_head = RobertaLMHead(config)
+            self.lm_head.decoder.weight = self.embeddings.word_embeddings.weight
+        else:
+            self.cls = BertPreTrainingHeads(config)
+            self.cls.predictions.decoder.weight = self.embeddings.word_embeddings.weight
+
         self.entity_predictions = EntityPredictionHead(config)
+        self.entity_predictions.decoder.weight = self.entity_embeddings.entity_embeddings.weight
 
         self.apply(self.init_weights)
-        self.entity_predictions.decoder.weight = self.entity_embeddings.entity_embeddings.weight
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_candidate_ids, entity_position_ids,
                 entity_segment_ids, entity_attention_mask, entity_candidate_labels=None, masked_entity_labels=None,
@@ -137,7 +151,10 @@ class LukeE2EPretrainingModel(LukeE2EModel):
                 masked_word_sequence_output = torch.masked_select(word_sequence_output, masked_lm_mask.unsqueeze(-1))
                 masked_word_sequence_output = masked_word_sequence_output.view(-1, self.config.hidden_size)
 
-                masked_lm_scores = self.cls.predictions(masked_word_sequence_output)
+                if self.config.bert_model_name and self.config.bert_model_name.startswith('roberta'):
+                    masked_lm_scores = self.lm_head(masked_word_sequence_output)
+                else:
+                    masked_lm_scores = self.cls.predictions(masked_word_sequence_output)
                 masked_lm_scores = masked_lm_scores.view(-1, self.config.vocab_size)
                 masked_lm_labels = torch.masked_select(masked_lm_labels, masked_lm_mask)
 

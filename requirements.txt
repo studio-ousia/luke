@@ -29,7 +29,7 @@ mwparserfromhell==0.5.4   # via wikipedia2vec
 numpy==1.16.4
 protobuf==3.9.1           # via tensorboard, tensorflow
 python-dateutil==2.8.0    # via botocore
-pytorch-transformers==1.0.0
+pytorch-transformers==1.1.0
 regex==2019.6.8           # via pytorch-transformers
 requests==2.22.0          # via pytorch-transformers
 s3transfer==0.2.1         # via boto3

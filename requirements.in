@@ -2,7 +2,7 @@ Click==7.0
 joblib==0.13.0
 marisa-trie==0.7.5
 numpy==1.16.4
-pytorch-transformers==1.0.0
+pytorch-transformers==1.1.0
 tensorflow==1.14.0
 torch==1.2.0
 tqdm==4.28.1
