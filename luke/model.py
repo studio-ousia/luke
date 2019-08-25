@@ -3,7 +3,6 @@ import logging
 import pytorch_transformers
 from pytorch_transformers.modeling_bert import BertConfig, BertEmbeddings, BertEncoder, BertPooler,\
     BertPredictionHeadTransform
-from pytorch_transformers.modeling_roberta import RobertaEmbeddings
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -26,8 +25,31 @@ class BertLayerNorm(nn.Module):
         x = (x - u) / torch.sqrt(s + self.variance_epsilon)
         return self.weight * x + self.bias
 
+
 # Override BertLayerNorm to avoid errors occurred on mixed precision training
 pytorch_transformers.modeling_bert.BertLayerNorm = BertLayerNorm
+
+
+class RobertaEmbeddings(BertEmbeddings):
+    def __init__(self, config):
+        super(RobertaEmbeddings, self).__init__(config)
+        self.padding_idx = 1
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=self.padding_idx)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size,
+                                                padding_idx=self.padding_idx)
+        self.token_type_embeddings.requires_grad = False
+
+    def forward(self, input_ids, token_type_ids=None, position_ids=None):
+        seq_length = input_ids.size(1)
+        if position_ids is None:
+            # Position numbers begin at padding_idx+1. Padding symbols are ignored.
+            # cf. fairseq's `utils.make_positions`
+            position_ids = torch.arange(self.padding_idx + 1, seq_length + self.padding_idx + 1, dtype=torch.long,
+                                        device=input_ids.device)
+            position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
+
+        return super(RobertaEmbeddings, self).forward(input_ids, token_type_ids=token_type_ids,
+                                                      position_ids=position_ids)
 
 
 class LukeConfig(BertConfig):
@@ -229,8 +251,10 @@ class LukeE2EModel(LukeBaseModel):
         if masked_entity_labels is not None:
             mask_entity_ids = entity_segment_ids.new_full(entity_segment_ids.size(), 2)  # index of [MASK] token is 2
             mask_embedding_output = self.entity_embeddings(mask_entity_ids, entity_position_ids, entity_segment_ids)
-            mask_embedding_output = mask_embedding_output * (masked_entity_labels != -1).unsqueeze(-1).type_as(mask_embedding_output)
-            entity_embedding_output = entity_embedding_output * (masked_entity_labels == -1).unsqueeze(-1).type_as(entity_embedding_output)
+            mask_embedding_output = mask_embedding_output * \
+                (masked_entity_labels != -1).unsqueeze(-1).type_as(mask_embedding_output)
+            entity_embedding_output = entity_embedding_output * \
+                (masked_entity_labels == -1).unsqueeze(-1).type_as(entity_embedding_output)
             entity_embedding_output = entity_embedding_output + mask_embedding_output
 
         embedding_output = torch.cat([word_embedding_output, entity_embedding_output], dim=1)

@@ -3,11 +3,12 @@ import itertools
 import json
 import os
 import random
+import re
 from contextlib import closing
 import multiprocessing
 from multiprocessing.pool import Pool
 import click
-from pytorch_transformers import AutoTokenizer, BertTokenizer, RobertaTokenizer
+from pytorch_transformers import BertTokenizer, RobertaTokenizer
 import tensorflow as tf
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Int64List
@@ -175,6 +176,12 @@ class WikipediaPretrainingDataset(object):
 
         sentences = []
 
+        def tokenize(text):
+            text = re.sub(r'\s+', ' ', text).rstrip()
+             # The private _tokenize() method needs to be used here because the public tokenize() method automatically
+             # removes the leading whitespace of the first word of the given text
+            return _tokenizer._tokenize(text)
+
         for paragraph in _dump_db.get_paragraphs(page_title):
             paragraph_text = paragraph.text
             paragraph_links = []
@@ -188,9 +195,7 @@ class WikipediaPretrainingDataset(object):
                     paragraph_links.append((link_title, link.start, link.end))
 
             for sent_start, sent_end in _sentence_tokenizer.span_tokenize(paragraph_text):
-                sent_text = paragraph_text[sent_start:sent_end]
-
-                cur = 0
+                cur = sent_start
                 sent_words = []
                 sent_links = []
                 for link_title, link_start, link_end in paragraph_links:
@@ -198,12 +203,17 @@ class WikipediaPretrainingDataset(object):
                         continue
 
                     entity_id = _entity_vocab[link_title]
-                    link_start -= sent_start
-                    link_end -= sent_start
 
-                    sent_words += _tokenizer.tokenize(sent_text[cur:link_start])
-                    link_text = sent_text[link_start:link_end]
-                    link_words = _tokenizer.tokenize(link_text)
+                    text = paragraph_text[cur:link_start]
+                    if cur != 0 and paragraph_text[cur - 1] == ' ':
+                        text = ' ' + text
+                    sent_words += tokenize(text)
+
+                    link_text = paragraph_text[link_start:link_end]
+                    if link_start != 0 and paragraph_text[link_start - 1] == ' ':
+                        link_words = tokenize(' ' + link_text)
+                    else:
+                        link_words = tokenize(link_text)
 
                     candidates = sorted(_entity_linker.query(link_text), reverse=True, key=lambda c: c.prior_prob)
                     candidates = candidates[:_max_candidate_length - 1]
@@ -220,7 +230,11 @@ class WikipediaPretrainingDataset(object):
                     sent_words += link_words
                     cur = link_end
 
-                sent_words += _tokenizer.tokenize(sent_text[cur:])
+                text = paragraph_text[cur:sent_end]
+                if cur != 0 and paragraph_text[cur - 1] == ' ':
+                    text = ' ' + text
+                sent_words += tokenize(text)
+
                 if len(sent_words) < _min_sentence_length or len(sent_words) > _max_num_tokens:
                     continue
                 sentences.append((sent_words, sent_links))

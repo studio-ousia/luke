@@ -4,6 +4,7 @@ import multiprocessing
 import queue
 import random
 import numpy as np
+from pytorch_transformers.tokenization_roberta import RobertaTokenizer
 
 from luke.pretraining.dataset import WikipediaPretrainingDataset
 from luke.utils.entity_vocab import MASK_TOKEN
@@ -70,6 +71,13 @@ class BaseBatchWorker(multiprocessing.Process):
         self._mask_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.mask_token)
         self._entity_mask_id = self._pretraining_dataset.entity_vocab[MASK_TOKEN]
 
+        if isinstance(self._tokenizer, RobertaTokenizer):
+            self._is_subword = lambda token: not self._tokenizer.convert_tokens_to_string(token).startswith(' ')
+            self._word_padding_index = 1
+        else:
+            self._is_subword = lambda token: token.startswith('##')
+            self._word_padding_index = 0
+
         buf = []
         max_word_len = 1
         max_entity_len = 1
@@ -92,7 +100,7 @@ class BaseBatchWorker(multiprocessing.Process):
                 max_entity_len = 1
 
     def _create_word_features(self, word_ids):
-        output_word_ids = np.zeros(self._max_seq_length, dtype=np.int)
+        output_word_ids = np.full(self._max_seq_length, self._word_padding_index, dtype=np.int)
         output_word_ids[:word_ids.size + 2] = np.concatenate([[self._cls_id], word_ids, [self._sep_id]])
         word_attention_mask = np.zeros(self._max_seq_length, dtype=np.int)
         word_attention_mask[:word_ids.size + 2] = 1
@@ -106,7 +114,7 @@ class BaseBatchWorker(multiprocessing.Process):
             candidate_word_indices = []
 
             for i, word in enumerate(self._tokenizer.convert_ids_to_tokens(word_ids), 1):  # 1 for [CLS]
-                if self._whole_word_masking and word.startswith('##') and candidate_word_indices:
+                if self._whole_word_masking and self._is_subword(word) and candidate_word_indices:
                     candidate_word_indices[-1].append(i)
                 else:
                     candidate_word_indices.append([i])
@@ -125,7 +133,8 @@ class BaseBatchWorker(multiprocessing.Process):
                     if p < 0.8:
                         output_word_ids[index] = self._mask_id
                     elif p < 0.9:
-                        output_word_ids[index] = random.randint(0, self._tokenizer.vocab_size - 1)
+                        output_word_ids[index] = random.randint(self._word_padding_index + 1,
+                                                                self._tokenizer.vocab_size - 1)
                     num_masked_words += 1
 
                 if num_masked_words == num_to_predict:
