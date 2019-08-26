@@ -33,10 +33,8 @@ pytorch_transformers.modeling_bert.BertLayerNorm = BertLayerNorm
 class RobertaEmbeddings(BertEmbeddings):
     def __init__(self, config):
         super(RobertaEmbeddings, self).__init__(config)
-        self.padding_idx = 1
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=self.padding_idx)
-        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size,
-                                                padding_idx=self.padding_idx)
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=1)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size, padding_idx=1)
         self.token_type_embeddings.requires_grad = False
 
     def forward(self, input_ids, token_type_ids=None, position_ids=None):
@@ -44,8 +42,7 @@ class RobertaEmbeddings(BertEmbeddings):
         if position_ids is None:
             # Position numbers begin at padding_idx+1. Padding symbols are ignored.
             # cf. fairseq's `utils.make_positions`
-            position_ids = torch.arange(self.padding_idx + 1, seq_length + self.padding_idx + 1, dtype=torch.long,
-                                        device=input_ids.device)
+            position_ids = torch.arange(2, seq_length + 2, dtype=torch.long, device=input_ids.device)
             position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
 
         return super(RobertaEmbeddings, self).forward(input_ids, token_type_ids=token_type_ids,

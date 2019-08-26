@@ -69,14 +69,13 @@ class BaseBatchWorker(multiprocessing.Process):
         self._cls_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.cls_token)
         self._sep_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.sep_token)
         self._mask_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.mask_token)
+        self._pad_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.pad_token)
         self._entity_mask_id = self._pretraining_dataset.entity_vocab[MASK_TOKEN]
 
         if isinstance(self._tokenizer, RobertaTokenizer):
             self._is_subword = lambda token: not self._tokenizer.convert_tokens_to_string(token).startswith(' ')
-            self._word_padding_index = 1
         else:
             self._is_subword = lambda token: token.startswith('##')
-            self._word_padding_index = 0
 
         buf = []
         max_word_len = 1
@@ -100,7 +99,7 @@ class BaseBatchWorker(multiprocessing.Process):
                 max_entity_len = 1
 
     def _create_word_features(self, word_ids):
-        output_word_ids = np.full(self._max_seq_length, self._word_padding_index, dtype=np.int)
+        output_word_ids = np.full(self._max_seq_length, self._pad_id, dtype=np.int)
         output_word_ids[:word_ids.size + 2] = np.concatenate([[self._cls_id], word_ids, [self._sep_id]])
         word_attention_mask = np.zeros(self._max_seq_length, dtype=np.int)
         word_attention_mask[:word_ids.size + 2] = 1
@@ -133,7 +132,7 @@ class BaseBatchWorker(multiprocessing.Process):
                     if p < 0.8:
                         output_word_ids[index] = self._mask_id
                     elif p < 0.9:
-                        output_word_ids[index] = random.randint(self._word_padding_index + 1,
+                        output_word_ids[index] = random.randint(self._pad_id + 1,
                                                                 self._tokenizer.vocab_size - 1)
                     num_masked_words += 1
 
