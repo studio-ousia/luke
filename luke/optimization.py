@@ -1,4 +1,5 @@
 import torch
+from torch.optim.lr_scheduler import LambdaLR
 from pytorch_transformers.optimization import AdamW
 
 
@@ -92,3 +93,14 @@ class LukeDenseSparseAdam(AdamW):
             if 'exp_avg' in state:
                 state['exp_avg'] = state['exp_avg'].to(self.grad_avg_device)
                 state['exp_avg_sq'] = state['exp_avg_sq'].to(self.grad_avg_device)
+
+
+class WarmupInverseSquareRootSchedule(LambdaLR):
+    def __init__(self, optimizer, warmup_steps, last_epoch=-1):
+        self.warmup_steps = warmup_steps
+        super(WarmupInverseSquareRootSchedule, self).__init__(optimizer, self.lr_lambda, last_epoch=last_epoch)
+
+    def lr_lambda(self, step):
+        if step < self.warmup_steps:
+            return step / self.warmup_steps
+        return (step - self.warmup_steps + 1) ** -0.5
