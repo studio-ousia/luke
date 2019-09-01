@@ -1,7 +1,7 @@
 import click
 from wikipedia2vec.dump_db import DumpDB
 
-from ed_dataset import EntityDisambiguationDataset
+from dataset import EntityDisambiguationDataset
 
 @click.group()
 def cli():
