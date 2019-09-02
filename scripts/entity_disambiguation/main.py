@@ -1,8 +1,10 @@
 import json
 import logging
+import math
 import os
 import random
 import click
+from comet_ml import Experiment
 import numpy as np
 from pytorch_transformers.tokenization_bert import BertTokenizer
 import torch
@@ -25,9 +27,7 @@ logger = logging.getLogger(__name__)
 @click.argument('model_file', type=click.Path())
 @click.option('-v', '--verbose', is_flag=True)
 @click.option('--data-dir', type=click.Path(exists=True), default='data/entity-disambiguation')
-@click.option('--max-seq-length', default=512)
 @click.option('--max-candidate-length', default=30)
-@click.option('--max-mention-length', default=20)
 @click.option('--num-documents-per-batch', default=32)
 @click.option('--document-split-mode', default='simple', type=click.Choice(['simple', 'per_mention']))
 @click.option('--min-context-entity-prob', default=0.0)
@@ -40,10 +40,9 @@ logger = logging.getLogger(__name__)
 @click.option('--fix-entity-bias/--update-entity-bias', default=True)
 @click.option('--in-domain/--out-domain', default=True)
 @click.option('-t', '--test-set', default=None, multiple=True)
-def run(data_dir, wikipedia_titles_file, wikipedia_redirects_file, model_file, verbose, max_seq_length,
-        max_candidate_length, max_mention_length, num_documents_per_batch, document_split_mode, min_context_entity_prob,
-        learning_rate, patience, warmup_steps, grad_avg_on_cpu, seed, fix_entity_emb, fix_entity_bias, in_domain,
-        test_set):
+def run(data_dir, wikipedia_titles_file, wikipedia_redirects_file, model_file, verbose, max_candidate_length,
+        num_documents_per_batch, document_split_mode, min_context_entity_prob, learning_rate, patience, warmup_steps,
+        grad_avg_on_cpu, seed, fix_entity_emb, fix_entity_bias, in_domain, test_set):
     log_format = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format=log_format)
@@ -56,6 +55,24 @@ def run(data_dir, wikipedia_titles_file, wikipedia_redirects_file, model_file, v
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
+    if in_domain:
+        experiment = Experiment(project_name='luke_entity_disambiguation_in_domain')
+    else:
+        experiment = Experiment(project_name='luke_entity_disambiguation_out_domain')
+
+    experiment.log_parameters(dict(
+        model_file=model_file,
+        num_documents_per_batch=num_documents_per_batch,
+        document_split_mode=document_split_mode,
+        min_context_entity_prob=min_context_entity_prob,
+        learning_rate=learning_rate,
+        patience=patience,
+        warmup_steps=warmup_steps,
+        seed=seed,
+        fix_entity_emb=fix_entity_emb,
+        fix_entity_bias=fix_entity_bias,
+    ))
+
     logger.info('Loading model and configurations...')
 
     model_dir = os.path.dirname(model_file)
@@ -65,8 +82,10 @@ def run(data_dir, wikipedia_titles_file, wikipedia_redirects_file, model_file, v
         model_data = json.load(f)
 
     config = LukeConfig(**model_data['model_config'])
-    tokenizer = BertTokenizer.from_pretrained(model_dir)
+    max_seq_length = model_data['max_seq_length']
+    max_mention_length = model_data['max_mention_length']
 
+    tokenizer = BertTokenizer.from_pretrained(model_dir)
     orig_entity_vocab = EntityVocab(os.path.join(model_dir, 'entity_vocab.tsv'))
 
     logger.info('Loading dataset...')
@@ -108,7 +127,7 @@ def run(data_dir, wikipedia_titles_file, wikipedia_redirects_file, model_file, v
     model.load_state_dict(state_dict, strict=False)
     model.to('cuda')
 
-    def evaluate(model, dataset_name):
+    def evaluate(model, dataset_name, document_split_mode):
         model.eval()
 
         eval_documents = getattr(dataset, dataset_name)
@@ -121,6 +140,10 @@ def run(data_dir, wikipedia_titles_file, wikipedia_redirects_file, model_file, v
         tqdm.write(f'  F1 = {f1:.3f}')
         tqdm.write(f'  Precision = {precision:.3f}')
         tqdm.write(f'  Recall = {recall:.3f}')
+
+        experiment.log_metric(f'{dataset_name}_precision', precision)
+        experiment.log_metric(f'{dataset_name}_recall', recall)
+        experiment.log_metric(f'{dataset_name}_f1', f1)
 
         return precision, recall, f1
 
@@ -153,67 +176,78 @@ def run(data_dir, wikipedia_titles_file, wikipedia_redirects_file, model_file, v
         best_val_f1_score = 0.0
         best_weights = None
         epoch = 0
+        global_step = 0
         num_epochs_without_improvement = 0
+
         while True:
-            model.train()
+            with experiment.train():
+                model.train()
 
-            mask_id = entity_vocab[MASK_TOKEN]
-            train_losses = []
-            random.shuffle(train_data)
-            with tqdm(train_data) as pbar:
-                for n, item in enumerate(pbar):
-                    features = item['features']
-                    entity_ids = torch.as_tensor(features['entity_ids'], device='cuda')
-                    entity_attention_mask = torch.as_tensor(features['entity_attention_mask'], device='cuda')
-                    entity_labels = torch.as_tensor(features['entity_labels'], device='cuda').view(-1)
-                    static_args = {k: torch.as_tensor(v, device='cuda') for k, v in features.items()
-                                   if k not in ('entity_ids', 'entity_attention_mask', 'entity_labels')}
-                    entity_length = entity_ids.size()[1]
-                    for _ in range(entity_length):
-                        logits = model(entity_ids=entity_ids, entity_attention_mask=entity_attention_mask,
-                                       **static_args)
-                        probs = F.softmax(logits, dim=2) * (entity_ids == mask_id).unsqueeze(-1).type_as(logits)
-                        max_probs, max_indices = torch.max(probs.squeeze(0), dim=1)
-                        prob, target_index = torch.max(max_probs, dim=0)
-                        entity_ids[0, target_index] = max_indices[target_index]
-                        if prob <= min_context_entity_prob:
-                            entity_attention_mask[0, target_index] = 0
-                        loss = F.cross_entropy(logits[:, target_index], entity_labels[target_index].unsqueeze(0))
-                        loss = loss / entity_length / num_documents_per_batch
-                        train_losses.append(loss.item())
-                        loss.backward()
+                mask_id = entity_vocab[MASK_TOKEN]
+                train_losses = []
 
-                    if (n + 1) % num_documents_per_batch == 0 or n == len(train_data) - 1:
+                batches = np.array_split(np.random.permutation(train_data),
+                                         math.ceil(len(train_data) / num_documents_per_batch))
+                with tqdm(batches) as pbar:
+                    for batch in pbar:
+                        batch_entity_length = sum(len(item['mentions']) for item in batch)
+                        for item in batch:
+                            args = {k: torch.as_tensor(v, device='cuda') for k, v in item['features'].items()}
+                            entity_ids = args.pop('entity_ids')
+                            entity_attention_mask = args.pop('entity_attention_mask')
+                            entity_labels = args.pop('entity_labels')
+                            entity_length = entity_ids.size()[1]
+                            for _ in range(entity_length):
+                                logits = model(entity_ids=entity_ids, entity_attention_mask=entity_attention_mask,
+                                               **args)
+                                probs = F.softmax(logits, dim=2) * (entity_ids == mask_id).unsqueeze(-1).type_as(logits)
+                                max_probs, max_indices = torch.max(probs.squeeze(0), dim=1)
+                                max_prob, target_index = torch.max(max_probs, dim=0)
+                                loss = F.cross_entropy(logits[:, target_index], entity_labels[:, target_index])
+                                loss = loss / batch_entity_length
+                                loss.backward()
+                                train_losses.append(loss.item())
+
+                                entity_ids[0, target_index] = max_indices[target_index]
+                                if max_prob <= min_context_entity_prob:
+                                    entity_attention_mask[0, target_index] = 0
+
                         optimizer.step()
                         scheduler.step()
                         model.zero_grad()
                         pbar.set_description(f'epoch: {epoch} '
                                              f'lr: {scheduler.get_lr()[0]:.8f} '
                                              f'loss: {np.mean(train_losses):.8f}')
+                        experiment.log_metric('batch_loss', np.mean(train_losses), step=global_step)
+                        experiment.log_metric('learning_rate', scheduler.get_lr()[0], step=global_step)
+                        global_step += 1
                         train_losses = []
 
             epoch += 1
 
-            val_f1_score = evaluate(model, 'test_a')[-1]
-            if val_f1_score > best_val_f1_score:
-                best_val_f1_score = val_f1_score
-                best_weights = {k: v.to('cpu').clone() for k, v in model.state_dict().items()}
-                num_epochs_without_improvement = 0
-            else:
-                num_epochs_without_improvement += 1
+            with experiment.validate():
+                val_f1_score = evaluate(model, 'test_a', 'simple')[-1]
+                if val_f1_score > best_val_f1_score:
+                    best_val_f1_score = val_f1_score
+                    best_weights = {k: v.to('cpu').clone() for k, v in model.state_dict().items()}
+                    num_epochs_without_improvement = 0
+                else:
+                    num_epochs_without_improvement += 1
 
-            if num_epochs_without_improvement >= patience:
-                model.load_state_dict(best_weights)
-                break
+                if num_epochs_without_improvement >= patience:
+                    model.load_state_dict(best_weights)
+                    break
 
-        results.append(evaluate(model, 'test_b'))
+        with experiment.test():
+            results.append(evaluate(model, 'test_b', document_split_mode))
 
     else:
         if not test_set:
             test_set = ['ace2004', 'aquaint', 'msnbc', 'wikipedia', 'clueweb']
 
-        for dataset_name in test_set:
-            results.append(evaluate(model, dataset_name))
+        with experiment.test():
+            for dataset_name in test_set:
+                results.append(evaluate(model, dataset_name, document_split_mode))
 
     return results
 
@@ -225,21 +259,20 @@ def compute_precision_recall_f1(model, eval_data, entity_vocab, desc, min_contex
     labels = []
     candidate_flags = []
     for item in tqdm(eval_data, desc=desc, leave=False):
-        features = item['features']
-        entity_ids = torch.as_tensor(features['entity_ids'], device='cuda')
-        entity_attention_mask = torch.as_tensor(features['entity_attention_mask'], device='cuda')
-        entity_labels = torch.as_tensor(features['entity_labels'], device='cuda')
-        static_args = {k: torch.as_tensor(v, device='cuda') for k, v in features.items()
-                       if k not in ('entity_ids', 'entity_attention_mask', 'entity_labels')}
+        args = {k: torch.as_tensor(v, device='cuda') for k, v in item['features'].items()}
+        entity_ids = args.pop('entity_ids')
+        entity_attention_mask = args.pop('entity_attention_mask')
+        entity_labels = args.pop('entity_labels')
         entity_length = entity_ids.size()[1]
         with torch.no_grad():
             for _ in range(entity_length):
-                logits = model(entity_ids=entity_ids, entity_attention_mask=entity_attention_mask, **static_args)
+                logits = model(entity_ids=entity_ids, entity_attention_mask=entity_attention_mask, **args)
                 probs = F.softmax(logits, dim=2) * (entity_ids == mask_id).unsqueeze(-1).type_as(logits)
                 max_probs, max_indices = torch.max(probs.squeeze(0), dim=1)
-                prob, target_index = torch.max(max_probs, dim=0)
+                max_prob, target_index = torch.max(max_probs, dim=0)
+
                 entity_ids[0, target_index] = max_indices[target_index]
-                if prob <= min_context_entity_prob:
+                if max_prob <= min_context_entity_prob:
                     entity_attention_mask[0, target_index] = 0
 
         for target_index in item['target_mention_indices']:
@@ -254,7 +287,7 @@ def compute_precision_recall_f1(model, eval_data, entity_vocab, desc, min_contex
         if prediction == label:
             num_correct += 1
 
-        assert not(candidate_flag == 1 and prediction == 0)
+        assert not (candidate_flag == 1 and prediction == 0)
         assert label != 0
 
         num_mentions += 1

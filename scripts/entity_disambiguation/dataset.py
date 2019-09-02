@@ -258,10 +258,10 @@ def generate_data(documents, tokenizer, entity_vocab, mode, document_split_mode,
         entity_ids = np.ones((1, len(target_mention_data)), dtype=np.int)  # the index of [MASK] is 1
         entity_attention_mask = np.ones((1, len(target_mention_data)), dtype=np.int)
         entity_segment_ids = np.zeros((1, len(target_mention_data)), dtype=np.int)
+        entity_position_ids = np.full((1, len(target_mention_data), max_mention_length), -1, dtype=np.int)
         candidate_ids = np.zeros((1, len(target_mention_data), max_candidate_length), dtype=np.int)
         entity_labels = np.full((1, len(target_mention_data)), -1, dtype=np.int)
 
-        entity_position_ids = np.full((1, len(target_mention_data), max_mention_length), -1, dtype=np.int)
         for index, (start, end, mention, candidates) in enumerate(target_mention_data):
             entity_position_ids[0, index][:end - start] = range(start + 1, end + 1)  # +1 for [CLS]
             candidate_ids[0, index, :len(candidates)] = [entity_vocab[cand] for cand in candidates]
@@ -300,7 +300,7 @@ def generate_data(documents, tokenizer, entity_vocab, mode, document_split_mode,
                     doc_start = tokens_per_batch * n
                     doc_end = min(len(tokens), tokens_per_batch * (n + 1))
                     output_mentions, feature_dict = generate_feature_dict(tokens, mention_data, doc_start, doc_end)
-                    ret.append(dict(document=document, features=feature_dict, mentiond=output_mentions,
+                    ret.append(dict(document=document, mentions=output_mentions, features=feature_dict,
                                     target_mention_indices=range(len(output_mentions))))
 
             else:
