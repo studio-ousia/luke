@@ -108,7 +108,7 @@ class WikipediaPretrainingDataset(object):
     @staticmethod
     def build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, entity_linker, output_dir, max_seq_length,
               max_entity_length, max_mention_length, min_sentence_length, max_candidate_length,
-              skip_sentences_without_entities, pool_size, chunk_size):
+              include_sentences_without_entities, include_unk_entities, pool_size, chunk_size):
         target_titles = [title for title in dump_db.titles()
                          if not (':' in title and title.lower().split(':')[0] in ('image', 'file', 'category'))]
         random.shuffle(target_titles)
@@ -126,7 +126,7 @@ class WikipediaPretrainingDataset(object):
             with tqdm(total=len(target_titles)) as pbar:
                 initargs = (dump_db, tokenizer, sentence_tokenizer, entity_vocab, entity_linker, max_num_tokens,
                             max_entity_length, max_mention_length, min_sentence_length, max_candidate_length,
-                            skip_sentences_without_entities)
+                            include_sentences_without_entities, include_unk_entities)
                 with closing(Pool(pool_size, initializer=WikipediaPretrainingDataset._initialize_worker,
                                   initargs=initargs)) as pool:
                     for ret in pool.imap(WikipediaPretrainingDataset._process_page, target_titles,
@@ -150,10 +150,10 @@ class WikipediaPretrainingDataset(object):
     @staticmethod
     def _initialize_worker(dump_db, tokenizer, sentence_tokenizer, entity_vocab, entity_linker, max_num_tokens,
                            max_entity_length, max_mention_length, min_sentence_length, max_candidate_length,
-                           skip_sentences_without_entities):
+                           include_sentences_without_entities, include_unk_entities):
         global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _entity_linker, _max_num_tokens,\
             _max_entity_length, _max_mention_length, _min_sentence_length, _max_candidate_length,\
-            _skip_sentences_without_entities
+            _include_sentences_without_entities, _include_unk_entities
 
         _dump_db = dump_db
         _tokenizer = tokenizer
@@ -165,7 +165,8 @@ class WikipediaPretrainingDataset(object):
         _max_mention_length = max_mention_length
         _min_sentence_length = min_sentence_length
         _max_candidate_length = max_candidate_length
-        _skip_sentences_without_entities = skip_sentences_without_entities
+        _include_sentences_without_entities = include_sentences_without_entities
+        _include_unk_entities = include_unk_entities
 
     @staticmethod
     def _process_page(page_title):
@@ -191,8 +192,11 @@ class WikipediaPretrainingDataset(object):
                 if link_title.startswith('Category:') and link.text.lower().startswith('category:'):
                     paragraph_text = paragraph_text[:link.start] + ' ' * \
                         (link.end - link.start) + paragraph_text[link.end:]
-                elif link_title in _entity_vocab:
-                    paragraph_links.append((link_title, link.start, link.end))
+                else:
+                    if link_title in _entity_vocab:
+                        paragraph_links.append((link_title, link.start, link.end))
+                    elif _include_unk_entities:
+                        paragraph_links.append((UNK_TOKEN, link.start, link.end))
 
             for sent_start, sent_end in _sentence_tokenizer.span_tokenize(paragraph_text):
                 cur = sent_start
@@ -246,7 +250,7 @@ class WikipediaPretrainingDataset(object):
             links += [(id_, start + len(words), end + len(words), cand, lb) for id_, start, end, cand, lb in sent_links]
             words += sent_words
             if i == len(sentences) - 1 or len(words) + len(sentences[i + 1][0]) > _max_num_tokens:
-                if links or not _skip_sentences_without_entities:
+                if links or _include_sentences_without_entities:
                     links = links[:_max_entity_length]
                     word_ids = _tokenizer.convert_tokens_to_ids(words)
                     assert _min_sentence_length <= len(word_ids) <= _max_num_tokens
@@ -286,7 +290,8 @@ class WikipediaPretrainingDataset(object):
 @click.option('--max-mention-length', default=30)
 @click.option('--min-sentence-length', default=5)
 @click.option('--max-candidate-length', default=30)
-@click.option('--skip-sentences-without-entities', is_flag=True)
+@click.option('--include-sentences-without-entities', is_flag=True)
+@click.option('--include-unk-entities/--skip-unk-entities', default=False)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', default=100)
 def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_vocab_file, entity_linker_file, output_dir,
