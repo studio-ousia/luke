@@ -293,7 +293,10 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
             global_step += 1
 
             if local_rank in (0, -1):
-                if global_step % num_train_steps_per_epoch == 0:
+                if global_step == num_train_steps:
+                    save_model(model, f'epoch{num_epochs}')
+                    time.sleep(60)
+                elif global_step % num_train_steps_per_epoch == 0:
                     epoch = int(global_step / num_train_steps_per_epoch)
                     save_model(model, f'epoch{epoch}')
                 if save_interval_sec and time.time() - prev_save_time > save_interval_sec:
