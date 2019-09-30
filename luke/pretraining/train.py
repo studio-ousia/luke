@@ -20,7 +20,7 @@ from luke.model import LukeConfig, LukeE2EConfig
 from luke.pretraining.batch_generator import LukePretrainingBatchGenerator
 from luke.pretraining.dataset import WikipediaPretrainingDataset, ENTITY_LINKER_FILE, ENTITY_VOCAB_FILE
 from luke.pretraining.model import LukePretrainingModel, LukeE2EPretrainingModel
-from luke.optimization import LukeDenseSparseAdam
+from luke.optimization import LukeDenseSparseAdam, WarmupInverseSquareRootSchedule
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +152,8 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
         scheduler = WarmupConstantSchedule(optimizer, warmup_steps=warmup_steps)
     elif lr_schedule == 'warmup_linear':
         scheduler = WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=num_train_steps)
+    elif lr_schedule == 'warmup_inverse_square_root':
+        scheduler = WarmupInverseSquareRootSchedule(optimizer, warmup_steps=warmup_steps)
     else:
         scheduler = ConstantLRSchedule(optimizer)
 
@@ -345,7 +347,7 @@ def run_parallel_pretraining(**kwargs):
 @click.option('--batch-size', default=256)
 @click.option('--gradient-accumulation-steps', default=1)
 @click.option('--learning-rate', default=1e-4)
-@click.option('--lr-schedule', type=click.Choice(['none', 'warmup_constant', 'warmup_linear']), default='warmup_linear')
+@click.option('--lr-schedule', type=click.Choice(['none', 'warmup_constant', 'warmup_linear', 'warmup_inverse_square_root']), default='warmup_linear')
 @click.option('--warmup-steps', default=0)
 @click.option('--adam-b1', default=0.9)
 @click.option('--adam-b2', default=0.999)
