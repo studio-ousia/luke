@@ -33,8 +33,8 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
                     learning_rate, lr_schedule, warmup_steps, adam_b1, adam_b2, max_grad_norm, masked_lm_prob,
                     masked_entity_prob, whole_word_masking, fix_bert_weights, grad_avg_on_cpu, num_epochs, fp16,
                     fp16_opt_level, fp16_master_weights, local_rank, log_dir, model_file, optimizer_file,
-                    scheduler_file, master_weights_file, save_interval_sec, num_el_hidden_layers=None,
-                    entity_selector_softmax_temp=None, global_step=0):
+                    scheduler_file, master_weights_file, save_interval_sec, entity_emb_size=None,
+                    num_el_hidden_layers=None, entity_selector_softmax_temp=None, global_step=0):
     train_args = {}
     for arg in inspect.getfullargspec(run_pretraining).args:
         train_args[arg] = locals()[arg]
@@ -67,7 +67,7 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
 
     if mode == 'default':
         config = LukeConfig(entity_vocab_size=dataset.entity_vocab.size, bert_model_name=bert_model_name,
-                            **bert_config.to_dict())
+                            entity_emb_size=entity_emb_size, **bert_config.to_dict())
         model = LukePretrainingModel(config)
 
     elif mode == 'e2e':
@@ -75,6 +75,7 @@ def run_pretraining(dataset_dir, output_dir, parallel, mode, bert_model_name, ba
                                bert_model_name=bert_model_name,
                                num_el_hidden_layers=num_el_hidden_layers,
                                entity_selector_softmax_temp=entity_selector_softmax_temp,
+                               entity_emb_size=entity_emb_size,
                                **bert_config.to_dict())
         model = LukeE2EPretrainingModel(config)
 
@@ -344,6 +345,7 @@ def run_parallel_pretraining(**kwargs):
 @click.option('--mode', type=click.Choice(['default', 'e2e']), default='default')
 @click.option('--parallel', is_flag=True)
 @click.option('--bert-model-name', default='bert-base-uncased')
+@click.option('--entity-emb-size', default=None, type=int)
 @click.option('--batch-size', default=256)
 @click.option('--gradient-accumulation-steps', default=1)
 @click.option('--learning-rate', default=1e-4)

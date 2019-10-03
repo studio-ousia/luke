@@ -50,19 +50,21 @@ class RobertaEmbeddings(BertEmbeddings):
 
 
 class LukeConfig(BertConfig):
-    def __init__(self, vocab_size, entity_vocab_size, bert_model_name, **kwargs):
+    def __init__(self, vocab_size, entity_vocab_size, bert_model_name, entity_emb_size=None, **kwargs):
         super(LukeConfig, self).__init__(vocab_size, **kwargs)
 
         self.entity_vocab_size = entity_vocab_size
         self.bert_model_name = bert_model_name
+        self.entity_emb_size = entity_emb_size
 
 
 class LukeE2EConfig(LukeConfig):
-    def __init__(self, num_el_hidden_layers, entity_selector_softmax_temp, **kwargs):
+    def __init__(self, num_el_hidden_layers, entity_selector_softmax_temp, entity_emb_size=None, **kwargs):
         super(LukeE2EConfig, self).__init__(**kwargs)
 
         self.num_el_hidden_layers = num_el_hidden_layers
         self.entity_selector_softmax_temp = entity_selector_softmax_temp
+        self.entity_emb_size = entity_emb_size
 
 
 class EntityEmbeddings(nn.Module):
@@ -72,7 +74,13 @@ class EntityEmbeddings(nn.Module):
         if entity_vocab_size is None:
             entity_vocab_size = config.entity_vocab_size
 
-        self.entity_embeddings = nn.Embedding(entity_vocab_size, config.hidden_size, padding_idx=0)
+        if config.entity_emb_size is None:
+            self.entity_embeddings = nn.Embedding(entity_vocab_size, config.hidden_size, padding_idx=0)
+        else:
+            self.entity_embeddings = nn.Embedding(entity_vocab_size, config.entity_emb_size, padding_idx=0)
+            if config.entity_emb_size != config.hidden_size:
+                self.entity_embedding_dense = nn.Linear(config.entity_emb_size, config.hidden_size, bias=False)
+
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
@@ -84,6 +92,8 @@ class EntityEmbeddings(nn.Module):
             token_type_ids = torch.zeros_like(entity_ids)
 
         entity_embeddings = self.entity_embeddings(entity_ids)
+        if self.config.entity_emb_size is not None and self.config.entity_emb_size != self.config.hidden_size:
+            entity_embeddings = self.entity_embedding_dense(entity_embeddings)
 
         position_embeddings = self.position_embeddings(position_ids.clamp(min=0))
         position_embedding_mask = (position_ids != -1).type_as(position_embeddings).unsqueeze(-1)

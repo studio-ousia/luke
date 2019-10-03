@@ -10,12 +10,17 @@ from luke.model import LukeModel, LukeE2EModel
 class EntityPredictionHead(nn.Module):
     def __init__(self, config):
         super(EntityPredictionHead, self).__init__()
+        self.config = config
         self.transform = BertPredictionHeadTransform(config)
         self.decoder = nn.Linear(config.hidden_size, config.entity_vocab_size, bias=False)
+        if config.entity_emb_size is not None and config.entity_emb_size != config.hidden_size:
+            self.pre_decoder_dense = nn.Linear(config.hidden_size, config.entity_emb_size, bias=False)
         self.bias = nn.Parameter(torch.zeros(config.entity_vocab_size))
 
     def forward(self, hidden_states):
         hidden_states = self.transform(hidden_states)
+        if self.config.entity_emb_size is not None and self.config.entity_emb_size != self.config.hidden_size:
+            hidden_states = self.pre_decoder_dense(hidden_states)
         hidden_states = self.decoder(hidden_states) + self.bias
 
         return hidden_states
