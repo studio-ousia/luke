@@ -23,7 +23,6 @@ except ImportError:
 
 import luke.pretraining.dataset
 import luke.pretraining.train
-import luke.utils.entity_linker
 import luke.utils.entity_vocab
 
 
@@ -34,10 +33,10 @@ def cli(verbose, seed):
     fmt = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format=fmt)
-        logging.getLogger('pytorch_transformers').setLevel(level=logging.DEBUG)
+        logging.getLogger('transformers').setLevel(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO, format=fmt)
-        logging.getLogger('pytorch_transformers').setLevel(level=logging.WARNING)
+        logging.getLogger('transformers').setLevel(level=logging.WARNING)
 
     if seed is not None:
         random.seed(seed)
@@ -56,8 +55,6 @@ def build_dump_db(dump_file, out_file, **kwargs):
     DumpDB.build(dump_reader, out_file, **kwargs)
 
 
-cli.add_command(luke.utils.entity_linker.build_entity_linker_from_wikipedia)
-cli.add_command(luke.utils.entity_linker.build_entity_linker_from_p_e_m_file)
 cli.add_command(luke.utils.entity_vocab.build_entity_vocab)
 cli.add_command(luke.pretraining.dataset.build_wikipedia_pretraining_dataset)
 cli.add_command(luke.pretraining.train.pretrain)

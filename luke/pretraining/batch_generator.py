@@ -1,10 +1,12 @@
-import logging
 import functools
+import logging
 import multiprocessing
 import queue
 import random
+import unicodedata
+
 import numpy as np
-from pytorch_transformers.tokenization_roberta import RobertaTokenizer
+from transformers.tokenization_roberta import RobertaTokenizer
 
 from luke.pretraining.dataset import WikipediaPretrainingDataset
 from luke.utils.entity_vocab import MASK_TOKEN
@@ -13,18 +15,16 @@ logger = logging.getLogger(__name__)
 
 
 class LukePretrainingBatchGenerator(object):
-    def __init__(self, dataset_dir, mode, batch_size, masked_lm_prob, masked_entity_prob, whole_word_masking,
-                 **dataset_kwargs):
-        if mode == 'default':
-            worker_cls = LukePretrainingBatchWorker
-        elif mode == 'e2e':
-            worker_cls = LukeE2EPretrainingBatchWorker
-        else:
-            raise RuntimeError(f'Unsupported mode: {mode}')
-
-        self._worker_func = functools.partial(worker_cls, dataset_dir=dataset_dir, batch_size=batch_size,
-                                              masked_lm_prob=masked_lm_prob, masked_entity_prob=masked_entity_prob,
-                                              whole_word_masking=whole_word_masking, **dataset_kwargs)
+    def __init__(self, dataset_dir, batch_size, masked_lm_prob, masked_entity_prob, whole_word_masking,
+                 source_entity_prediction, **dataset_kwargs):
+        self._worker_func = functools.partial(LukePretrainingBatchWorker,
+                                              dataset_dir=dataset_dir,
+                                              batch_size=batch_size,
+                                              masked_lm_prob=masked_lm_prob,
+                                              masked_entity_prob=masked_entity_prob,
+                                              whole_word_masking=whole_word_masking,
+                                              source_entity_prediction=source_entity_prediction,
+                                              **dataset_kwargs)
 
     def generate_batches(self, queue_size=10000):
         output_queue = multiprocessing.Queue(queue_size)
@@ -45,15 +45,18 @@ class LukePretrainingBatchGenerator(object):
             output_queue.close()
 
 
-class BaseBatchWorker(multiprocessing.Process):
-    def __init__(self, output_queue, dataset_dir, batch_size, masked_lm_prob, whole_word_masking, **dataset_kwargs):
-        super(BaseBatchWorker, self).__init__()
+class LukePretrainingBatchWorker(multiprocessing.Process):
+    def __init__(self, output_queue, dataset_dir, batch_size, masked_lm_prob, masked_entity_prob, whole_word_masking,
+                 source_entity_prediction, **dataset_kwargs):
+        super(LukePretrainingBatchWorker, self).__init__()
 
         self._output_queue = output_queue
         self._dataset_dir = dataset_dir
         self._batch_size = batch_size
         self._masked_lm_prob = masked_lm_prob
+        self._masked_entity_prob = masked_entity_prob
         self._whole_word_masking = whole_word_masking
+        self._source_entity_prediction = source_entity_prediction
         self._dataset_kwargs = dataset_kwargs
 
         if 'shuffle_buffer_size' not in self._dataset_kwargs:
@@ -65,33 +68,28 @@ class BaseBatchWorker(multiprocessing.Process):
         self._max_seq_length = self._pretraining_dataset.max_seq_length
         self._max_entity_length = self._pretraining_dataset.max_entity_length
         self._max_mention_length = self._pretraining_dataset.max_mention_length
-        self._max_candidate_length = self._pretraining_dataset.max_candidate_length
         self._cls_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.cls_token)
         self._sep_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.sep_token)
         self._mask_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.mask_token)
         self._pad_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.pad_token)
         self._entity_mask_id = self._pretraining_dataset.entity_vocab[MASK_TOKEN]
 
-        if isinstance(self._tokenizer, RobertaTokenizer):
-            self._is_subword = lambda token: not self._tokenizer.convert_tokens_to_string(token).startswith(' ')
-        else:
-            self._is_subword = lambda token: token.startswith('##')
-
         buf = []
         max_word_len = 1
         max_entity_len = 1
         for item in self._pretraining_dataset.create_iterator(**self._dataset_kwargs):
             word_feat = self._create_word_features(item['word_ids'])
-            entity_feat = self._create_entity_features(item['entity_ids'], item['entity_position_ids'],
-                                                       item['entity_candidate_ids'], item['entity_candidate_labels'])
+            entity_feat = self._create_entity_features(item['entity_ids'], item['entity_position_ids'])
             max_word_len = max(max_word_len, item['word_ids'].size + 2)  # 2 for [CLS] and [SEP]
             max_entity_len = max(max_entity_len, item['entity_ids'].size)
-            buf.append((word_feat, entity_feat))
+            buf.append((word_feat, entity_feat, item['page_id']))
 
             if len(buf) == self._batch_size:
                 batch = {}
                 batch.update({k: np.stack([o[0][k][:max_word_len] for o in buf]) for k in buf[0][0].keys()})
                 batch.update({k: np.stack([o[1][k][:max_entity_len] for o in buf]) for k in buf[0][1].keys()})
+                if self._source_entity_prediction:
+                    batch['source_entity_label'] = np.stack([o[2] for o in buf])
                 self._output_queue.put(batch, True)
 
                 buf = []
@@ -126,9 +124,9 @@ class BaseBatchWorker(multiprocessing.Process):
                 if len(indices_to_mask) > num_to_predict - num_masked_words:
                     continue
 
+                p = random.random()
                 for index in indices_to_mask:
                     masked_lm_labels[index] = output_word_ids[index]
-                    p = random.random()
                     if p < 0.8:
                         output_word_ids[index] = self._mask_id
                     elif p < 0.9:
@@ -150,19 +148,7 @@ class BaseBatchWorker(multiprocessing.Process):
 
         return ret
 
-    def _create_entity_features(self, entity_ids, entity_position_ids, entity_candidate_ids, entity_candidate_labels):
-        raise NotImplementedError()
-
-
-class LukePretrainingBatchWorker(BaseBatchWorker):
-    def __init__(self, output_queue, dataset_dir, batch_size, masked_lm_prob, masked_entity_prob, whole_word_masking,
-                 **dataset_kwargs):
-        super(LukePretrainingBatchWorker, self).__init__(output_queue, dataset_dir, batch_size, masked_lm_prob,
-                                                         whole_word_masking, **dataset_kwargs)
-
-        self._masked_entity_prob = masked_entity_prob
-
-    def _create_entity_features(self, entity_ids, entity_position_ids, entity_candidate_ids, entity_candidate_labels):
+    def _create_entity_features(self, entity_ids, entity_position_ids):
         output_entity_ids = np.zeros(self._max_entity_length, dtype=np.int)
         output_entity_ids[:entity_ids.size] = entity_ids
 
@@ -188,33 +174,24 @@ class LukePretrainingBatchWorker(BaseBatchWorker):
 
         return ret
 
+    def _is_subword(self, token):
+        if isinstance(self._tokenizer, RobertaTokenizer) and\
+            not self._tokenizer.convert_tokens_to_string(token).startswith(' ') and\
+            not self._is_punctuation(token[0]):
+            return True
+        elif token.startswith('##'):
+            return True
 
-class LukeE2EPretrainingBatchWorker(LukePretrainingBatchWorker):
-    def _create_entity_features(self, entity_ids, entity_position_ids, entity_candidate_ids, entity_candidate_labels):
-        output_entity_candidate_ids = np.zeros((self._max_entity_length, self._max_candidate_length), dtype=np.int)
-        output_entity_candidate_ids[:entity_candidate_ids.shape[0]] = entity_candidate_ids
+        return False
 
-        entity_position_ids += (entity_position_ids != -1)  # for [CLS]
-        output_entity_position_ids = np.full((self._max_entity_length, self._max_mention_length), -1, dtype=np.int)
-        output_entity_position_ids[:entity_position_ids.shape[0]] = entity_position_ids
-
-        entity_attention_mask = np.zeros(self._max_entity_length, dtype=np.int)
-        entity_attention_mask[:entity_ids.size] = 1
-
-        output_entity_candidate_labels = np.full(self._max_entity_length, -1, dtype=np.int)
-        output_entity_candidate_labels[:entity_candidate_labels.size] = entity_candidate_labels
-
-        ret = dict(entity_candidate_ids=output_entity_candidate_ids,
-                   entity_position_ids=output_entity_position_ids,
-                   entity_attention_mask=entity_attention_mask,
-                   entity_segment_ids=np.zeros(self._max_entity_length, dtype=np.int),
-                   entity_candidate_labels=output_entity_candidate_labels)
-
-        if self._masked_entity_prob != 0.0:
-            num_to_predict = max(1, int(round(entity_ids.size * self._masked_entity_prob)))
-            masked_entity_labels = np.full(self._max_entity_length, -1, dtype=np.int)
-            for index in np.random.permutation(range(entity_ids.size))[:num_to_predict]:
-                masked_entity_labels[index] = entity_ids[index]
-            ret['masked_entity_labels'] = masked_entity_labels
-
-        return ret
+    @staticmethod
+    def _is_punctuation(char):
+        # obtained from:
+        # https://github.com/huggingface/transformers/blob/5f25a5f367497278bf19c9994569db43f96d5278/transformers/tokenization_bert.py#L489
+        cp = ord(char)
+        if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or(cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
+            return True
+        cat = unicodedata.category(char)
+        if cat.startswith("P"):
+            return True
+        return False
