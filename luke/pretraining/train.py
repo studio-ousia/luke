@@ -59,7 +59,7 @@ MASTER_PORT = '29502'
 @click.option('--fp16-opt-level', default='O2', type=click.Choice(['O1', 'O2']))
 @click.option('--fp16-master-weights/--fp16-no-master-weights', default=True)
 @click.option('--fp16-min-loss-scale', default=1)
-@click.option('--fp16-max-loss-scale', default=256)
+@click.option('--fp16-max-loss-scale', default=4)
 @click.option('--local-rank', '--local_rank', default=-1)
 @click.option('--log-dir', type=click.Path(), default=None)
 @click.option('--model-file', type=click.Path(exists=True), default=None)
