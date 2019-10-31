@@ -48,11 +48,11 @@ MASTER_PORT = '29502'
 @click.option('--weight-decay', default=0.01)
 @click.option('--max-grad-norm', default=0.0)
 @click.option('--masked-lm-prob', default=0.15)
-@click.option('--masked-entity-prob', default=0.3)
+@click.option('--masked-entity-prob', default=0.15)
 @click.option('--source-entity-prediction', is_flag=True)
 @click.option('--whole-word-masking', is_flag=True)
 @click.option('--fix-bert-weights', is_flag=True)
-@click.option('--grad-avg-on-cpu', is_flag=True)
+@click.option('--grad-avg-on-cpu/--grad-avg-on-gpu', default=False)
 @click.option('--num-epochs', default=5)
 @click.option('--global-step', default=0)
 @click.option('--fp16', is_flag=True)
@@ -75,6 +75,7 @@ def pretrain(**kwargs):
 @click.argument('output_dir', type=click.Path())
 @click.option('--batch-size', default=None, type=int)
 @click.option('--gradient-accumulation-steps', default=None, type=int)
+@click.option('--grad-avg-on-cpu/--grad-avg-on-gpu', default=False)
 def resume_pretraining(output_dir, **kwargs):
     with open(os.path.join(output_dir, 'metadata.json')) as f:
         args = json.load(f)['arguments']
