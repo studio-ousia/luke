@@ -31,6 +31,8 @@ def cli(verbose, seed):
 
 from .entity_disambiguation.main import cli as entity_disambiguation_cli
 cli.add_command(entity_disambiguation_cli)
+from .squad.main import cli as squad_cli
+cli.add_command(squad_cli)
 from .mention_db import cli as mention_db_cli
 cli.add_command(mention_db_cli)
 
