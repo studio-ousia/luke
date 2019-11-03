@@ -143,6 +143,9 @@ def run_pretraining(args):
     logger.info('The number of training steps: %d', num_train_steps)
     train_batch_size = int(args.batch_size / args.gradient_accumulation_steps / num_workers)
 
+    if args.entity_emb_size is None:
+        args.entity_emb_size = bert_config.hidden_size
+
     config = LukeConfig(entity_vocab_size=dataset.entity_vocab.size, bert_model_name=args.bert_model_name,
                         entity_emb_size=args.entity_emb_size, **bert_config.to_dict())
     model = LukePretrainingModel(config)
