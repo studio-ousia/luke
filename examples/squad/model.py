@@ -22,7 +22,8 @@ class LukeForQuestionAnswering(LukeModel):
         self.entity_predictions = EntityPredictionHead(config)
         self.entity_predictions.decoder.weight = self.entity_embeddings.entity_embeddings.weight
         self.entity_prediction_bias = nn.Embedding(config.entity_vocab_size, 1, padding_idx=0)
-        self.entity_prediction_bias.weight = self.entity_predictions.bias
+        # self.entity_prediction_bias.weight = self.entity_predictions.bias.view(-1, 1)
+        self.entity_prediction_bias.weight.data = self.entity_predictions.bias.data.view(-1, 1)
 
         # self.transform = BertPredictionHeadTransform(config)
         # self.decoder = nn.Linear(config.hidden_size, config.entity_vocab_size, bias=False)

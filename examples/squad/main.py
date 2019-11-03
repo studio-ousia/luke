@@ -144,6 +144,7 @@ def run(**kwargs):
         if args.fix_entity_emb:
             model.entity_embeddings.entity_embeddings.weight.requires_grad = False
         if args.fix_entity_bias:
+            model.entity_predictions.bias.requires_grad = False
             model.entity_prediction_bias.weight.requires_grad = False
 
         num_train_steps = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
