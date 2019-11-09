@@ -1,3 +1,4 @@
+# Obtained from: https://github.com/huggingface/transformers/blob/ee83f98121d7bd0e26280cd6af625afbe65dc9a1/examples/utils_squad_evaluate.py
 """ Official evaluation script for SQuAD version 2.0.
     Modified by XLNet authors to update `find_best_threshold` scripts for SQuAD V2.0
 
@@ -110,9 +111,6 @@ def get_raw_scores(dataset, preds):
         # Take max over all gold answers
         exact_scores[qid] = max(compute_exact(a, a_pred) for a in gold_answers)
         f1_scores[qid] = max(compute_f1(a, a_pred) for a in gold_answers)
-        # import Levenshtein
-        # if exact_scores[qid] != 1 and min(Levenshtein.distance(a_pred, a) for a in gold_answers) <= 2:
-        #     print( normalize_answer(a_pred), [normalize_answer(a) for a in gold_answers])
   return exact_scores, f1_scores
 
 def apply_no_ans_threshold(scores, na_probs, qid_to_has_ans, na_prob_thresh):

@@ -48,7 +48,8 @@ def parse_args():
     #                          "training script")
 
     # rest from the training program
-    parser.add_argument('training_script_args', nargs=REMAINDER)
+    parser.add_argument('training_script_args')
+    # parser.add_argument('training_script_args', nargs=REMAINDER)
     return parser.parse_args()
 
 def main():
@@ -73,9 +74,9 @@ def main():
         current_env["LOCAL_RANK"] = str(local_rank)
 
         cmd = [sys.executable, "-u", "-m", "examples.cli"]
-        cmd.extend(args.training_script_args)
         if not args.use_env:
             cmd.append("--local-rank={}".format(local_rank))
+        cmd.extend(args.training_script_args.split(' '))
 
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)

@@ -19,8 +19,7 @@ from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import MASK_TOKEN, PAD_TOKEN
 
-from ..model_loader import LukeModelLoader
-from ..trainer import Trainer
+from ..trainer import Trainer, trainer_args
 from ..utils import set_seed
 from .model import LukeForEntityDisambiguation
 from .utils import EntityDisambiguationDataset, convert_documents_to_features
@@ -34,44 +33,29 @@ def cli():
 
 
 @cli.command()
-@click.argument('model_file', type=click.Path(exists=True))
-@click.option('-v', '--verbose', is_flag=True)
-@click.option('--base-dir', type=click.Path(exists=True))
 @click.option('--data-dir', type=click.Path(exists=True), default='data/entity-disambiguation')
 @click.option('--titles-file', type=click.Path(exists=True), default='enwiki_20181220_titles.txt')
 @click.option('--redirects-file', type=click.Path(exists=True), default='enwiki_20181220_redirects.tsv')
-@click.option('--output-dir', default=None, type=click.Path())
 @click.option('-t', '--test-set', default=['test_b', 'ace2004', 'aquaint', 'msnbc', 'wikipedia', 'clueweb'],
               multiple=True)
 @click.option('--do-train/--no-train', default=False)
 @click.option('--do-eval/--no-eval', default=True)
+@click.option('--num-train-epochs', default=2)
+@click.option('--train-batch-size', default=1)
+@click.option('--max-seq-length', default=512)
 @click.option('--max-candidate-length', default=30)
-@click.option('--document-split-mode', default='simple', type=click.Choice(['simple', 'per_mention']))
 @click.option('--masked-entity-prob', default=0.7)
 @click.option('--use-context-entities/--no-context-entities', default=True)
 @click.option('--context-entity-selection-order', default='highest_prob',
               type=click.Choice(['natural', 'random', 'highest_prob']))
-@click.option('--train-batch-size', default=1)
-@click.option('--gradient-accumulation-steps', default=32)
-@click.option('--learning-rate', default=3e-5)
-@click.option('--weight-decay', default=0.01)
-@click.option('--max-grad-norm', default=1.0)
-@click.option('--num-train-epochs', default=2)
-@click.option('--warmup-proportion', default=0.2)
-@click.option('--grad-avg-on-cpu', is_flag=True)
+@click.option('--document-split-mode', default='simple', type=click.Choice(['simple', 'per_mention']))
 @click.option('--fix-entity-emb/--update-entity-emb', default=True)
 @click.option('--fix-entity-bias/--update-entity-bias', default=True)
-def run(**kwargs):
-    args = Namespace(**kwargs)
-    args.device = torch.device('cuda')
-    if not args.base_dir:
-        args.base_dir = os.path.dirname(args.model_file)
-
-    if args.output_dir and not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
-
-    model_data = LukeModelLoader.load(args.base_dir)
-    model_config = model_data.model_config
+@trainer_args
+@click.pass_obj
+def run(common_args, **task_args):
+    task_args.update(common_args)
+    args = Namespace(**task_args)
 
     dataset = EntityDisambiguationDataset(args.data_dir, args.titles_file, args.redirects_file)
     entity_titles = []
@@ -86,31 +70,33 @@ def run(**kwargs):
     entity_vocab = {PAD_TOKEN: 0, MASK_TOKEN: 1}
     for n, title in enumerate(sorted(entity_titles), 2):
         entity_vocab[title] = n
+
+    model_config = args.model_config
     model_config.entity_vocab_size = len(entity_vocab)
 
     logger.info('Model configuration: %s', model_config)
 
-    state_dict = torch.load(args.model_file, map_location='cpu')
-    orig_entity_vocab = model_data.entity_vocab
-    orig_entity_emb = state_dict['entity_embeddings.entity_embeddings.weight']
+    model_weights = args.model_weights
+    orig_entity_vocab = args.entity_vocab
+    orig_entity_emb = model_weights['entity_embeddings.entity_embeddings.weight']
     if orig_entity_emb.size(0) != len(entity_vocab):  # detect whether the model is the fine-tuned one
         entity_emb = orig_entity_emb.new_zeros((len(entity_titles) + 2, model_config.hidden_size))
-        orig_entity_bias = state_dict['entity_predictions.bias']
+        orig_entity_bias = model_weights['entity_predictions.bias']
         entity_bias = orig_entity_bias.new_zeros(len(entity_titles) + 2)
         for title, index in entity_vocab.items():
             if title in orig_entity_vocab:
                 orig_index = orig_entity_vocab[title]
                 entity_emb[index] = orig_entity_emb[orig_index]
                 entity_bias[index] = orig_entity_bias[orig_index]
-        state_dict['entity_embeddings.entity_embeddings.weight'] = entity_emb
-        state_dict['entity_embeddings.mask_embedding'] = entity_emb[1].view(1, -1)
-        state_dict['entity_predictions.decoder.weight'] = entity_emb
-        state_dict['entity_predictions.bias'] = entity_bias
+        model_weights['entity_embeddings.entity_embeddings.weight'] = entity_emb
+        model_weights['entity_embeddings.mask_embedding'] = entity_emb[1].view(1, -1)
+        model_weights['entity_predictions.decoder.weight'] = entity_emb
+        model_weights['entity_predictions.bias'] = entity_bias
         del orig_entity_bias, entity_emb, entity_bias
     del orig_entity_emb
 
     model = LukeForEntityDisambiguation(model_config)
-    model.load_state_dict(state_dict, strict=False)
+    model.load_state_dict(model_weights, strict=False)
     model.to(args.device)
 
     def collate_fn(batch, is_eval=False):
@@ -119,7 +105,7 @@ def run(**kwargs):
             return torch.nn.utils.rnn.pad_sequence(tensors, batch_first=True, padding_value=padding_value)
 
         ret = dict(
-            word_ids=create_padded_sequence('word_ids', model_data.tokenizer.pad_token_id),
+            word_ids=create_padded_sequence('word_ids', args.tokenizer.pad_token_id),
             word_segment_ids=create_padded_sequence('word_segment_ids', 0),
             word_attention_mask=create_padded_sequence('word_attention_mask', 0),
             entity_ids=create_padded_sequence('entity_ids', 0),
@@ -136,11 +122,9 @@ def run(**kwargs):
         return ret
 
     if args.do_train:
-        logger.info('Training parameters %s', args)
-
         train_data = convert_documents_to_features(
-            dataset.train, model_data.tokenizer, entity_vocab, 'train', 'simple', model_data.max_seq_length,
-            args.max_candidate_length, model_data.max_mention_length)
+            dataset.train, args.tokenizer, entity_vocab, 'train', 'simple', args.max_seq_length,
+            args.max_candidate_length, args.max_mention_length)
         train_dataloader = DataLoader(train_data, batch_size=args.train_batch_size, collate_fn=collate_fn, shuffle=True)
 
         logger.info('Fix entity embeddings during training: %s', args.fix_entity_emb)
@@ -152,21 +136,8 @@ def run(**kwargs):
 
         num_train_steps = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
 
-        trainer = EntityDisambiguationTrainer(
-            model=model,
-            dataloader=train_dataloader,
-            device=args.device,
-            num_train_steps=num_train_steps,
-            learning_rate=args.learning_rate,
-            weight_decay=args.weight_decay,
-            max_grad_norm=args.max_grad_norm,
-            warmup_proportion=args.warmup_proportion,
-            gradient_accumulation_steps=args.gradient_accumulation_steps,
-            grad_avg_on_cpu=args.grad_avg_on_cpu,
-            masked_entity_prob=args.masked_entity_prob)
-
-        model, global_step, tr_loss = trainer.train()
-        logger.info("global_step = %s, average loss = %s", global_step, tr_loss)
+        trainer = EntityDisambiguationTrainer(args, model, train_dataloader, num_train_steps)
+        trainer.train()
 
         if args.output_dir:
             logger.info('Saving model to %s', args.output_dir)
@@ -182,8 +153,8 @@ def run(**kwargs):
             logger.info('***** Evaluating: %s *****', dataset_name)
             eval_documents = getattr(dataset, dataset_name)
             eval_data = convert_documents_to_features(
-                eval_documents, model_data.tokenizer, entity_vocab, 'eval', args.document_split_mode,
-                model_data.max_seq_length, args.max_candidate_length, model_data.max_mention_length)
+                eval_documents, args.tokenizer, entity_vocab, 'eval', args.document_split_mode, args.max_seq_length,
+                args.max_candidate_length, args.max_mention_length)
             eval_dataloader = DataLoader(eval_data, batch_size=1,
                                          collate_fn=functools.partial(collate_fn, is_eval=True))
             predictions_file = None
@@ -301,14 +272,10 @@ def create_redirect_tsv(dump_db_file, out_file):
 
 
 class EntityDisambiguationTrainer(Trainer):
-    def __init__(self, masked_entity_prob, *args, **kwargs):
-        super(EntityDisambiguationTrainer, self).__init__(*args, **kwargs)
-        self._masked_entity_prob = masked_entity_prob
-
     def _create_model_arguments(self, batch):
         batch['entity_labels'] = batch['entity_ids'].clone()
         for index, entity_length in enumerate(batch['entity_attention_mask'].sum(1).tolist()):
-            masked_entity_length = max(1, round(entity_length * self._masked_entity_prob))
+            masked_entity_length = max(1, round(entity_length * self.args.masked_entity_prob))
             permutated_indices = torch.randperm(entity_length)[:masked_entity_length]
             batch['entity_ids'][index, permutated_indices[:masked_entity_length]] = 1  # [MASK]
             batch['entity_labels'][index, permutated_indices[masked_entity_length:]] = -1

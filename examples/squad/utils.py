@@ -6,7 +6,7 @@ from multiprocessing.pool import Pool
 from transformers.tokenization_roberta import RobertaTokenizer
 from tqdm import tqdm
 
-from ..text_encoder import LukeTextEncoder
+from ..utils.text_encoder import LukeTextEncoder
 from .utils_squad import _improve_answer_span, _check_is_max_context
 
 

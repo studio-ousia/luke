@@ -65,6 +65,6 @@ class LukeForEntityDisambiguation(LukeModel):
         if entity_labels is not None:
             loss = F.cross_entropy(logits.view(entity_labels.view(-1).size(0), -1), entity_labels.view(-1),
                                    ignore_index=-1)
-            return (loss, logits)
+            return loss, logits
 
-        return (logits,)
+        return logits,

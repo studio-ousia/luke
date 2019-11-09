@@ -1,3 +1,4 @@
+# Obtained from: https://raw.githubusercontent.com/huggingface/transformers/ee83f98121d7bd0e26280cd6af625afbe65dc9a1/examples/utils_squad.py
 
 # coding=utf-8
 # Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
