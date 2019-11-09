@@ -1,17 +1,22 @@
+import json
 import logging
 import os
 import random
 import string
 
+logging.getLogger('transformers').setLevel(logging.WARNING)
+
 import click
 import comet_ml
 import torch
+from transformers import AutoTokenizer
 
-logging.getLogger('transformers').setLevel(logging.WARNING)
+from luke.model import LukeConfig
+from luke.utils.entity_vocab import EntityVocab
+from luke.pretraining.dataset import ENTITY_VOCAB_FILE, METADATA_FILE
 
 from .utils import set_seed
 from .utils.mention_db import MentionDB
-from .utils.model_loader import LukeModelLoader
 
 LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
 
@@ -48,8 +53,6 @@ def cli(ctx, output_dir, verbose, seed, no_cuda, local_rank, model_dir, weights_
     if not os.path.exists(output_dir) and local_rank in [-1, 0]:
         os.makedirs(output_dir)
 
-    set_seed(seed)
-
     # NOTE: ctx.obj is documented here: http://click.palletsprojects.com/en/7.x/api/#click.Context.obj
     ctx.obj = dict(local_rank=local_rank, output_dir=output_dir)
 
@@ -62,17 +65,21 @@ def cli(ctx, output_dir, verbose, seed, no_cuda, local_rank, model_dir, weights_
         ctx.obj['device'] = torch.device('cuda', local_rank)
         torch.distributed.init_process_group(backend='nccl')
 
+    set_seed(seed)
+
     if model_dir or weights_file:
         if not model_dir:
             model_dir = os.path.dirname(weights_file)
         ctx.obj['model_dir'] = model_dir
 
-        model_data = LukeModelLoader.load(model_dir)
-        ctx.obj['model_data'] = model_data
-        ctx.obj['tokenizer'] = model_data.tokenizer
-        ctx.obj['entity_vocab'] = model_data.entity_vocab
-        ctx.obj['model_config'] = model_data.model_config
-        ctx.obj['max_mention_length'] = model_data.max_mention_length
+        json_file = os.path.join(model_dir, METADATA_FILE)
+        with open(json_file) as f:
+            model_data = json.load(f)
+
+        ctx.obj['tokenizer'] = AutoTokenizer.from_pretrained(model_data['model_config']['bert_model_name'])
+        ctx.obj['entity_vocab'] = EntityVocab(os.path.join(model_dir, ENTITY_VOCAB_FILE))
+        ctx.obj['model_config'] = LukeConfig(**model_data['model_config'])
+        ctx.obj['max_mention_length'] = model_data['max_mention_length']
 
     if weights_file:
         ctx.obj['model_weights'] = torch.load(weights_file, map_location='cpu')
