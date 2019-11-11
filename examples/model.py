@@ -1,3 +1,4 @@
+import contextlib
 import functools
 
 import click
@@ -37,34 +38,40 @@ class LukeTwoStageBaseModel(LukeModel):
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_candidate_ids, entity_position_ids,
                 entity_segment_ids, entity_attention_mask):
         if self.args.use_softmax_average:
-            extended_attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
-            word_embeddings = self.embeddings(word_ids, word_segment_ids)
-            mask_embeddings = self.entity_embeddings(entity_attention_mask * self.entity_mask_id,
-                                                     entity_position_ids, entity_segment_ids)
-            encoder_outputs = self.encoder(torch.cat([word_embeddings, mask_embeddings], dim=1),
-                                           extended_attention_mask, [None] * self.config.num_hidden_layers)
-            mask_sequence_output = encoder_outputs[0][:, word_ids.size(1):, :]
-            mask_sequence_output = self.entity_predictions.transform(mask_sequence_output)
-            if self.config.entity_emb_size != self.config.hidden_size:
-                mask_sequence_output = self.entity_predictions.pre_decoder_dense(mask_sequence_output)
-            candidate_embeddings = self.entity_embeddings.entity_embeddings(entity_candidate_ids)
+            def maybe_no_grad():
+                if self.args.update_params_in_disambi:
+                    return contextlib.ExitStack()
+                else:
+                    return torch.no_grad()
 
-            attention_logits = (mask_sequence_output.unsqueeze(2) * candidate_embeddings).sum(-1)
-            attention_bias = self.entity_prediction_bias(entity_candidate_ids).squeeze(-1)
-            attention_logits = attention_logits + attention_bias
-            attention_logits = attention_logits / self.args.entity_softmax_temp
-            attention_logits.masked_fill_(entity_candidate_ids == 0, -10000.0)
-            attention_probs = F.softmax(attention_logits, dim=-1)
-            if not self.args.update_params_in_disambi:
-                attention_probs = attention_probs.detach()
+            with maybe_no_grad():
+                extended_attention_mask = self._compute_extended_attention_mask(
+                    word_attention_mask, entity_attention_mask)
+                word_embeddings = self.embeddings(word_ids, word_segment_ids)
+                mask_embeddings = self.entity_embeddings(entity_attention_mask * self.entity_mask_id,
+                                                         entity_position_ids, entity_segment_ids)
+                encoder_outputs = self.encoder(torch.cat([word_embeddings, mask_embeddings], dim=1),
+                                               extended_attention_mask, [None] * self.config.num_hidden_layers)
+                mask_sequence_output = encoder_outputs[0][:, word_ids.size(1):, :]
+                mask_sequence_output = self.entity_predictions.transform(mask_sequence_output)
+                if self.config.entity_emb_size != self.config.hidden_size:
+                    mask_sequence_output = self.entity_predictions.pre_decoder_dense(mask_sequence_output)
+                candidate_embeddings = self.entity_embeddings.entity_embeddings(entity_candidate_ids)
 
-            entity_embeddings = self.entity_embeddings(entity_candidate_ids, entity_position_ids.unsqueeze(-2),
-                                                       entity_segment_ids.unsqueeze(-1))
-            entity_embeddings = (entity_embeddings * attention_probs.unsqueeze(-1)).sum(-2)
+                attention_logits = (mask_sequence_output.unsqueeze(2) * candidate_embeddings).sum(-1)
+                attention_bias = self.entity_prediction_bias(entity_candidate_ids).squeeze(-1)
+                attention_logits = attention_logits + attention_bias
+                attention_logits = attention_logits / self.args.entity_softmax_temp
+                attention_logits.masked_fill_(entity_candidate_ids == 0, -10000.0)
+                attention_probs = F.softmax(attention_logits, dim=-1)
 
-            if self.args.min_context_entity_prob != 0.0:
-                mask = (attention_probs.max(2)[0] >= self.args.min_context_entity_prob).long()
-                entity_attention_mask = entity_attention_mask * mask
+                entity_embeddings = self.entity_embeddings(entity_candidate_ids, entity_position_ids.unsqueeze(-2),
+                                                           entity_segment_ids.unsqueeze(-1))
+                entity_embeddings = (entity_embeddings * attention_probs.unsqueeze(-1)).sum(-2)
+
+                if self.args.min_context_entity_prob != 0.0:
+                    mask = (attention_probs.max(2)[0] >= self.args.min_context_entity_prob).long()
+                    entity_attention_mask = entity_attention_mask * mask
 
             extended_attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
 

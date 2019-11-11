@@ -174,7 +174,7 @@ def load_and_cache_examples(args, evaluate=False):
         features = convert_examples_to_features(
             examples, args.tokenizer, args.entity_vocab, args.mention_db, args.max_seq_length, args.max_mention_length,
             args.max_candidate_length, args.doc_stride, args.max_query_length, args.add_extra_sep_token, not evaluate)
-        if args.local_rank in [-1, 0]:
+        if args.local_rank in (-1, 0):
             logger.info("Saving features into cached file %s", cache_file)
             torch.save(features, cache_file)
 

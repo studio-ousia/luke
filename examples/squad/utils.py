@@ -1,3 +1,4 @@
+from argparse import Namespace
 from collections import namedtuple
 from contextlib import closing
 from functools import partial
@@ -44,7 +45,7 @@ def convert_examples_to_features(
     text_encoder = LukeTextEncoder(tokenizer, entity_vocab, mention_db, max_mention_length, max_candidate_length,
                                    add_extra_sep_token)
 
-    param_dict = dict(
+    worker_params = Namespace(
         tokenizer=tokenizer,
         max_seq_length=max_seq_length,
         doc_stride=doc_stride,
@@ -53,11 +54,9 @@ def convert_examples_to_features(
         text_encoder=text_encoder,
         is_training=is_training,
     )
-    initargs = (namedtuple('WorkerParameters', param_dict.keys())(*param_dict.values()),)
-
     features = []
     unique_id = 1000000000
-    with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool:
+    with closing(Pool(pool_size, initializer=_initialize_worker, initargs=(worker_params,))) as pool:
         with tqdm(total=len(examples)) as pbar:
             for ret in pool.imap(_process_example, enumerate(examples), chunksize=chunk_size):
                 for feature in ret:
@@ -97,17 +96,18 @@ def _process_example(args):
 
     tok_start_position = None
     tok_end_position = None
-    if params.is_training and example.is_impossible:
-        tok_start_position = -1
-        tok_end_position = -1
-    if params.is_training and not example.is_impossible:
-        tok_start_position = orig_to_tok_index[example.start_position]
-        if example.end_position < len(example.doc_tokens) - 1:
-            tok_end_position = orig_to_tok_index[example.end_position + 1] - 1
+    if params.is_training:
+        if example.is_impossible:
+            tok_start_position = -1
+            tok_end_position = -1
         else:
-            tok_end_position = len(all_doc_tokens) - 1
-        tok_start_position, tok_end_position = _improve_answer_span(
-            all_doc_tokens, tok_start_position, tok_end_position, tokenizer, example.orig_answer_text)
+            tok_start_position = orig_to_tok_index[example.start_position]
+            if example.end_position < len(example.doc_tokens) - 1:
+                tok_end_position = orig_to_tok_index[example.end_position + 1] - 1
+            else:
+                tok_end_position = len(all_doc_tokens) - 1
+            tok_start_position, tok_end_position = _improve_answer_span(
+                all_doc_tokens, tok_start_position, tok_end_position, tokenizer, example.orig_answer_text)
 
     max_tokens_for_doc = params.max_seq_length - len(query_tokens) - 3
     if params.add_extra_sep_token:

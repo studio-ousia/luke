@@ -1,4 +1,5 @@
-# Obtained from: https://raw.githubusercontent.com/huggingface/transformers/ee83f98121d7bd0e26280cd6af625afbe65dc9a1/examples/utils_squad.py
+# The original version was obtained from:
+# https://raw.githubusercontent.com/huggingface/transformers/ee83f98121d7bd0e26280cd6af625afbe65dc9a1/examples/utils_squad.py
 
 # coding=utf-8
 # Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
@@ -433,11 +434,13 @@ def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer,
     # the word "Japanese". Since our WordPiece tokenizer does not split
     # "Japanese", we just use "Japanese" as the annotation. This is fairly rare
     # in SQuAD, but does happen.
-    tok_answer_text = " ".join(tokenizer.tokenize(orig_answer_text))
+    tok_answer_text = tokenizer.convert_tokens_to_string(tokenizer.tokenize(orig_answer_text)).strip()
+    # tok_answer_text = " ".join(tokenizer.tokenize(orig_answer_text))
 
     for new_start in range(input_start, input_end + 1):
         for new_end in range(input_end, new_start - 1, -1):
-            text_span = " ".join(doc_tokens[new_start:(new_end + 1)])
+            text_span = tokenizer.convert_tokens_to_string(doc_tokens[new_start:(new_end + 1)]).strip()
+            # text_span = " ".join(doc_tokens[new_start:(new_end + 1)])
             if text_span == tok_answer_text:
                 return (new_start, new_end)
 
