@@ -65,8 +65,6 @@ def cli(ctx, output_dir, verbose, seed, no_cuda, local_rank, model_dir, weights_
         ctx.obj['device'] = torch.device('cuda', local_rank)
         torch.distributed.init_process_group(backend='nccl')
 
-    set_seed(seed)
-
     if model_dir or weights_file:
         if not model_dir:
             model_dir = os.path.dirname(weights_file)
@@ -86,6 +84,8 @@ def cli(ctx, output_dir, verbose, seed, no_cuda, local_rank, model_dir, weights_
 
     if mention_db_file:
         ctx.obj['mention_db'] = MentionDB(mention_db_file)
+
+    set_seed(seed)
 
 
 from .entity_disambiguation.main import cli as entity_disambiguation_cli

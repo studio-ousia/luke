@@ -303,17 +303,30 @@ def convert_documents_to_features(documents, tokenizer, entity_vocab, mode, docu
 
         if len(tokens) > max_num_tokens:
             if document_split_mode == 'simple':
+                in_mention_flag = [False] * len(tokens)
+                for n, obj in enumerate(mention_data):
+                    in_mention_flag[obj[0]:obj[1]] = [n] * (obj[1] - obj[0])
+
                 num_splits = math.ceil(len(tokens) / max_num_tokens)
                 tokens_per_batch = math.ceil(len(tokens) / num_splits)
-                for n in range(num_splits):
-                    doc_start = tokens_per_batch * n
-                    doc_end = min(len(tokens), tokens_per_batch * (n + 1))
+                doc_start = 0
+                while True:
+                    doc_end = min(len(tokens), doc_start + tokens_per_batch)
+                    if mode != 'train':
+                        while True:
+                            if doc_end == len(tokens) or not in_mention_flag[doc_end - 1] or\
+                                (in_mention_flag[doc_end - 1] != in_mention_flag[doc_end]):
+                                break
+                            doc_end -= 1
                     output_mentions, feature_dict = generate_feature_dict(tokens, mention_data, doc_start, doc_end)
                     if output_mentions:
                         ret.append(InputFeatures(document=document,
                                                  mentions=output_mentions,
                                                  target_mention_indices=range(len(output_mentions)),
                                                  **feature_dict))
+                    if doc_end == len(tokens):
+                        break
+                    doc_start = doc_end
 
             else:
                 for mention_index, (start, end, mention) in enumerate(mention_data):
