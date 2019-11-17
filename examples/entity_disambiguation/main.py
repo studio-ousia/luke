@@ -40,6 +40,7 @@ def cli():
 @click.option('--max-seq-length', default=512)
 @click.option('--max-candidate-length', default=30)
 @click.option('--masked-entity-prob', default=0.7)
+@click.option('--candidate-generation/--no-candidate-generation', default=True)
 @click.option('--use-context-entities/--no-context-entities', default=True)
 @click.option('--context-entity-selection-order', default='highest_prob',
               type=click.Choice(['natural', 'random', 'highest_prob']))
@@ -107,8 +108,10 @@ def run(common_args, **task_args):
             entity_position_ids=create_padded_sequence('entity_position_ids', -1),
             entity_segment_ids=create_padded_sequence('entity_segment_ids', 0),
             entity_attention_mask=create_padded_sequence('entity_attention_mask', 0),
-            entity_candidate_ids=create_padded_sequence('entity_candidate_ids', 0),
         )
+        if args.candidate_generation:
+            ret['entity_candidate_ids'] = create_padded_sequence('entity_candidate_ids', 0)
+
         if is_eval:
             ret['document'] = [o.document for o in batch]
             ret['mentions'] = [o.mentions for o in batch]

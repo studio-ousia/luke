@@ -50,16 +50,18 @@ class LukeForEntityDisambiguation(LukeModel):
         self.apply(self.init_weights)
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                entity_segment_ids, entity_attention_mask, entity_candidate_ids, entity_labels=None):
+                entity_segment_ids, entity_attention_mask, entity_candidate_ids=None, entity_labels=None):
         encoder_output = super(LukeForEntityDisambiguation, self).forward(
             word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids, entity_segment_ids,
             entity_attention_mask)
         logits = self.entity_predictions(encoder_output[1]).view(-1, self.config.entity_vocab_size)
 
-        entity_candidate_ids = entity_candidate_ids.view(-1, entity_candidate_ids.size(-1))
-        entity_candidate_mask = logits.new_zeros(logits.size(), dtype=torch.bool)
-        entity_candidate_mask.scatter_(dim=1, index=entity_candidate_ids, src=(entity_candidate_ids != 0))
-        logits = logits.masked_fill(~entity_candidate_mask, -1e32)
+        if entity_candidate_ids is not None:
+            entity_candidate_ids = entity_candidate_ids.view(-1, entity_candidate_ids.size(-1))
+            entity_candidate_mask = logits.new_zeros(logits.size(), dtype=torch.bool)
+            entity_candidate_mask.scatter_(dim=1, index=entity_candidate_ids, src=(entity_candidate_ids != 0))
+            logits = logits.masked_fill(~entity_candidate_mask, -1e32)
+
         logits = logits.view(entity_ids.size(0), -1, self.config.entity_vocab_size)
 
         if entity_labels is not None:
