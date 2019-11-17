@@ -3,15 +3,11 @@ import json
 import logging
 import os
 import random
-import shutil
-import tempfile
 from argparse import Namespace
 
 import click
-import numpy as np
 import torch
 import torch.nn.functional as F
-from comet_ml import Experiment, Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import WEIGHTS_NAME
@@ -20,7 +16,6 @@ from wikipedia2vec.dump_db import DumpDB
 from luke.utils.entity_vocab import MASK_TOKEN, PAD_TOKEN
 
 from ..trainer import Trainer, trainer_args
-from ..utils import set_seed
 from .model import LukeForEntityDisambiguation
 from .utils import EntityDisambiguationDataset, convert_documents_to_features
 
@@ -171,63 +166,6 @@ def run(common_args, **task_args):
 
 
 @cli.command()
-@click.argument('config_file', type=click.Path(exists=True))
-@click.option('--test-set', default='test_a')
-def param_search(config_file, model_file, test_set, **kwargs):
-    experiment_cls = functools.partial(Experiment, auto_metric_logging=False, auto_output_logging=None, log_code=False,
-                                       log_graph=False)
-    opt = Optimizer(config_file, project_name=f"luke-entity-disambiguation-hyperparam-search-5",
-                    experiment_class=experiment_cls)
-
-    with open(config_file) as f:
-        config = json.load(f)
-    base_dir = os.path.dirname(model_file)
-
-    for experiment in opt.get_experiments():
-        experiment.disable_mp()
-        experiment.log_parameter('model_file', model_file)
-
-        for param_name in config['parameters'].keys():
-            kwargs[param_name] = experiment.get_parameter(param_name)
-
-        scores_with_cxt = []
-        scores_no_cxt = []
-        for seed in range(1, 6):
-            output_dir = tempfile.mkdtemp()
-            set_seed(seed)
-
-            score = run.callback(model_file=model_file, output_dir=output_dir, base_dir=base_dir, test_set=[test_set],
-                                 do_train=True, do_eval=True, use_context_entities=True, **kwargs)[test_set]['f1']
-            scores_with_cxt.append(score)
-            experiment.log_metric(f'acc_{seed}', score)
-            if np.mean(scores_with_cxt) < 0.946:
-                shutil.rmtree(output_dir)
-                break
-
-            torch.cuda.empty_cache()
-            set_seed(seed)
-
-            score = run.callback(model_file=os.path.join(output_dir, WEIGHTS_NAME), output_dir=None, base_dir=base_dir,
-                                 test_set=[test_set], do_train=False, do_eval=True, use_context_entities=False,
-                                 **kwargs)[test_set]['f1']
-            scores_no_cxt.append(score)
-            experiment.log_metric(f'acc_no_cxt{seed}', score)
-            torch.cuda.empty_cache()
-
-            shutil.rmtree(output_dir)
-
-        experiment.log_metric('acc', np.mean(scores_with_cxt))
-        experiment.log_metric('acc_no_cxt', np.mean(scores_no_cxt))
-        experiment.end()
-
-
-param_search.params = param_search.params +\
-    [p for p in run.params if p.name not in ('gradient_accumulation_steps', 'masked_entity_prob', 'learning_rate',
-                                             'warmup_proportion', 'num_train_epochs', 'do_train', 'do_eval', 'test_set',
-                                             'output_dir', 'use_context_entities', 'base_dir')]
-
-
-@cli.command()
 @click.argument('dump_db_file', type=click.Path(exists=True))
 @click.argument('out_file', type=click.File('w'))
 @click.option('--data-dir', type=click.Path(exists=True), default='data/entity-disambiguation')
@@ -358,9 +296,9 @@ def evaluate(args, eval_dataloader, model, entity_vocab, output_file=None):
     recall = num_correct / num_mentions
     f1 = 2.0 * precision * recall / (precision + recall)
 
-    logger.info('f1: %.3f', f1)
-    logger.info('precision: %.3f', precision)
-    logger.info('recall: %.3f', recall)
+    logger.info('f1: %.5f', f1)
+    logger.info('precision: %.5f', precision)
+    logger.info('recall: %.5f', recall)
     logger.info('#mentions: %d', num_mentions)
     logger.info('#mentions with candidates: %d', num_mentions_with_candidates)
     logger.info('#correct: %d', num_correct)
