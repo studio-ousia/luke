@@ -80,6 +80,7 @@ def cli(ctx, output_dir, verbose, seed, no_cuda, local_rank, model_dir, weights_
         ctx.obj['max_mention_length'] = model_data['max_mention_length']
 
     if weights_file:
+        ctx.obj['weights_file'] = weights_file
         ctx.obj['model_weights'] = torch.load(weights_file, map_location='cpu')
 
     if mention_db_file:
