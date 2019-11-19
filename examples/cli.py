@@ -74,6 +74,9 @@ def cli(ctx, output_dir, verbose, seed, no_cuda, local_rank, model_dir, weights_
         with open(json_file) as f:
             model_data = json.load(f)
 
+        if 'entity_emb_size' not in model_data['model_config']:
+            model_data['model_config']['entity_emb_size'] = model_data['model_config']['hidden_size']
+
         ctx.obj['tokenizer'] = AutoTokenizer.from_pretrained(model_data['model_config']['bert_model_name'])
         ctx.obj['entity_vocab'] = EntityVocab(os.path.join(model_dir, ENTITY_VOCAB_FILE))
         ctx.obj['model_config'] = LukeConfig(**model_data['model_config'])
