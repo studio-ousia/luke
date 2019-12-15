@@ -109,6 +109,7 @@ def run(common_args, **task_args):
             results.update(result)
 
     logger.info('Results: {}'.format(results))
+    print(results)
     return results
 
 
