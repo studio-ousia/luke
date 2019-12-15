@@ -52,6 +52,7 @@ def cli(ctx, output_dir, verbose, seed, no_cuda, local_rank, model_dir, weights_
 
     if not os.path.exists(output_dir) and local_rank in [-1, 0]:
         os.makedirs(output_dir)
+        logger.info('Output dir: %s', output_dir)
 
     # NOTE: ctx.obj is documented here: http://click.palletsprojects.com/en/7.x/api/#click.Context.obj
     ctx.obj = dict(local_rank=local_rank, output_dir=output_dir)

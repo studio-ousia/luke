@@ -32,7 +32,13 @@ class EntityVocab(object):
     def __init__(self, vocab_file):
         self._vocab_file = vocab_file
 
-        self.vocab = self._load_vocab(vocab_file)
+        self.vocab = {}
+        self.counter = {}
+        with open(vocab_file) as f:
+            for (index, line) in enumerate(f):
+                title, count = line.rstrip().split('\t')
+                self.vocab[title] = index
+                self.counter[title] = int(count)
         self.inv_vocab = {v: k for k, v in self.vocab.items()}
 
     @property
@@ -63,19 +69,13 @@ class EntityVocab(object):
     def get_title_by_id(self, id_):
         return self.inv_vocab[id_]
 
+    def get_count_by_title(self, title):
+        return self.counter.get(title, 0)
+
     def save(self, out_file):
         with open(self._vocab_file, 'r') as src:
             with open(out_file, 'w') as dst:
                 dst.write(src.read())
-
-    def _load_vocab(self, vocab_file):
-        vocab = {}
-        with open(vocab_file) as f:
-            for (index, line) in enumerate(f):
-                title = line.rstrip().split('\t')[0]
-                vocab[title] = index
-
-        return vocab
 
     @staticmethod
     def build(dump_db, out_file, vocab_size, white_list, white_list_only, pool_size, chunk_size):

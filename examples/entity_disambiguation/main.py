@@ -226,9 +226,11 @@ class EntityDisambiguationTrainer(Trainer):
 
 def evaluate(args, eval_dataloader, model, entity_vocab, output_file=None):
     predictions = []
+    context_entities = []
     labels = []
     documents = []
     mentions = []
+    reverse_entity_vocab = {v: k for k, v in entity_vocab.items()}
     for item in tqdm(eval_dataloader, leave=False):  # the batch size must be 1
         inputs = {k: v.to(args.device)
                   for k, v in item.items() if k not in ('document', 'mentions', 'target_mention_indices')}
@@ -238,8 +240,9 @@ def evaluate(args, eval_dataloader, model, entity_vocab, output_file=None):
         entity_length = entity_ids.size(1)
         with torch.no_grad():
             if args.use_context_entities:
-                result = torch.zeros(entity_length)
-                for _ in range(entity_length):
+                result = torch.zeros(entity_length, dtype=torch.long)
+                prediction_order = torch.zeros(entity_length, dtype=torch.long)
+                for n in range(entity_length):
                     logits = model(entity_ids=input_entity_ids, entity_attention_mask=entity_attention_mask,
                                    **inputs)[0]
                     probs = F.softmax(logits, dim=2) * (input_entity_ids == 1).unsqueeze(-1).type_as(logits)
@@ -252,6 +255,7 @@ def evaluate(args, eval_dataloader, model, entity_vocab, output_file=None):
                         target_index = (input_entity_ids == 1).squeeze(0).nonzero().view(-1)[0]
                     input_entity_ids[0, target_index] = max_indices[target_index]
                     result[target_index] = max_indices[target_index]
+                    prediction_order[target_index] = n
             else:
                 logits = model(entity_ids=input_entity_ids, entity_attention_mask=entity_attention_mask, **inputs)[0]
                 result = torch.argmax(logits, dim=2).squeeze(0)
@@ -261,14 +265,22 @@ def evaluate(args, eval_dataloader, model, entity_vocab, output_file=None):
             labels.append(entity_ids[0, index].item())
             documents.append(item['document'][0])
             mentions.append(item['mentions'][0][index])
+            if args.use_context_entities:
+                context_entities.append([
+                    dict(order=prediction_order[n].item(), prediction=reverse_entity_vocab[result[n].item()],
+                         label=mention.title, text=mention.text)
+                    for n, mention in enumerate(item['mentions'][0])
+                    if prediction_order[n] < prediction_order[index]
+                ])
+            else:
+                context_entities.append([])
 
     num_correct = 0
     num_mentions = 0
     num_mentions_with_candidates = 0
-    reverse_entity_vocab = {v: k for k, v in entity_vocab.items()}
 
     eval_predictions = []
-    for prediction, label, document, mention in zip(predictions, labels, documents, mentions):
+    for prediction, label, document, mention, cxt in zip(predictions, labels, documents, mentions, context_entities):
         if prediction == label:
             num_correct += 1
 
@@ -281,13 +293,16 @@ def evaluate(args, eval_dataloader, model, entity_vocab, output_file=None):
 
             eval_predictions.append(dict(
                 document_id=document.id,
+                document_words=document.words,
                 document_length=len(document.words),
                 mention_length=len(document.mentions),
                 mention=dict(label=mention.title,
                              text=mention.text,
                              span=(mention.start, mention.end),
-                             candidate_length=len(mention.candidates)),
-                prediction=reverse_entity_vocab[prediction]
+                             candidate_length=len(mention.candidates),
+                             candidates=[dict(prior_prob=c.prior_prob, title=c.title) for c in mention.candidates]),
+                prediction=reverse_entity_vocab[prediction],
+                context_entities=cxt
             ))
 
     if output_file:
