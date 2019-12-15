@@ -169,13 +169,15 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
             num_to_predict = max(1, int(round(entity_ids.size * self._masked_entity_prob)))
             masked_entity_labels = np.full(self._max_entity_length, -1, dtype=np.int)
             for index in np.random.permutation(range(entity_ids.size))[:num_to_predict]:
-                p = random.random()
                 masked_entity_labels[index] = entity_ids[index]
-                if p < 0.8:
-                    output_entity_ids[index] = self._entity_mask_id
-                elif p < 0.9:
-                    output_entity_ids[index] = random.randint(self._entity_vocab[MASK_TOKEN] + 1,
-                                                              len(self._entity_vocab) - 1)
+                output_entity_ids[index] = self._entity_mask_id
+                # p = random.random()
+                # masked_entity_labels[index] = entity_ids[index]
+                # if p < 0.8:
+                #     output_entity_ids[index] = self._entity_mask_id
+                # elif p < 0.9:
+                #     output_entity_ids[index] = random.randint(self._entity_vocab[MASK_TOKEN] + 1,
+                #                                               len(self._entity_vocab) - 1)
             ret['masked_entity_labels'] = masked_entity_labels
 
         return ret
