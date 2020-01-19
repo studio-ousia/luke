@@ -16,14 +16,13 @@ logger = logging.getLogger(__name__)
 
 class LukePretrainingBatchGenerator(object):
     def __init__(self, dataset_dir, batch_size, masked_lm_prob, masked_entity_prob, whole_word_masking,
-                 source_entity_prediction, **dataset_kwargs):
+                 **dataset_kwargs):
         self._worker_func = functools.partial(LukePretrainingBatchWorker,
                                               dataset_dir=dataset_dir,
                                               batch_size=batch_size,
                                               masked_lm_prob=masked_lm_prob,
                                               masked_entity_prob=masked_entity_prob,
                                               whole_word_masking=whole_word_masking,
-                                              source_entity_prediction=source_entity_prediction,
                                               **dataset_kwargs)
 
     def generate_batches(self, queue_size=10000):
@@ -47,7 +46,7 @@ class LukePretrainingBatchGenerator(object):
 
 class LukePretrainingBatchWorker(multiprocessing.Process):
     def __init__(self, output_queue, dataset_dir, batch_size, masked_lm_prob, masked_entity_prob, whole_word_masking,
-                 source_entity_prediction, **dataset_kwargs):
+                 **dataset_kwargs):
         super(LukePretrainingBatchWorker, self).__init__()
 
         self._output_queue = output_queue
@@ -56,7 +55,6 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         self._masked_lm_prob = masked_lm_prob
         self._masked_entity_prob = masked_entity_prob
         self._whole_word_masking = whole_word_masking
-        self._source_entity_prediction = source_entity_prediction
         self._dataset_kwargs = dataset_kwargs
 
         if 'shuffle_buffer_size' not in self._dataset_kwargs:
@@ -89,8 +87,6 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                 batch = {}
                 batch.update({k: np.stack([o[0][k][:max_word_len] for o in buf]) for k in buf[0][0].keys()})
                 batch.update({k: np.stack([o[1][k][:max_entity_len] for o in buf]) for k in buf[0][1].keys()})
-                if self._source_entity_prediction:
-                    batch['source_entity_label'] = np.stack([o[2] for o in buf])
                 self._output_queue.put(batch, True)
 
                 buf = []
@@ -171,13 +167,6 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
             for index in np.random.permutation(range(entity_ids.size))[:num_to_predict]:
                 masked_entity_labels[index] = entity_ids[index]
                 output_entity_ids[index] = self._entity_mask_id
-                # p = random.random()
-                # masked_entity_labels[index] = entity_ids[index]
-                # if p < 0.8:
-                #     output_entity_ids[index] = self._entity_mask_id
-                # elif p < 0.9:
-                #     output_entity_ids[index] = random.randint(self._entity_vocab[MASK_TOKEN] + 1,
-                #                                               len(self._entity_vocab) - 1)
             ret['masked_entity_labels'] = masked_entity_labels
 
         return ret

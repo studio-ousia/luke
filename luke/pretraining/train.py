@@ -50,7 +50,6 @@ MASTER_PORT = '29502'
 @click.option('--max-grad-norm', default=0.0)
 @click.option('--masked-lm-prob', default=0.15)
 @click.option('--masked-entity-prob', default=0.15)
-@click.option('--source-entity-prediction', is_flag=True)
 @click.option('--whole-word-masking', is_flag=True)
 @click.option('--fix-bert-weights', is_flag=True)
 @click.option('--grad-avg-on-cpu/--grad-avg-on-gpu', default=False)
@@ -155,8 +154,8 @@ def run_pretraining(args):
     global_step = args.global_step
     batch_generator = LukePretrainingBatchGenerator(args.dataset_dir, train_batch_size, args.masked_lm_prob,
                                                     args.masked_entity_prob, args.whole_word_masking,
-                                                    args.source_entity_prediction, num_workers=num_workers,
-                                                    worker_index=worker_index, skip=global_step * args.batch_size)
+                                                    num_workers=num_workers, worker_index=worker_index,
+                                                    skip=global_step * args.batch_size)
 
     logger.info('Model configuration: %s', config)
 
@@ -348,7 +347,7 @@ def run_pretraining(args):
             summary['batch_run_time'] = current_time - prev_step_time
             prev_step_time = current_time
 
-            for name in ('masked_lm', 'masked_entity', 'source_entity'):
+            for name in ('masked_lm', 'masked_entity'):
                 try:
                     summary[name + '_loss'] = np.concatenate([r[name + '_loss'].flatten() for r in results]).mean()
                     correct = np.concatenate([r[name + '_correct'].flatten() for r in results]).sum()

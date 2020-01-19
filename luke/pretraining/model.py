@@ -40,21 +40,6 @@ class EntityPredictionHead(nn.Module):
         return hidden_states
 
 
-class SourceEntityPredictionHead(nn.Module):
-    def __init__(self, config):
-        super(SourceEntityPredictionHead, self).__init__()
-        self.config = config
-        self.transform = EntityPredictionHeadTransform(config)
-        self.decoder = nn.Linear(config.entity_emb_size, config.entity_vocab_size, bias=False)
-        self.bias = nn.Parameter(torch.zeros(config.entity_vocab_size))
-
-    def forward(self, hidden_states):
-        hidden_states = self.transform(hidden_states)
-        hidden_states = self.decoder(hidden_states) + self.bias
-
-        return hidden_states
-
-
 class LukePretrainingModel(LukeModel):
     def __init__(self, config):
         super(LukePretrainingModel, self).__init__(config)
@@ -69,14 +54,11 @@ class LukePretrainingModel(LukeModel):
         self.entity_predictions = EntityPredictionHead(config)
         self.entity_predictions.decoder.weight = self.entity_embeddings.entity_embeddings.weight
 
-        self.source_entity_prediction = SourceEntityPredictionHead(config)
-        self.source_entity_prediction.decoder.weight = self.entity_embeddings.entity_embeddings.weight
-
         self.apply(self.init_weights)
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
                 entity_segment_ids, entity_attention_mask, masked_entity_labels=None, masked_lm_labels=None,
-                source_entity_label=None, **kwargs):
+                **kwargs):
         model_dtype = next(self.parameters()).dtype  # for fp16 compatibility
 
         output = super(LukePretrainingModel, self).forward(
@@ -128,18 +110,5 @@ class LukePretrainingModel(LukeModel):
                 ret['masked_lm_loss'] = word_ids.new_tensor(0.0, dtype=model_dtype)
                 ret['masked_lm_correct'] = word_ids.new_tensor(0, dtype=torch.long)
                 ret['masked_lm_total'] = word_ids.new_tensor(0, dtype=torch.long)
-
-        if source_entity_label is not None:
-            if source_entity_label.ne(-1).sum() > 0:
-                source_entity_score = self.source_entity_prediction(word_sequence_output[:, 0])
-                ret['source_entity_loss'] = loss_fn(source_entity_score, source_entity_label)
-                ret['source_entity_correct'] = (torch.argmax(source_entity_score, 1).data ==
-                                                source_entity_label.data).sum()
-                ret['source_entity_total'] = source_entity_label.ne(-1).sum()
-                ret['loss'] += ret['source_entity_loss']
-            else:
-                ret['source_entity_loss'] = word_ids.new_tensor(0.0, dtype=model_dtype)
-                ret['source_entity_correct'] = word_ids.new_tensor(0, dtype=torch.long)
-                ret['source_entity_total'] = word_ids.new_tensor(0, dtype=torch.long)
 
         return ret
