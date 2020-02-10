@@ -2,6 +2,7 @@ import glob
 import logging
 import os
 from argparse import Namespace
+from functools import partial
 
 import click
 import torch
@@ -9,27 +10,26 @@ from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 from transformers import WEIGHTS_NAME, BertTokenizer
+from transformers.data.processors.squad import SquadResult, SquadV1Processor, SquadV2Processor
 
 from ..model import two_stage_model_args
 from ..trainer import Trainer, trainer_args
-from .model import LukeForSquad
-from .utils import convert_examples_to_features
-from .utils_squad import RawResult, read_squad_examples, write_predictions
-from .utils_squad_evaluate import EVAL_OPTS
-from .utils_squad_evaluate import main as evaluate_on_squad
+from .model import LukeForReadingComprehension
+from .utils import convert_examples_to_features, write_predictions
+from .squad_eval import EVAL_OPTS
+from .squad_eval import main as evaluate_on_squad
 
 logger = logging.getLogger(__name__)
 
 
-@click.group(name='squad')
+@click.group(name='reading-comprehension')
 def cli():
     pass
 
 
 @cli.command()
-@click.option('--train-file', default='data/squad/train-v2.0.json', type=click.Path(exists=True), required=True)
-@click.option('--predict-file', default='data/squad/dev-v2.0.json', type=click.Path(exists=True), required=True)
-@click.option('--version-2-with-negative/--version-1-with-no-negative', default=True)
+@click.option('--data-dir', default='data/squad', type=click.Path(exists=True))
+@click.option('--with-negative/--no-negative', default=True)
 @click.option('--null-score-diff-threshold', type=float, default=0.0)
 @click.option('--doc-stride', default=128)
 @click.option('--max-query-length', default=64)
@@ -38,7 +38,6 @@ def cli():
 @click.option('--max-seq-length', default=512)
 @click.option('--max-entity-length', default=128)
 @click.option('--max-candidate-length', default=30)
-@click.option('--add-extra-sep-token', is_flag=True)
 @click.option('--do-train/--no-train', default=True)
 @click.option('--do-eval/--no-eval', default=True)
 @click.option('--create-cache', is_flag=True)
@@ -61,14 +60,14 @@ def run(common_args, **task_args):
         return
 
     if args.do_train:
-        model = LukeForSquad(args)
+        model = LukeForReadingComprehension(args)
         model.load_state_dict(args.model_weights, strict=False)
         model.to(args.device)
 
         if args.fix_entity_emb:
             model.entity_embeddings.entity_embeddings.weight.requires_grad = False
 
-        train_dataloader, _, _ = load_and_cache_examples(args, evaluate=False)
+        train_dataloader, _, _, _ = load_and_cache_examples(args, evaluate=False)
 
         num_train_steps = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
         trainer = Trainer(args, model=model, dataloader=train_dataloader, num_train_steps=num_train_steps)
@@ -97,7 +96,7 @@ def run(common_args, **task_args):
 
         for checkpoint_dir in checkpoints:
             global_step = checkpoint_dir.split('-')[-1] if len(checkpoints) > 1 else ""
-            model = LukeForSquad(args)
+            model = LukeForReadingComprehension(args)
             model.load_state_dict(torch.load(os.path.join(checkpoint_dir, WEIGHTS_NAME), map_location='cpu'))
             model.to(args.device)
 
@@ -114,7 +113,7 @@ def run(common_args, **task_args):
 
 
 def evaluate(args, model, prefix=""):
-    dataloader, examples, features = load_and_cache_examples(args, evaluate=True)
+    dataloader, examples, features, processor = load_and_cache_examples(args, evaluate=True)
     all_results = []
     for batch in tqdm(dataloader, desc="Eval"):
         model.eval()
@@ -125,12 +124,13 @@ def evaluate(args, model, prefix=""):
         for i, example_index in enumerate(batch['example_indices']):
             eval_feature = features[example_index.item()]
             unique_id = int(eval_feature.unique_id)
-            all_results.append(RawResult(unique_id=unique_id, start_logits=outputs[0][i].detach().cpu().tolist(),
-                                         end_logits=outputs[1][i].detach().cpu().tolist()))
+            output = [output[i].detach().cpu().tolist() for output in outputs]
+            start_logits, end_logits = output
+            all_results.append(SquadResult(unique_id, start_logits, end_logits))
 
     output_prediction_file = os.path.join(args.output_dir, "predictions_{}.json".format(prefix))
     output_nbest_file = os.path.join(args.output_dir, "nbest_predictions_{}.json".format(prefix))
-    if args.version_2_with_negative:
+    if args.with_negative:
         output_null_log_odds_file = os.path.join(args.output_dir, "null_odds_{}.json".format(prefix))
     else:
         output_null_log_odds_file = None
@@ -141,9 +141,9 @@ def evaluate(args, model, prefix=""):
 
     write_predictions(examples, features, all_results, args.n_best_size, args.max_answer_length, do_lower_case,
                       output_prediction_file, output_nbest_file, output_null_log_odds_file, False,
-                      args.version_2_with_negative, args.null_score_diff_threshold, args.tokenizer)
+                      args.with_negative, args.null_score_diff_threshold, args.tokenizer)
 
-    return evaluate_on_squad(EVAL_OPTS(data_file=args.predict_file,
+    return evaluate_on_squad(EVAL_OPTS(os.path.join(args.data_dir, processor.dev_file),
                                        pred_file=output_prediction_file,
                                        na_prob_file=output_null_log_odds_file))
 
@@ -152,12 +152,21 @@ def load_and_cache_examples(args, evaluate=False):
     if args.local_rank not in [-1, 0] and not evaluate:
         torch.distributed.barrier()
 
-    input_file = args.predict_file if evaluate else args.train_file
-    examples = read_squad_examples(input_file=input_file, is_training=not evaluate,
-                                   version_2_with_negative=args.version_2_with_negative)
-    cache_file = os.path.join(os.path.dirname(input_file), 'cached_' + '_'.join((
-        os.path.basename(input_file),
-        args.tokenizer.__class__.__name__,
+    if args.with_negative:
+        processor = SquadV2Processor()
+    else:
+        processor = SquadV1Processor()
+
+    logger.info("Loading the dataset...")
+    if evaluate:
+        examples = processor.get_dev_examples(args.data_dir)
+    else:
+        examples = processor.get_train_examples(args.data_dir)
+
+    bert_model_name = args.model_config.bert_model_name
+
+    cache_file = os.path.join(args.data_dir, 'cached_' + '_'.join((
+        bert_model_name,
         str(len(args.entity_vocab)),
         os.path.basename(args.mention_db.mention_db_file),
         str(args.max_seq_length),
@@ -165,18 +174,26 @@ def load_and_cache_examples(args, evaluate=False):
         str(args.max_candidate_length),
         str(args.doc_stride),
         str(args.max_query_length),
-        str(args.add_extra_sep_token),
+        str(evaluate),
+        str(args.with_negative)
     )))
     if os.path.exists(cache_file) and not args.overwrite_cache:
-        logger.info("Loading features from cached file %s", cache_file)
+        logger.info("Loading features from the cached file %s", cache_file)
         features = torch.load(cache_file)
     else:
-        logger.info("Creating features from dataset file at %s", input_file)
+        logger.info("Creating features from the dataset...")
+
+        tokenizer = args.tokenizer
+        add_extra_sep_token = False
+        if 'roberta' in bert_model_name:
+            tokenizer.tokenize = partial(tokenizer.tokenize, add_prefix_space=True)
+            add_extra_sep_token = True
+
         features = convert_examples_to_features(
-            examples, args.tokenizer, args.entity_vocab, args.mention_db, args.max_seq_length, args.max_mention_length,
-            args.max_candidate_length, args.doc_stride, args.max_query_length, args.add_extra_sep_token, not evaluate)
+            examples, tokenizer, args.entity_vocab, args.mention_db, args.max_seq_length, args.max_mention_length,
+            args.max_candidate_length, args.doc_stride, args.max_query_length, add_extra_sep_token, not evaluate)
         if args.local_rank in (-1, 0):
-            logger.info("Saving features into cached file %s", cache_file)
+            logger.info("Saving features into the cache file %s", cache_file)
             torch.save(features, cache_file)
 
     if args.local_rank == 0 and not evaluate:
@@ -215,4 +232,4 @@ def load_and_cache_examples(args, evaluate=False):
         dataloader = DataLoader(list(enumerate(features)), sampler=sampler, batch_size=args.train_batch_size,
                                 collate_fn=collate_fn)
 
-    return dataloader, examples, features
+    return dataloader, examples, features, processor

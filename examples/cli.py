@@ -1,8 +1,6 @@
 import json
 import logging
 import os
-import random
-import string
 
 logging.getLogger('transformers').setLevel(logging.WARNING)
 
@@ -80,6 +78,7 @@ def cli(ctx, output_dir, verbose, seed, no_cuda, local_rank, model_dir, weights_
 
         ctx.obj['tokenizer'] = AutoTokenizer.from_pretrained(model_data['model_config']['bert_model_name'])
         ctx.obj['entity_vocab'] = EntityVocab(os.path.join(model_dir, ENTITY_VOCAB_FILE))
+        ctx.obj['bert_model_name'] = model_data['model_config']['bert_model_name']
         ctx.obj['model_config'] = LukeConfig(**model_data['model_config'])
         ctx.obj['max_mention_length'] = model_data['max_mention_length']
 
@@ -90,13 +89,16 @@ def cli(ctx, output_dir, verbose, seed, no_cuda, local_rank, model_dir, weights_
     if mention_db_file:
         ctx.obj['mention_db'] = MentionDB(mention_db_file)
 
+    ctx.obj['seed'] = seed
     set_seed(seed)
 
 
 from .entity_disambiguation.main import cli as entity_disambiguation_cli
 cli.add_command(entity_disambiguation_cli)
-from .squad.main import cli as squad_cli
-cli.add_command(squad_cli)
+# from .entity_typing.main import cli as entity_typing_cli
+# cli.add_command(entity_typing_cli)
+# from .reading_comprehension.main import cli as reading_comprehension_cli
+# cli.add_command(reading_comprehension_cli)
 from .utils.mention_db import cli as mention_db_cli
 cli.add_command(mention_db_cli)
 

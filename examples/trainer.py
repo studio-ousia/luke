@@ -6,7 +6,7 @@ import os
 import click
 import torch
 from tqdm import tqdm
-from transformers import WEIGHTS_NAME, WarmupConstantSchedule, WarmupLinearSchedule
+from transformers import WEIGHTS_NAME, get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
 
 from luke.optimization import LukeDenseSparseAdam
 
@@ -36,11 +36,12 @@ def trainer_args(func):
 
 
 class Trainer(object):
-    def __init__(self, args, model, dataloader, num_train_steps):
+    def __init__(self, args, model, dataloader, num_train_steps, step_callback=None):
         self.args = args
         self.model = model
         self.dataloader = dataloader
         self.num_train_steps = num_train_steps
+        self.step_callback = step_callback
 
         self.optimizer = self._create_optimizer(model)
         self.scheduler = self._create_scheduler(self.optimizer)
@@ -106,7 +107,11 @@ class Trainer(object):
                                              (epoch, loss.item(), max(self.scheduler.get_lr())))
                         pbar.update()
                         global_step += 1
-                        if self.args.local_rank in (-1, 0) and self.args.save_steps > 0 and\
+
+                        if self.step_callback is not None:
+                            self.step_callback(model, global_step, tqdm)
+
+                        if self.args.local_rank in (-1, 0) and self.args.output_dir and self.args.save_steps > 0 and\
                             global_step % self.args.save_steps == 0:
                             output_dir = os.path.join(self.args.output_dir, 'checkpoint-{}'.format(global_step))
                             if not os.path.exists(output_dir):
@@ -124,7 +129,7 @@ class Trainer(object):
                     break
                 epoch += 1
 
-        logger.info("global_step = %s, average loss = %s", global_step, tr_loss / global_step)
+        logger.info('global_step = %s, average loss = %s', global_step, tr_loss / global_step)
 
         return model, global_step, tr_loss / global_step
 
@@ -132,9 +137,10 @@ class Trainer(object):
         param_optimizer = list(model.named_parameters())
         no_decay = ['bias', 'LayerNorm.weight']
         optimizer_parameters = [
-            {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+            {'params': [p for n, p in param_optimizer if p.requires_grad and not any(nd in n for nd in no_decay)],
              'weight_decay': self.args.weight_decay},
-            {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+            {'params': [p for n, p in param_optimizer
+                        if p.requires_grad and any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
         grad_avg_device = torch.device(self.args.device)
         if self.args.grad_avg_on_cpu:
@@ -146,9 +152,9 @@ class Trainer(object):
     def _create_scheduler(self, optimizer):
         warmup_steps = int(self.num_train_steps * self.args.warmup_proportion)
         if self.args.lr_schedule == 'warmup_linear':
-            return WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=self.num_train_steps)
+            return get_linear_schedule_with_warmup(optimizer, warmup_steps, self.num_train_steps)
         if self.args.lr_schedule == 'warmup_constant':
-            return WarmupConstantSchedule(optimizer, warmup_steps=warmup_steps)
+            return get_constant_schedule_with_warmup(optimizer, warmup_steps)
 
         raise RuntimeError('Unsupported scheduler: ' + self.args.lr_schedule)
 
