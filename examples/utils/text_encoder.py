@@ -1,5 +1,4 @@
 import unicodedata
-from functools import partial
 from itertools import chain, repeat
 
 from transformers import RobertaTokenizer
@@ -7,20 +6,16 @@ from transformers import RobertaTokenizer
 from luke.utils.entity_vocab import UNK_TOKEN
 
 
-class LukeTextEncoder(object):
+class TextEncoder(object):
     def __init__(self, tokenizer, entity_vocab, mention_db, max_mention_length, max_candidate_length,
-                 add_extra_sep_token=False):
+                 add_extra_sep_token=False, segment_b_id=1):
         self._tokenizer = tokenizer
         self._entity_vocab = entity_vocab
         self._mention_db = mention_db
         self._max_mention_length = max_mention_length
         self._max_candidate_length = max_candidate_length
         self._add_extra_sep_token = add_extra_sep_token
-
-        self._segment_b_id = 1
-        if isinstance(tokenizer, RobertaTokenizer):
-            tokenizer.tokenize = partial(tokenizer.tokenize, add_prefix_space=True)
-            self._segment_b_id = 0
+        self._segment_b_id = segment_b_id
 
     def encode_text(self, text_or_tokens):
         if isinstance(text_or_tokens, str):

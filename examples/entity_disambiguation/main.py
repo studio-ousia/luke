@@ -16,6 +16,7 @@ from wikipedia2vec.dump_db import DumpDB
 from luke.utils.entity_vocab import MASK_TOKEN, PAD_TOKEN
 
 from ..trainer import Trainer, trainer_args
+from ..utils import set_seed
 from .model import LukeForEntityDisambiguation
 from .utils import EntityDisambiguationDataset, convert_documents_to_features
 
@@ -47,11 +48,14 @@ def cli():
 @click.option('--document-split-mode', default='simple', type=click.Choice(['simple', 'per_mention']))
 @click.option('--fix-entity-emb/--update-entity-emb', default=True)
 @click.option('--fix-entity-bias/--update-entity-bias', default=True)
+@click.option('--seed', default=1)
 @trainer_args
 @click.pass_obj
 def run(common_args, **task_args):
     task_args.update(common_args)
     args = Namespace(**task_args)
+
+    set_seed(args.seed)
 
     dataset = EntityDisambiguationDataset(args.data_dir, args.titles_file, args.redirects_file)
     entity_titles = []

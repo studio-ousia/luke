@@ -1,6 +1,8 @@
 import glob
+import json
 import logging
 import os
+import random
 from argparse import Namespace
 from functools import partial
 
@@ -10,14 +12,18 @@ from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 from transformers import WEIGHTS_NAME, BertTokenizer
-from transformers.data.processors.squad import SquadResult, SquadV1Processor, SquadV2Processor
 
 from ..model import two_stage_model_args
 from ..trainer import Trainer, trainer_args
+from ..utils import set_seed
 from .model import LukeForReadingComprehension
-from .utils import convert_examples_to_features, write_predictions
-from .squad_eval import EVAL_OPTS
-from .squad_eval import main as evaluate_on_squad
+from .utils.dataset import RECORD_HIGHLIGHT_TOKEN, RECORD_PLACEHOLDER_TOKEN, RecordProcessor, SquadV1Processor,\
+    SquadV2Processor
+from .utils.feature_generator import convert_examples_to_features
+from .utils.record_eval import evaluate as evaluate_on_record
+from .utils.result_writer import Result, write_predictions
+from .utils.squad_eval import EVAL_OPTS as SQUAD_EVAL_OPTS
+from .utils.squad_eval import main as evaluate_on_squad
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +35,7 @@ def cli():
 
 @cli.command()
 @click.option('--data-dir', default='data/squad', type=click.Path(exists=True))
+@click.option('--dataset-type', default='squad', type=click.Choice(['squad', 'record']))
 @click.option('--with-negative/--no-negative', default=True)
 @click.option('--null-score-diff-threshold', type=float, default=0.0)
 @click.option('--doc-stride', default=128)
@@ -46,7 +53,10 @@ def cli():
 @click.option('--eval-batch-size', default=8)
 @click.option('--num-train-epochs', default=2)
 @click.option('--fix-entity-emb/--update-entity-emb', default=True)
+@click.option('--no-entity', is_flag=True, default=False)
+@click.option('--use-first-answer/--use-random-answer', default=True)
 @click.option('--eval-all-checkpoints/--no-eval-checkpoints', default=False)
+@click.option('--seed', default=42)
 @two_stage_model_args
 @trainer_args
 @click.pass_obj
@@ -54,10 +64,26 @@ def run(common_args, **task_args):
     task_args.update(common_args)
     args = Namespace(**task_args)
 
+    set_seed(args.seed)
+
+    if 'roberta' in args.bert_model_name:
+        args.tokenizer.tokenize = partial(args.tokenizer.tokenize, add_prefix_space=True)
+
+    if args.dataset_type == 'record':
+        args.tokenizer.add_special_tokens(
+            dict(additional_special_tokens=[RECORD_HIGHLIGHT_TOKEN, RECORD_PLACEHOLDER_TOKEN]))
+
     if args.create_cache:
         load_and_cache_examples(args, evaluate=False)
         load_and_cache_examples(args, evaluate=True)
         return
+
+    if args.dataset_type == 'record':
+        args.model_config.vocab_size += 2
+        new_emb = torch.empty(2, args.model_config.hidden_size)
+        new_emb.normal_(mean=0.0, std=args.model_config.initializer_range)
+        args.model_weights['embeddings.word_embeddings.weight'] = torch.cat(
+            [args.model_weights['embeddings.word_embeddings.weight'], new_emb])
 
     if args.do_train:
         model = LukeForReadingComprehension(args)
@@ -74,7 +100,6 @@ def run(common_args, **task_args):
         trainer.train()
 
     if args.do_train and args.local_rank in (0, -1):
-        logger.info("Saving model checkpoint to %s", args.output_dir)
         if hasattr(model, 'module'):
             torch.save(model.module.state_dict(), os.path.join(args.output_dir, WEIGHTS_NAME))
         else:
@@ -92,8 +117,6 @@ def run(common_args, **task_args):
             checkpoints = list(os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + '/**/' + WEIGHTS_NAME,
                                                                             recursive=True)))
 
-        logger.info('Evaluating the following checkpoints: %s', checkpoints)
-
         for checkpoint_dir in checkpoints:
             global_step = checkpoint_dir.split('-')[-1] if len(checkpoints) > 1 else ""
             model = LukeForReadingComprehension(args)
@@ -107,12 +130,12 @@ def run(common_args, **task_args):
             result = {k + '_' + str(global_step) if global_step else k: v for k, v in result.items()}
             results.update(result)
 
-    logger.info('Results: {}'.format(results))
+    logger.info('Results: %s', results)
     print(results)
     return results
 
 
-def evaluate(args, model, prefix=""):
+def evaluate(args, model, prefix=''):
     dataloader, examples, features, processor = load_and_cache_examples(args, evaluate=True)
     all_results = []
     for batch in tqdm(dataloader, desc="Eval"):
@@ -124,14 +147,13 @@ def evaluate(args, model, prefix=""):
         for i, example_index in enumerate(batch['example_indices']):
             eval_feature = features[example_index.item()]
             unique_id = int(eval_feature.unique_id)
-            output = [output[i].detach().cpu().tolist() for output in outputs]
-            start_logits, end_logits = output
-            all_results.append(SquadResult(unique_id, start_logits, end_logits))
+            start_logits, end_logits = [o[i].detach().cpu().tolist() for o in outputs]
+            all_results.append(Result(unique_id, start_logits, end_logits))
 
-    output_prediction_file = os.path.join(args.output_dir, "predictions_{}.json".format(prefix))
-    output_nbest_file = os.path.join(args.output_dir, "nbest_predictions_{}.json".format(prefix))
+    output_prediction_file = os.path.join(args.output_dir, 'predictions_{}.json'.format(prefix))
+    output_nbest_file = os.path.join(args.output_dir, 'nbest_predictions_{}.json'.format(prefix))
     if args.with_negative:
-        output_null_log_odds_file = os.path.join(args.output_dir, "null_odds_{}.json".format(prefix))
+        output_null_log_odds_file = os.path.join(args.output_dir, 'null_odds_{}.json'.format(prefix))
     else:
         output_null_log_odds_file = None
 
@@ -143,21 +165,29 @@ def evaluate(args, model, prefix=""):
                       output_prediction_file, output_nbest_file, output_null_log_odds_file, False,
                       args.with_negative, args.null_score_diff_threshold, args.tokenizer)
 
-    return evaluate_on_squad(EVAL_OPTS(os.path.join(args.data_dir, processor.dev_file),
-                                       pred_file=output_prediction_file,
-                                       na_prob_file=output_null_log_odds_file))
+    if args.dataset_type == 'record':
+        with open(os.path.join(args.data_dir, processor.dev_file)) as f:
+            dev_data = json.load(f)['data']
+        with open(output_prediction_file) as f:
+            predictions = json.load(f)
+        return evaluate_on_record(dev_data, predictions)[0]
+    else:
+        return evaluate_on_squad(SQUAD_EVAL_OPTS(os.path.join(args.data_dir, processor.dev_file),
+                                                 pred_file=output_prediction_file,
+                                                 na_prob_file=output_null_log_odds_file))
 
 
 def load_and_cache_examples(args, evaluate=False):
-    if args.local_rank not in [-1, 0] and not evaluate:
+    if args.local_rank not in (-1, 0) and not evaluate:
         torch.distributed.barrier()
 
-    if args.with_negative:
+    if args.dataset_type == 'record':
+        processor = RecordProcessor()
+    elif args.with_negative:
         processor = SquadV2Processor()
     else:
         processor = SquadV1Processor()
 
-    logger.info("Loading the dataset...")
     if evaluate:
         examples = processor.get_dev_examples(args.data_dir)
     else:
@@ -166,7 +196,7 @@ def load_and_cache_examples(args, evaluate=False):
     bert_model_name = args.model_config.bert_model_name
 
     cache_file = os.path.join(args.data_dir, 'cached_' + '_'.join((
-        bert_model_name,
+        bert_model_name.split('-')[0],
         str(len(args.entity_vocab)),
         os.path.basename(args.mention_db.mention_db_file),
         str(args.max_seq_length),
@@ -176,24 +206,25 @@ def load_and_cache_examples(args, evaluate=False):
         str(args.max_query_length),
         str(evaluate),
         str(args.with_negative)
-    )))
+    )) + '.pkl')
     if os.path.exists(cache_file) and not args.overwrite_cache:
-        logger.info("Loading features from the cached file %s", cache_file)
+        logger.info('Loading features from the cached file %s', cache_file)
         features = torch.load(cache_file)
     else:
-        logger.info("Creating features from the dataset...")
+        logger.info('Creating features from the dataset...')
 
-        tokenizer = args.tokenizer
+        segment_b_id = 1
         add_extra_sep_token = False
         if 'roberta' in bert_model_name:
-            tokenizer.tokenize = partial(tokenizer.tokenize, add_prefix_space=True)
+            segment_b_id = 0
             add_extra_sep_token = True
 
         features = convert_examples_to_features(
-            examples, tokenizer, args.entity_vocab, args.mention_db, args.max_seq_length, args.max_mention_length,
-            args.max_candidate_length, args.doc_stride, args.max_query_length, add_extra_sep_token, not evaluate)
+            examples, args.tokenizer, args.entity_vocab, args.mention_db, args.max_seq_length, args.max_mention_length,
+            args.max_candidate_length, args.doc_stride, args.max_query_length, segment_b_id, add_extra_sep_token,
+            not evaluate)
+
         if args.local_rank in (-1, 0):
-            logger.info("Saving features into the cache file %s", cache_file)
             torch.save(features, cache_file)
 
     if args.local_rank == 0 and not evaluate:
@@ -213,12 +244,20 @@ def load_and_cache_examples(args, evaluate=False):
             entity_position_ids=create_padded_sequence('entity_position_ids', -1)[:, :args.max_entity_length, :],
             entity_segment_ids=create_padded_sequence('entity_segment_ids', 0)[:, :args.max_entity_length],
         )
+        if args.no_entity:
+            ret['entity_attention_mask'].fill_(0)
 
         if evaluate:
             ret['example_indices'] = torch.tensor([o[0] for o in batch], dtype=torch.long)
         else:
-            ret['start_positions'] = torch.tensor([o[1].start_position for o in batch], dtype=torch.long)
-            ret['end_positions'] = torch.tensor([o[1].end_position for o in batch], dtype=torch.long)
+            if args.dataset_type == 'record':
+                ret['start_positions'] = torch.tensor([random.choice(o[1].start_positions) for o in batch],
+                                                      dtype=torch.long)
+                ret['end_positions'] = torch.tensor([random.choice(o[1].end_positions) for o in batch],
+                                                    dtype=torch.long)
+            else:
+                ret['start_positions'] = torch.tensor([o[1].start_positions[0] for o in batch], dtype=torch.long)
+                ret['end_positions'] = torch.tensor([o[1].end_positions[0] for o in batch], dtype=torch.long)
 
         return ret
 
