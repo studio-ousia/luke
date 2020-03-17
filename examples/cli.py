@@ -156,6 +156,8 @@ from .relation_classification.main import cli as relation_classification_cli
 cli.add_command(relation_classification_cli)
 from .utils.mention_db import cli as mention_db_cli
 cli.add_command(mention_db_cli)
+from .entity_span_qa.main import cli as entity_span_qa_cli
+cli.add_command(entity_span_qa_cli)
 
 
 @cli.group()
