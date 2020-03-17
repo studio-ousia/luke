@@ -4,16 +4,16 @@ from torch.nn import CrossEntropyLoss
 from ..model import LukeTwoStageBaseModel
 
 
-class LukeForSquad(LukeTwoStageBaseModel):
+class LukeForReadingComprehension(LukeTwoStageBaseModel):
     def __init__(self, args):
-        super(LukeForSquad, self).__init__(args)
+        super(LukeForReadingComprehension, self).__init__(args)
 
         self.qa_outputs = nn.Linear(self.config.hidden_size, 2)
         self.apply(self.init_weights)
 
     def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_candidate_ids, entity_position_ids,
                 entity_segment_ids, entity_attention_mask, start_positions=None, end_positions=None):
-        encoder_outputs = super(LukeForSquad, self).forward(
+        encoder_outputs = super(LukeForReadingComprehension, self).forward(
             word_ids, word_segment_ids, word_attention_mask, entity_candidate_ids, entity_position_ids,
             entity_segment_ids, entity_attention_mask)
 

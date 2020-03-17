@@ -27,9 +27,9 @@ from luke.pretraining.model import LukePretrainingModel
 
 logger = logging.getLogger(__name__)
 
-NCCL_SOCKET_IF_NAME = 'lo'  # this code does not currently support distributed training
-MASTER_ADDR = '127.0.0.1'
-MASTER_PORT = '29502'
+# NCCL_SOCKET_IF_NAME = 'lo'  # this code does not currently support distributed training
+# MASTER_ADDR = '127.0.0.1'
+# MASTER_PORT = '29502'
 
 
 @click.command()
@@ -61,6 +61,10 @@ MASTER_PORT = '29502'
 @click.option('--fp16-min-loss-scale', default=1)
 @click.option('--fp16-max-loss-scale', default=4)
 @click.option('--local-rank', '--local_rank', default=-1)
+@click.option('--num-nodes', default=1)
+@click.option('--node-rank', default=0)
+@click.option('--master-addr', default='127.0.0.1')
+@click.option('--master-port', default='29502')
 @click.option('--log-dir', type=click.Path(), default=None)
 @click.option('--model-file', type=click.Path(exists=True), default=None)
 @click.option('--optimizer-file', type=click.Path(exists=True), default=None)
@@ -77,7 +81,17 @@ def pretrain(**kwargs):
 @click.option('--batch-size', default=None, type=int)
 @click.option('--gradient-accumulation-steps', default=None, type=int)
 @click.option('--grad-avg-on-cpu/--grad-avg-on-gpu', default=False)
+@click.option('--num-nodes', default=1)
+@click.option('--node-rank', default=0)
+@click.option('--master-addr', default='127.0.0.1')
+@click.option('--master-port', default='29502')
 def resume_pretraining(output_dir, **kwargs):
+    if 'num_nodes' not in kwargs:
+        kwargs['num_nodes'] = 1
+        kwargs['node_rank'] = 0
+        kwargs['master_addr'] = '127.0.0.1'
+        kwargs['master_port'] = '29502'
+
     with open(os.path.join(output_dir, 'metadata.json')) as f:
         args = json.load(f)['arguments']
 
@@ -128,7 +142,7 @@ def run_pretraining(args):
         num_workers = torch.distributed.get_world_size()
         worker_index = torch.distributed.get_rank()
 
-    if args.local_rank not in [-1, 0]:
+    if args.local_rank not in (-1, 0):
         logging.getLogger().setLevel(logging.WARN)
 
     logger.info('Starting pretraining with the following arguments: %s', args)
@@ -244,7 +258,8 @@ def run_pretraining(args):
 
     model.train()
 
-    if args.local_rank in (0, -1):
+    # if args.local_rank in (0, -1):
+    if args.local_rank == -1 or worker_index == 0:
         dataset.tokenizer.save_pretrained(args.output_dir)
         dataset.entity_vocab.save(os.path.join(args.output_dir, ENTITY_VOCAB_FILE))
         metadata = dict(model_config=config.to_dict(),
@@ -276,7 +291,8 @@ def run_pretraining(args):
         with open(os.path.join(args.output_dir, f'metadata_{suffix}.json'), 'w') as f:
             json.dump(metadata, f, indent=2, sort_keys=True)
 
-    if args.local_rank in (0, -1):
+    # if args.local_rank in (0, -1):
+    if args.local_rank == -1 or worker_index == 0:
         summary_writer = SummaryWriter(args.log_dir)
         pbar = tqdm(total=num_train_steps, initial=global_step)
 
@@ -359,7 +375,8 @@ def run_pretraining(args):
 
             results = []
 
-            if args.local_rank in (0, -1):
+            if args.local_rank == -1 or worker_index == 0:
+            # if args.local_rank in (0, -1):
                 for (name, value) in summary.items():
                     summary_writer.add_scalar(name, value, global_step)
                 desc = f'epoch: {int(global_step / num_train_steps_per_epoch)} '\
@@ -370,7 +387,8 @@ def run_pretraining(args):
 
             global_step += 1
 
-            if args.local_rank in (0, -1):
+            if args.local_rank == -1 or worker_index == 0:
+            # if args.local_rank in (0, -1):
                 if global_step == num_train_steps:
                     save_model(model, f'epoch{args.num_epochs}')
                     time.sleep(60)
@@ -381,25 +399,29 @@ def run_pretraining(args):
                     save_model(model, f'step{global_step:07}')
                     prev_save_time = time.time()
 
-            if global_step == num_train_steps:
-                break
+            # if global_step == num_train_steps:
+            #     break
 
-    if args.local_rank in (0, -1):
+    # if args.local_rank in (0, -1):
+    if args.local_rank == -1 or worker_index == 0:
         summary_writer.close()
 
 
 def run_parallel_pretraining(args):
     num_workers = torch.cuda.device_count()
+
     current_env = os.environ.copy()
-    current_env['NCCL_SOCKET_IFNAME'] = NCCL_SOCKET_IF_NAME
-    current_env['MASTER_ADDR'] = MASTER_ADDR
-    current_env['MASTER_PORT'] = MASTER_PORT
-    current_env['WORLD_SIZE'] = str(num_workers)
+    # current_env['NCCL_SOCKET_IFNAME'] = NCCL_SOCKET_IF_NAME
+    current_env['MASTER_ADDR'] = args.master_addr
+    current_env['MASTER_PORT'] = args.master_port
+    # current_env['WORLD_SIZE'] = str(num_workers)
+    current_env['WORLD_SIZE'] = str(num_workers * args.num_nodes)
     current_env['OMP_NUM_THREADS'] = str(1)
     processes = []
     for local_rank in range(num_workers):
         cmd = ['luke', 'start-pretraining-worker', f'--local-rank={local_rank}', f'--args={json.dumps(vars(args))}']
-        current_env['RANK'] = str(local_rank)
+        current_env['RANK'] = str(num_workers * args.node_rank + local_rank)
+        # current_env['RANK'] = str(local_rank)
         current_env['LOCAL_RANK'] = str(local_rank)
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)

@@ -16,6 +16,7 @@ comet-git-pure==0.19.11   # via comet-ml
 comet-ml==2.0.14
 configobj==5.0.6          # via everett
 docutils==0.14            # via botocore
+entmax==1.0
 everett[ini]==1.0.2       # via comet-ml
 gast==0.2.2               # via tensorflow
 google-pasta==0.1.7       # via tensorflow
@@ -61,4 +62,4 @@ wrapt==1.11.2             # via tensorflow
 wurlitzer==1.0.3          # via comet-ml
 
 # The following packages are considered to be unsafe in a requirements file:
-# setuptools==41.4.0        # via jsonschema, markdown, protobuf, tensorboard
+# setuptools==45.2.0        # via jsonschema, markdown, protobuf, tensorboard

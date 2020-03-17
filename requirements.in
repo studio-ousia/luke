@@ -1,5 +1,6 @@
 Click==7.0
 comet-ml==2.0.14
+entmax==1.0
 joblib==0.13.0
 marisa-trie==0.7.5
 numpy==1.16.4
