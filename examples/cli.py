@@ -22,7 +22,6 @@ from luke.model import LukeConfig
 from luke.utils.entity_vocab import EntityVocab
 from luke.pretraining.dataset import ENTITY_VOCAB_FILE, METADATA_FILE
 
-from .utils import set_seed
 from .utils.mention_db import MentionDB
 
 LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
@@ -42,7 +41,6 @@ logger = logging.getLogger(__name__)
 @click.option('--output-dir', default='exp_' + ''.join(random.choice(string.ascii_letters) for m in range(8)),
               type=click.Path(), required=True)
 @click.option('--verbose', is_flag=True)
-@click.option('--seed', default=1)
 @click.option('--num-gpus', default=1)
 @click.option('--master-port', default=29500)
 @click.option('--local-rank', '--local_rank', default=-1)
@@ -53,7 +51,7 @@ logger = logging.getLogger(__name__)
 @click.option('--comet-offline', is_flag=True)
 @click.option('--comet-offline-dir', type=click.Path(), default='comet_experiments')
 @click.pass_context
-def cli(ctx, num_gpus, master_port, output_dir, verbose, seed, local_rank, model_dir, weights_file, mention_db_file,
+def cli(ctx, num_gpus, master_port, output_dir, verbose, local_rank, model_dir, weights_file, mention_db_file,
         comet_project, comet_offline, comet_offline_dir):
     if local_rank == -1 and num_gpus > 1:
         current_env = os.environ.copy()

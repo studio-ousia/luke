@@ -1,10 +1,14 @@
 import json
 import os
+
 from tqdm import tqdm
+from transformers.tokenization_roberta import RobertaTokenizer
 
 ENTITY_TYPES = ['CAUSE_OF_DEATH', 'CITY', 'COUNTRY', 'CRIMINAL_CHARGE', 'DATE', 'DURATION', 'IDEOLOGY',
                 'LOCATION', 'MISC', 'NATIONALITY', 'NUMBER', 'ORGANIZATION', 'PERSON', 'RELIGION',
                 'STATE_OR_PROVINCE', 'TITLE', 'URL']
+HEAD_TOKEN = '[HEAD]'
+TAIL_TOKEN = '[TAIL]'
 
 
 class InputExample(object):
@@ -84,10 +88,17 @@ class DatasetProcessor(object):
         return examples
 
 
-def convert_examples_to_features(examples, label_list, tokenizer, max_mention_length, use_entity_type_token):
+def convert_examples_to_features(examples, label_list, tokenizer, max_mention_length, use_entity_type_token,
+                                 use_marker_token):
     label_map = {l: i for i, l in enumerate(label_list)}
     if use_entity_type_token:
         type_map = {t: i + 1 for i, t in enumerate(ENTITY_TYPES)}  # 1 for padding emb
+
+    def tokenize(text):
+        if isinstance(tokenizer, RobertaTokenizer):
+            return tokenizer.tokenize(text, add_prefix_space=True)
+        else:
+            return tokenizer.tokenize(text)
 
     features = []
     for example in tqdm(examples):
@@ -101,13 +112,17 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_mention_le
         token_spans = {}
         for span_name in span_order:
             span = getattr(example, span_name)
-            tokens += tokenizer.tokenize(example.text[cur:span[0]])
+            tokens += tokenize(example.text[cur:span[0]])
             start = len(tokens)
-            tokens += tokenizer.tokenize(example.text[span[0]:span[1]])
+            if use_marker_token:
+                tokens.append(HEAD_TOKEN if span_name == 'span_a' else TAIL_TOKEN)
+            tokens += tokenize(example.text[span[0]:span[1]])
+            if use_marker_token:
+                tokens.append(HEAD_TOKEN if span_name == 'span_a' else TAIL_TOKEN)
             token_spans[span_name] = (start, len(tokens))
             cur = span[1]
 
-        tokens += tokenizer.tokenize(example.text[cur:])
+        tokens += tokenize(example.text[cur:])
         tokens.append(tokenizer.sep_token)
 
         word_ids = tokenizer.convert_tokens_to_ids(tokens)

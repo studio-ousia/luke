@@ -1,6 +1,10 @@
 import json
 import os
+
 from tqdm import tqdm
+from transformers.tokenization_roberta import RobertaTokenizer
+
+ENTITY_TOKEN = '[ENTITY]'
 
 
 class InputExample(object):
@@ -50,15 +54,60 @@ class DatasetProcessor(object):
 def convert_examples_to_features(examples, label_list, tokenizer, max_mention_length):
     label_map = {label: i for i, label in enumerate(label_list)}
 
+    conv_tables = (
+        ('-LRB-', '('),
+        ('-LCB-', '('),
+        ('-LSB-', '('),
+        ('-RRB-', ')'),
+        ('-RCB-', ')'),
+        ('-RSB-', ')'),
+        # ('( ', '('),
+        # (' )', ')'),
+        # (' ,', ','),
+        # (' .', '.'),
+        # (' :', ':'),
+        # (' ;', ';'),
+        # (' ?', '?'),
+        # (" '", "'"),
+        # ("`` ", "``"),
+        # (' - ', '-'),
+    )
     features = []
     for example in tqdm(examples):
+
+        # prev_text = [None]
+
+        def preprocess_and_tokenize(text, start, end=None):
+            # if start == end:
+            #     return []
+
+            target_text = text[start:end]
+            for a, b in conv_tables:
+                target_text = target_text.replace(a, b)
+
+            if isinstance(tokenizer, RobertaTokenizer):
+                return tokenizer.tokenize(target_text, add_prefix_space=True)
+            else:
+                return tokenizer.tokenize(target_text)
+            # if isinstance(tokenizer, RobertaTokenizer) and\
+            #     (prev_text[0] is None or (prev_text[0] and prev_text[0][-1] == ' ') or (target_text and target_text[0] == ' ')):
+            #     tokens = tokenizer.tokenize(target_text, add_prefix_space=True)
+            # else:
+            #     tokens = tokenizer.tokenize(target_text)
+
+            # prev_text[0] = target_text
+
+            # return tokens
+
         tokens = [tokenizer.cls_token]
-        tokens += tokenizer.tokenize(example.text[:example.span[0]])
+        tokens += preprocess_and_tokenize(example.text, 0, example.span[0])
         mention_start = len(tokens)
-        tokens += tokenizer.tokenize(example.text[example.span[0]:example.span[1]])
+        tokens.append(ENTITY_TOKEN)
+        tokens += preprocess_and_tokenize(example.text, example.span[0], example.span[1])
+        tokens.append(ENTITY_TOKEN)
         mention_end = len(tokens)
 
-        tokens += tokenizer.tokenize(example.text[example.span[1]:])
+        tokens += preprocess_and_tokenize(example.text, example.span[1])
         tokens.append(tokenizer.sep_token)
 
         word_ids = tokenizer.convert_tokens_to_ids(tokens)

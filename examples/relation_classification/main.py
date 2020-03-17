@@ -2,7 +2,6 @@ import json
 import logging
 import os
 from argparse import Namespace
-from functools import partial
 
 import click
 import torch
@@ -17,7 +16,7 @@ from ..trainer import Trainer, trainer_args
 from ..utils import set_seed
 from ..word_entity_model import word_entity_model_args
 from .model import LukeForRelationClassification
-from .utils import ENTITY_TYPES, convert_examples_to_features, DatasetProcessor
+from .utils import ENTITY_TYPES, HEAD_TOKEN, TAIL_TOKEN, convert_examples_to_features, DatasetProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +33,9 @@ def cli():
 @click.option('--num-train-epochs', default=2.0)
 @click.option('--do-eval/--no-eval', default=True)
 @click.option('--eval-batch-size', default=8)
-@click.option('--eval-set', default=['dev'], type=click.Choice(['dev', 'test']), multiple=True)
-@click.option('--evaluate-every-epoch', is_flag=True)
 @click.option('--use-entity-type-token', is_flag=True)
-@click.option('--use-hidden-layer', is_flag=True)
+@click.option('--use-marker-token', is_flag=True)
 @click.option('--use-difference-feature', is_flag=True)
-@click.option('--fix-entity-emb', is_flag=True)
 @click.option('--dropout-prob', default=0.1)
 @click.option('--seed', default=42)
 @word_entity_model_args
@@ -53,8 +49,13 @@ def run(common_args, **task_args):
 
     args.experiment.log_parameters({p.name: getattr(args, p.name) for p in run.params})
 
-    if 'roberta' in args.bert_model_name:
-        args.tokenizer.tokenize = partial(args.tokenizer.tokenize, add_prefix_space=True)
+    if args.use_marker_token:
+        args.model_config.vocab_size += 2
+        word_emb = args.model_weights['embeddings.word_embeddings.weight']
+        head_emb = word_emb[args.tokenizer.convert_tokens_to_ids(['@'])[0]].unsqueeze(0)
+        tail_emb = word_emb[args.tokenizer.convert_tokens_to_ids(['#'])[0]].unsqueeze(0)
+        args.model_weights['embeddings.word_embeddings.weight'] = torch.cat([word_emb, head_emb, tail_emb])
+        args.tokenizer.add_special_tokens(dict(additional_special_tokens=[HEAD_TOKEN, TAIL_TOKEN]))
 
     entity_emb = args.model_weights['entity_embeddings.entity_embeddings.weight']
     mask_emb = entity_emb[args.entity_vocab[MASK_TOKEN]].unsqueeze(0)
@@ -69,40 +70,43 @@ def run(common_args, **task_args):
     train_dataloader, _, _, label_list = load_and_cache_examples(args, fold='train')
     num_labels = len(label_list)
 
+    results = {}
     if args.do_train:
         model = LukeForRelationClassification(args, num_labels)
         model.load_state_dict(args.model_weights, strict=False)
         model.to(args.device)
 
-        if args.fix_entity_emb:
-            model.entity_embeddings.entity_embeddings.weight.requires_grad = False
-
         num_train_steps_per_epoch = len(train_dataloader) // args.gradient_accumulation_steps
         num_train_steps = int(num_train_steps_per_epoch * args.num_train_epochs)
 
-        if args.evaluate_every_epoch:
-            def step_callback(model, global_step, tqdm_ins):
-                if global_step % num_train_steps_per_epoch == 0 and args.local_rank in (0, -1):
-                    epoch = int(global_step / num_train_steps_per_epoch - 1)
-                    for eval_set in args.eval_set:
-                        results = evaluate(args, model, fold=eval_set)
-                        args.experiment.log_metrics(
-                            {f'{eval_set}_{k}_epoch{epoch}': v for k, v in results.items()}, epoch=epoch)
-                        tqdm_ins.write(f'{eval_set}: {str(results)}')
-                    model.train()
-        else:
-            step_callback = None
+        best_dev_f1 = [-1]
+        best_weights = [None]
+
+        def step_callback(model, global_step, tqdm_ins):
+            if global_step % num_train_steps_per_epoch == 0 and args.local_rank in (0, -1):
+                epoch = int(global_step / num_train_steps_per_epoch - 1)
+                dev_results = evaluate(args, model, fold='dev')
+                args.experiment.log_metrics({f'dev_{k}_epoch{epoch}': v for k, v in dev_results.items()}, epoch=epoch)
+                results.update({f'dev_{k}_epoch{epoch}': v for k, v in dev_results.items()})
+                tqdm_ins.write('dev: ' + str(dev_results))
+
+                if dev_results['f1'] > best_dev_f1[0]:
+                    if hasattr(model, 'module'):
+                        best_weights[0] = {k: v.to('cpu').clone() for k, v in model.module.state_dict().items()}
+                    else:
+                        best_weights[0] = {k: v.to('cpu').clone() for k, v in model.state_dict().items()}
+                    best_dev_f1[0] = dev_results['f1']
+                    results['best_epoch'] = epoch
+
+                model.train()
 
         trainer = Trainer(args, model=model, dataloader=train_dataloader, num_train_steps=num_train_steps,
                           step_callback=step_callback)
         trainer.train()
 
     if args.do_train and args.local_rank in (0, -1):
-        logger.info('Saving model checkpoint to %s', args.output_dir)
-        if hasattr(model, 'module'):
-            torch.save(model.module.state_dict(), os.path.join(args.output_dir, WEIGHTS_NAME))
-        else:
-            torch.save(model.state_dict(), os.path.join(args.output_dir, WEIGHTS_NAME))
+        logger.info('Saving the model checkpoint to %s', args.output_dir)
+        torch.save(best_weights[0], os.path.join(args.output_dir, WEIGHTS_NAME))
 
     if args.local_rank not in (0, -1):
         return {}
@@ -110,7 +114,6 @@ def run(common_args, **task_args):
     model = None
     torch.cuda.empty_cache()
 
-    results = {}
     if args.do_eval:
         model = LukeForRelationClassification(args, num_labels)
         model.load_state_dict(torch.load(os.path.join(args.output_dir, WEIGHTS_NAME), map_location='cpu'))
@@ -118,7 +121,7 @@ def run(common_args, **task_args):
             model = torch.nn.DataParallel(model)
         model.to(args.device)
 
-        for eval_set in args.eval_set:
+        for eval_set in ('dev', 'test'):
             results.update({f'{eval_set}_{k}':v for k, v in evaluate(args, model, fold=eval_set).items()})
 
     print(results)
@@ -189,16 +192,18 @@ def load_and_cache_examples(args, fold='train'):
         str(len(args.entity_vocab)),
         str(args.max_mention_length),
         str(args.use_entity_type_token),
+        str(args.use_marker_token),
         fold
     )) + '.pkl')
     if os.path.exists(cache_file):
-        logger.info("Loading features from cached file %s", cache_file)
+        logger.info('Loading features from cached file %s', cache_file)
         features = torch.load(cache_file)
     else:
-        logger.info("Creating features from dataset file")
+        logger.info('Creating features from dataset file')
 
         features = convert_examples_to_features(
-            examples, label_list, args.tokenizer, args.max_mention_length, args.use_entity_type_token)
+            examples, label_list, args.tokenizer, args.max_mention_length, args.use_entity_type_token,
+            args.use_marker_token)
 
         if args.local_rank in (-1, 0):
             torch.save(features, cache_file)
@@ -229,7 +234,6 @@ def load_and_cache_examples(args, fold='train'):
             sampler = RandomSampler(features)
         else:
             sampler = DistributedSampler(features)
-        dataloader = DataLoader(features, sampler=sampler, batch_size=args.train_batch_size,
-                                collate_fn=collate_fn)
+        dataloader = DataLoader(features, sampler=sampler, batch_size=args.train_batch_size, collate_fn=collate_fn)
 
     return dataloader, examples, features, label_list
