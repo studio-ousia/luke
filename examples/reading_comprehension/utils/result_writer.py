@@ -1,7 +1,3 @@
-"""
-The original version of this code is based on the following:
-https://github.com/huggingface/transformers/blob/23c6998bf46e43092fc59543ea7795074a720f08/src/transformers/data/processors/squad.py#L38
-"""
 import json
 import logging
 import math
@@ -22,8 +18,8 @@ class Result(object):
 def write_predictions(all_examples, all_features, all_results, n_best_size, max_answer_length, do_lower_case,
                       output_prediction_file, output_nbest_file, output_null_log_odds_file, verbose_logging,
                       version_2_with_negative, null_score_diff_threshold, tokenizer):
-    logger.info("Writing predictions to: %s" % (output_prediction_file))
-    logger.info("Writing nbest to: %s" % (output_nbest_file))
+    logger.info('Writing predictions to: %s', output_prediction_file)
+    logger.info('Writing nbest to: %s', output_nbest_file)
 
     example_index_to_features = collections.defaultdict(list)
     for feature in all_features:

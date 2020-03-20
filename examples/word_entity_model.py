@@ -1,7 +1,4 @@
-import contextlib
-import copy
 import functools
-import itertools
 import math
 
 import click
@@ -12,8 +9,6 @@ from transformers.modeling_bert import BertIntermediate, BertOutput, BertSelfOut
 from entmax import sparsemax, entmax15, entmax_bisect
 
 from luke.model import LukeModel
-from luke.pretraining.model import EntityPredictionHead
-from luke.utils.entity_vocab import MASK_TOKEN, UNK_TOKEN
 
 
 def word_entity_model_args(func):
@@ -22,17 +17,6 @@ def word_entity_model_args(func):
     @click.option('--word-entity-value', is_flag=True)
     @click.option('--attention-activation', type=click.Choice(['softmax', 'sparsemax', 'entmax15', 'entmax_bisect']),
                   default='softmax')
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-
-def two_stage_model_args(func):
-    @click.option('--use-softmax-average', is_flag=True)
-    @click.option('--entity-activation-temp', default=0.1)
-    @click.option('--entity-activation', type=click.Choice(['softmax', 'sparsemax', 'entmax15']), default='softmax')
-    @click.option('--update-params-in-disambi', is_flag=True)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -74,94 +58,6 @@ class LukeWordEntityAttentionModel(LukeModel):
 
         kwargs['strict'] = False
         super(LukeWordEntityAttentionModel, self).load_state_dict(new_state_dict, *args, **kwargs)
-
-
-class LukeTwoStepWordEntityAttentionModel(LukeWordEntityAttentionModel):
-    def __init__(self, args):
-        super(LukeTwoStepWordEntityAttentionModel, self).__init__(args)
-
-        self.entity_mask_id = args.entity_vocab[MASK_TOKEN]
-        self.entity_unk_id = args.entity_vocab[UNK_TOKEN]
-
-        if args.update_params_in_disambi:
-            self.ed_embeddings = self.embeddings
-            self.ed_entity_embeddings = self.entity_embeddings
-            self.ed_encoder = self.encoder
-        else:
-            self.ed_embeddings = copy.deepcopy(self.embeddings)
-            self.ed_entity_embeddings = copy.deepcopy(self.entity_embeddings)
-            self.ed_encoder = copy.deepcopy(self.encoder)
-            for param in itertools.chain(self.ed_embeddings.parameters(), self.ed_entity_embeddings.parameters(),
-                                         self.ed_encoder.parameters()):
-                param.requires_grad = False
-
-        self.entity_predictions = EntityPredictionHead(self.config)
-        self.entity_predictions.decoder.weight = self.entity_embeddings.entity_embeddings.weight
-        self.entity_prediction_bias = nn.Embedding(args.model_config.entity_vocab_size, 1, padding_idx=0)
-        self.entity_prediction_bias.weight.data = self.entity_predictions.bias.data.view(-1, 1)
-
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                entity_segment_ids, entity_attention_mask):
-        def maybe_no_grad():
-            if self.args.update_params_in_disambi:
-                return contextlib.ExitStack()
-            else:
-                return torch.no_grad()
-
-        with maybe_no_grad():
-            ed_attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
-            ed_word_embeddings = self.ed_embeddings(word_ids, word_segment_ids)
-            ed_mask_embeddings = self.ed_entity_embeddings(entity_attention_mask * self.entity_mask_id,
-                                                           entity_position_ids, entity_segment_ids)
-            ed_encoder_outputs = self.ed_encoder(ed_word_embeddings, ed_mask_embeddings, ed_attention_mask)
-            ed_mask_output = ed_encoder_outputs[1]
-            ed_mask_output = self.entity_predictions.transform(ed_mask_output)
-            ed_candidate_embeddings = self.ed_entity_embeddings.entity_embeddings(entity_ids)
-
-            ed_logits = (ed_mask_output.unsqueeze(2) * ed_candidate_embeddings).sum(-1)
-            ed_bias = self.entity_prediction_bias(entity_ids).squeeze(-1)
-            ed_logits = ed_logits + ed_bias
-
-        entity_candidate_embeddings = self.entity_embeddings(entity_ids, entity_position_ids.unsqueeze(-2),
-                                                             entity_segment_ids.unsqueeze(-1))
-
-        ed_logits = ed_logits / self.args.entity_activation_temp
-        ed_logits.masked_fill_(entity_ids == 0, -10000.0)
-
-        if self.args.attention_activation == 'sparsemax':
-            ed_probs = sparsemax(ed_logits, dim=-1)
-        elif self.args.attention_activation == 'entmax15':
-            ed_probs = entmax15(ed_logits, dim=-1)
-        else:
-            ed_probs = F.softmax(ed_logits, dim=-1)
-
-        entity_embeddings = (entity_candidate_embeddings * ed_probs.unsqueeze(-1)).sum(-2)
-
-        word_embeddings = self.embeddings(word_ids, word_segment_ids)
-        attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
-
-        return self.encoder(word_embeddings, entity_embeddings, attention_mask)
-
-    def load_state_dict(self, state_dict, *args, **kwargs):
-        new_state_dict = state_dict.copy()
-        for key, weights in state_dict.items():
-            if key.startswith('encoder.') or key.startswith('embeddings.') or key.startswith('entity_embeddings.'):
-                new_state_dict['ed_' + key] = weights
-
-        for num in range(self.args.model_config.num_hidden_layers):
-            for mat_name in ('query', 'key', 'value'):
-                for attr_name in ('weight', 'bias'):
-                    if f'ed_encoder.layer.{num}.attention.self.w2e_{mat_name}.{attr_name}' not in state_dict:
-                        new_state_dict[f'ed_encoder.layer.{num}.attention.self.w2e_{mat_name}.{attr_name}'] =\
-                            state_dict[f'encoder.layer.{num}.attention.self.{mat_name}.{attr_name}']
-                    if f'ed_encoder.layer.{num}.attention.self.e2w_{mat_name}.{attr_name}' not in state_dict:
-                        new_state_dict[f'ed_encoder.layer.{num}.attention.self.e2w_{mat_name}.{attr_name}'] =\
-                            state_dict[f'encoder.layer.{num}.attention.self.{mat_name}.{attr_name}']
-                    if f'ed_encoder.layer.{num}.attention.self.e2e_{mat_name}.{attr_name}' not in state_dict:
-                        new_state_dict[f'ed_encoder.layer.{num}.attention.self.e2e_{mat_name}.{attr_name}'] =\
-                            state_dict[f'encoder.layer.{num}.attention.self.{mat_name}.{attr_name}']
-
-        super(LukeTwoStepWordEntityAttentionModel, self).load_state_dict(new_state_dict, *args, **kwargs)
 
 
 class WordEntitySelfAttention(nn.Module):

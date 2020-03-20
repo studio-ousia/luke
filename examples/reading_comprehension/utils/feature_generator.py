@@ -1,16 +1,21 @@
+import logging
 import multiprocessing
+import unicodedata
 from argparse import Namespace
 from contextlib import closing
+from itertools import chain, repeat
 from multiprocessing.pool import Pool
-from tqdm import tqdm
 
-from ...utils.text_encoder import TextEncoder
+from tqdm import tqdm
+from transformers.tokenization_roberta import RobertaTokenizer
+
+logger = logging.getLogger(__name__)
 
 
 class InputFeatures(object):
     def __init__(self, unique_id, example_index, doc_span_index, tokens, mentions, token_to_orig_map,
-                 token_is_max_context, word_ids, word_segment_ids, word_attention_mask, entity_candidate_ids,
-                 entity_position_ids, entity_segment_ids, entity_attention_mask, start_positions, end_positions):
+                 token_is_max_context, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
+                 entity_segment_ids, entity_attention_mask, start_positions, end_positions):
         self.unique_id = unique_id
         self.example_index = example_index
         self.doc_span_index = doc_span_index
@@ -21,7 +26,7 @@ class InputFeatures(object):
         self.word_ids = word_ids
         self.word_segment_ids = word_segment_ids
         self.word_attention_mask = word_attention_mask
-        self.entity_candidate_ids = entity_candidate_ids
+        self.entity_ids = entity_ids
         self.entity_position_ids = entity_position_ids
         self.entity_segment_ids = entity_segment_ids
         self.entity_attention_mask = entity_attention_mask
@@ -30,11 +35,11 @@ class InputFeatures(object):
 
 
 def convert_examples_to_features(
-        examples, tokenizer, entity_vocab, mention_db, max_seq_length, max_mention_length, max_candidate_length,
-        doc_stride, max_query_length, segment_b_id, add_extra_sep_token, is_training,
+        examples, tokenizer, entity_vocab, mention_db, dump_db, redirect_mappings, max_seq_length, max_mention_length,
+        doc_stride, max_query_length, min_mention_link_prob, segment_b_id, add_extra_sep_token, is_training,
         pool_size=multiprocessing.cpu_count(), chunk_size=30):
-    text_encoder = TextEncoder(tokenizer, entity_vocab, mention_db, max_mention_length, max_candidate_length,
-                               add_extra_sep_token, segment_b_id)
+    passage_encoder = PassageEncoder(tokenizer, entity_vocab, mention_db, dump_db, redirect_mappings,
+                                     max_mention_length, min_mention_link_prob, add_extra_sep_token, segment_b_id)
 
     worker_params = Namespace(
         tokenizer=tokenizer,
@@ -42,7 +47,7 @@ def convert_examples_to_features(
         doc_stride=doc_stride,
         max_query_length=max_query_length,
         add_extra_sep_token=add_extra_sep_token,
-        text_encoder=text_encoder,
+        passage_encoder=passage_encoder,
         is_training=is_training,
     )
     features = []
@@ -58,6 +63,145 @@ def convert_examples_to_features(
     return features
 
 
+class PassageEncoder(object):
+    def __init__(self, tokenizer, entity_vocab, mention_db, dump_db, redirect_mappings, max_mention_length,
+                 min_mention_link_prob, add_extra_sep_token, segment_b_id):
+        self._tokenizer = tokenizer
+        self._entity_vocab = entity_vocab
+        self._mention_db = mention_db
+        self._dump_db = dump_db
+        self._redirect_mappings = redirect_mappings
+        self._max_mention_length = max_mention_length
+        self._add_extra_sep_token = add_extra_sep_token
+        self._segment_b_id = segment_b_id
+        self._min_mention_link_prob = min_mention_link_prob
+
+    def encode(self, title, tokens_a, tokens_b):
+        if self._add_extra_sep_token:
+            mid_sep_tokens = [self._tokenizer.sep_token] * 2
+        else:
+            mid_sep_tokens = [self._tokenizer.sep_token]
+
+        all_tokens = [self._tokenizer.cls_token] + tokens_a + mid_sep_tokens + tokens_b + [self._tokenizer.sep_token]
+
+        word_ids = self._tokenizer.convert_tokens_to_ids(all_tokens)
+        word_segment_ids = [0] * (len(tokens_a) + len(mid_sep_tokens) + 1) + [self._segment_b_id] * (len(tokens_b) + 1)
+        word_attention_mask = [1] * len(all_tokens)
+
+        try:
+            title = self._dump_db.resolve_redirect(title)
+            mention_candidates = {}
+            ambiguous_mentions = set()
+            for paragraph in self._dump_db.get_paragraphs(title):
+                for link in paragraph.wiki_links:
+                    link_text = self._normalize_mention(link.text)
+                    link_title = self._dump_db.resolve_redirect(link.title)
+
+                    if link_text in mention_candidates and mention_candidates[link_text] != link_title:
+                        ambiguous_mentions.add(link_text)
+                        continue
+
+                    mentions = self._mention_db.query(link_text)
+                    if title in [m.title for m in mentions]:
+                        continue
+                    if mentions and mentions[0].link_prob >= self._min_mention_link_prob:
+                        mention_candidates[link_text] = link_title
+
+            for link_text in ambiguous_mentions:
+                del mention_candidates[link_text]
+
+        except KeyError:
+            mention_candidates = {}
+            logger.warning('Not found in the Dump DB: %s', title)
+
+        mentions_a = self.detect_mentions(tokens_a, mention_candidates)
+        mentions_b = self.detect_mentions(tokens_b, mention_candidates)
+        all_mentions = mentions_a + mentions_b
+
+        if not all_mentions:
+            entity_segment_ids = [0]
+            entity_attention_mask = [0]
+            entity_ids = [0]
+            entity_position_ids = [[-1 for y in range(self._max_mention_length)]]
+        else:
+            entity_segment_ids = [0] * len(mentions_a) + [self._segment_b_id] * len(mentions_b)
+            entity_attention_mask = [1] * len(all_mentions)
+            entity_ids = [0] * len(all_mentions)
+            entity_position_ids = [[-1 for y in range(self._max_mention_length)] for x in range(len(all_mentions))]
+
+            offset_a = 1
+            offset_b = len(tokens_a) + 2  # 2 for CLS and SEP tokens
+            if self._add_extra_sep_token:
+                offset_b += 1
+
+            for i, (offset, (entity_id, start, end)) in enumerate(chain(zip(repeat(offset_a), mentions_a),
+                                                                        zip(repeat(offset_b), mentions_b))):
+                entity_ids[i] = entity_id
+                entity_position_ids[i][:end - start] = range(start + offset, end + offset)
+
+        return dict(
+            tokens=all_tokens,
+            mentions=all_mentions,
+            word_ids=word_ids,
+            word_segment_ids=word_segment_ids,
+            word_attention_mask=word_attention_mask,
+            entity_ids=entity_ids,
+            entity_position_ids=entity_position_ids,
+            entity_segment_ids=entity_segment_ids,
+            entity_attention_mask=entity_attention_mask,
+        )
+
+    def detect_mentions(self, tokens, mention_candidates):
+        mentions = []
+        cur = 0
+        for start, token in enumerate(tokens):
+            if start < cur:
+                continue
+            if self._is_subword(token):
+                continue
+
+            for end in range(min(start + self._max_mention_length, len(tokens)), start, -1):
+                if end < len(tokens) and self._is_subword(tokens[end]):
+                    continue
+                mention_text = self._tokenizer.convert_tokens_to_string(tokens[start:end]).lower()
+                mention_text = ' '.join(mention_text.split(' ')).strip()
+                if mention_text in mention_candidates:
+                    cur = end
+                    title = mention_candidates[mention_text]
+                    title = self._redirect_mappings.get(title, title)  # resolve mismatch between two dumps
+                    if title in self._entity_vocab:
+                        mentions.append((self._entity_vocab[title], start, end))
+                    break
+
+        return mentions
+
+    def _is_subword(self, token):
+        if isinstance(self._tokenizer, RobertaTokenizer):
+            token = self._tokenizer.convert_tokens_to_string(token)
+            if not token.startswith(' ') and not self._is_punctuation(token[0]):
+                return True
+        elif token.startswith('##'):
+            return True
+
+        return False
+
+    @staticmethod
+    def _is_punctuation(char):
+        # obtained from:
+        # https://github.com/huggingface/transformers/blob/5f25a5f367497278bf19c9994569db43f96d5278/transformers/tokenization_bert.py#L489
+        cp = ord(char)
+        if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or(cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
+            return True
+        cat = unicodedata.category(char)
+        if cat.startswith("P"):
+            return True
+        return False
+
+    @staticmethod
+    def _normalize_mention(text):
+        return ' '.join(text.lower().split(' ')).strip()
+
+
 params = None
 
 
@@ -70,8 +214,8 @@ def _process_example(args):
     example_index, example = args
 
     tokenizer = params.tokenizer
-    query_tokens = tokenizer.tokenize(example.question_text)
 
+    query_tokens = _tokenize(example.question_text)
     if len(query_tokens) > params.max_query_length:
         query_tokens = query_tokens[0:params.max_query_length]
 
@@ -80,7 +224,7 @@ def _process_example(args):
     all_doc_tokens = []
     for i, token in enumerate(example.doc_tokens):
         orig_to_tok_index.append(len(all_doc_tokens))
-        sub_tokens = tokenizer.tokenize(token)
+        sub_tokens = _tokenize(token)
         for sub_token in sub_tokens:
             tok_to_orig_index.append(i)
             all_doc_tokens.append(sub_token)
@@ -152,7 +296,6 @@ def _process_example(args):
                     end_positions.append(tok_end - doc_start + doc_offset)
 
                 if not start_positions:
-                    # continue
                     start_positions = [0]
                     end_positions = [0]
 
@@ -164,10 +307,17 @@ def _process_example(args):
             token_is_max_context=token_is_max_context,
             start_positions=start_positions,
             end_positions=end_positions,
-            **params.text_encoder.encode_text_pair(query_tokens, answer_tokens)
+            **params.passage_encoder.encode(example.title, query_tokens, answer_tokens)
         ))
 
     return features
+
+
+def _tokenize(text):
+    if isinstance(params.tokenizer, RobertaTokenizer):
+        return params.tokenizer.tokenize(text, add_prefix_space=True)
+    else:
+        return params.tokenizer.tokenize(text)
 
 
 def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer, orig_answer_text):
@@ -175,7 +325,7 @@ def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer, orig_ans
        Original version was obtained from here:
        https://github.com/huggingface/transformers/blob/23c6998bf46e43092fc59543ea7795074a720f08/src/transformers/data/processors/squad.py#L25
     """
-    tok_answer_text = tokenizer.convert_tokens_to_string(tokenizer.tokenize(orig_answer_text)).strip()
+    tok_answer_text = tokenizer.convert_tokens_to_string(_tokenize(orig_answer_text)).strip()
 
     for new_start in range(input_start, input_end + 1):
         for new_end in range(input_end, new_start - 1, -1):

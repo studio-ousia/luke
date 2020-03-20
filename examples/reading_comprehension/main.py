@@ -2,9 +2,7 @@ import glob
 import json
 import logging
 import os
-import random
 from argparse import Namespace
-from functools import partial
 
 import click
 import torch
@@ -12,15 +10,14 @@ from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 from transformers import WEIGHTS_NAME, BertTokenizer
+from wikipedia2vec.dump_db import DumpDB
 
-from ..model import two_stage_model_args
 from ..trainer import Trainer, trainer_args
 from ..utils import set_seed
+from ..word_entity_model import word_entity_model_args
 from .model import LukeForReadingComprehension
-from .utils.dataset import RECORD_HIGHLIGHT_TOKEN, RECORD_PLACEHOLDER_TOKEN, RecordProcessor, SquadV1Processor,\
-    SquadV2Processor
+from .utils.dataset import SquadV1Processor, SquadV2Processor
 from .utils.feature_generator import convert_examples_to_features
-from .utils.record_eval import evaluate as evaluate_on_record
 from .utils.result_writer import Result, write_predictions
 from .utils.squad_eval import EVAL_OPTS as SQUAD_EVAL_OPTS
 from .utils.squad_eval import main as evaluate_on_squad
@@ -35,7 +32,8 @@ def cli():
 
 @cli.command()
 @click.option('--data-dir', default='data/squad', type=click.Path(exists=True))
-@click.option('--dataset-type', default='squad', type=click.Choice(['squad', 'record']))
+@click.option('--dump-db-file', type=click.Path(exists=True), required=True)
+@click.option('--redirects-file', type=click.Path(exists=True), default='enwiki_20181220_redirects.tsv')
 @click.option('--with-negative/--no-negative', default=True)
 @click.option('--null-score-diff-threshold', type=float, default=0.0)
 @click.option('--doc-stride', default=128)
@@ -44,20 +42,17 @@ def cli():
 @click.option('--max-answer-length', default=30)
 @click.option('--max-seq-length', default=512)
 @click.option('--max-entity-length', default=128)
-@click.option('--max-candidate-length', default=30)
+@click.option('--min-mention-link-prob', default=0.1)
 @click.option('--do-train/--no-train', default=True)
-@click.option('--do-eval/--no-eval', default=True)
-@click.option('--create-cache', is_flag=True)
-@click.option('--overwrite-cache', is_flag=True)
 @click.option('--train-batch-size', default=1)
+@click.option('--do-eval/--no-eval', default=True)
 @click.option('--eval-batch-size', default=8)
+@click.option('--create-cache', is_flag=True)
 @click.option('--num-train-epochs', default=2)
-@click.option('--fix-entity-emb/--update-entity-emb', default=True)
 @click.option('--no-entity', is_flag=True, default=False)
-@click.option('--use-first-answer/--use-random-answer', default=True)
 @click.option('--eval-all-checkpoints/--no-eval-checkpoints', default=False)
 @click.option('--seed', default=42)
-@two_stage_model_args
+@word_entity_model_args
 @trainer_args
 @click.pass_obj
 def run(common_args, **task_args):
@@ -66,32 +61,27 @@ def run(common_args, **task_args):
 
     set_seed(args.seed)
 
-    if 'roberta' in args.bert_model_name:
-        args.tokenizer.tokenize = partial(args.tokenizer.tokenize, add_prefix_space=True)
+    args.experiment.log_parameters({p.name: getattr(args, p.name) for p in run.params})
 
-    if args.dataset_type == 'record':
-        args.tokenizer.add_special_tokens(
-            dict(additional_special_tokens=[RECORD_HIGHLIGHT_TOKEN, RECORD_PLACEHOLDER_TOKEN]))
+    args.dump_db = DumpDB(args.dump_db_file)
+
+    args.redirect_mappings = {}
+    with open(args.redirects_file) as f:
+        for line in f:
+            src, dest = line.rstrip().split('\t')
+            args.redirect_mappings[src] = dest
 
     if args.create_cache:
         load_and_cache_examples(args, evaluate=False)
         load_and_cache_examples(args, evaluate=True)
         return
 
-    if args.dataset_type == 'record':
-        args.model_config.vocab_size += 2
-        new_emb = torch.empty(2, args.model_config.hidden_size)
-        new_emb.normal_(mean=0.0, std=args.model_config.initializer_range)
-        args.model_weights['embeddings.word_embeddings.weight'] = torch.cat(
-            [args.model_weights['embeddings.word_embeddings.weight'], new_emb])
-
     if args.do_train:
         model = LukeForReadingComprehension(args)
         model.load_state_dict(args.model_weights, strict=False)
         model.to(args.device)
 
-        if args.fix_entity_emb:
-            model.entity_embeddings.entity_embeddings.weight.requires_grad = False
+        model.entity_embeddings.entity_embeddings.weight.requires_grad = False
 
         train_dataloader, _, _, _ = load_and_cache_examples(args, evaluate=False)
 
@@ -105,13 +95,15 @@ def run(common_args, **task_args):
         else:
             torch.save(model.state_dict(), os.path.join(args.output_dir, WEIGHTS_NAME))
 
+    if args.local_rank not in (0, -1):
+        return {}
+
     model = None
     torch.cuda.empty_cache()
-    if args.local_rank != -1:
-        torch.distributed.barrier()
 
     results = {}
-    if args.do_eval and args.local_rank in (-1, 0):
+
+    if args.do_eval:
         checkpoints = [args.output_dir]
         if args.eval_all_checkpoints:
             checkpoints = list(os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + '/**/' + WEIGHTS_NAME,
@@ -130,15 +122,18 @@ def run(common_args, **task_args):
             result = {k + '_' + str(global_step) if global_step else k: v for k, v in result.items()}
             results.update(result)
 
-    logger.info('Results: %s', results)
     print(results)
+    args.experiment.log_metrics(results)
+    with open(os.path.join(args.output_dir, 'results.json'), 'w') as f:
+        json.dump(results, f)
+
     return results
 
 
 def evaluate(args, model, prefix=''):
     dataloader, examples, features, processor = load_and_cache_examples(args, evaluate=True)
     all_results = []
-    for batch in tqdm(dataloader, desc="Eval"):
+    for batch in tqdm(dataloader, desc='eval'):
         model.eval()
         inputs = {k: v.to(args.device) for k, v in batch.items() if k != 'example_indices'}
         with torch.no_grad():
@@ -165,25 +160,16 @@ def evaluate(args, model, prefix=''):
                       output_prediction_file, output_nbest_file, output_null_log_odds_file, False,
                       args.with_negative, args.null_score_diff_threshold, args.tokenizer)
 
-    if args.dataset_type == 'record':
-        with open(os.path.join(args.data_dir, processor.dev_file)) as f:
-            dev_data = json.load(f)['data']
-        with open(output_prediction_file) as f:
-            predictions = json.load(f)
-        return evaluate_on_record(dev_data, predictions)[0]
-    else:
-        return evaluate_on_squad(SQUAD_EVAL_OPTS(os.path.join(args.data_dir, processor.dev_file),
-                                                 pred_file=output_prediction_file,
-                                                 na_prob_file=output_null_log_odds_file))
+    return evaluate_on_squad(SQUAD_EVAL_OPTS(os.path.join(args.data_dir, processor.dev_file),
+                                             pred_file=output_prediction_file,
+                                             na_prob_file=output_null_log_odds_file))
 
 
 def load_and_cache_examples(args, evaluate=False):
     if args.local_rank not in (-1, 0) and not evaluate:
         torch.distributed.barrier()
 
-    if args.dataset_type == 'record':
-        processor = RecordProcessor()
-    elif args.with_negative:
+    if args.with_negative:
         processor = SquadV2Processor()
     else:
         processor = SquadV1Processor()
@@ -199,15 +185,17 @@ def load_and_cache_examples(args, evaluate=False):
         bert_model_name.split('-')[0],
         str(len(args.entity_vocab)),
         os.path.basename(args.mention_db.mention_db_file),
+        os.path.basename(args.dump_db_file),
+        os.path.basename(args.redirects_file),
         str(args.max_seq_length),
         str(args.max_mention_length),
-        str(args.max_candidate_length),
         str(args.doc_stride),
         str(args.max_query_length),
+        str(args.min_mention_link_prob),
         str(evaluate),
         str(args.with_negative)
     )) + '.pkl')
-    if os.path.exists(cache_file) and not args.overwrite_cache:
+    if os.path.exists(cache_file):
         logger.info('Loading features from the cached file %s', cache_file)
         features = torch.load(cache_file)
     else:
@@ -220,9 +208,9 @@ def load_and_cache_examples(args, evaluate=False):
             add_extra_sep_token = True
 
         features = convert_examples_to_features(
-            examples, args.tokenizer, args.entity_vocab, args.mention_db, args.max_seq_length, args.max_mention_length,
-            args.max_candidate_length, args.doc_stride, args.max_query_length, segment_b_id, add_extra_sep_token,
-            not evaluate)
+            examples, args.tokenizer, args.entity_vocab, args.mention_db, args.dump_db, args.redirect_mappings,
+            args.max_seq_length, args.max_mention_length, args.doc_stride, args.max_query_length,
+            args.min_mention_link_prob, segment_b_id, add_extra_sep_token, not evaluate)
 
         if args.local_rank in (-1, 0):
             torch.save(features, cache_file)
@@ -239,7 +227,7 @@ def load_and_cache_examples(args, evaluate=False):
             word_ids=create_padded_sequence('word_ids', args.tokenizer.pad_token_id),
             word_attention_mask=create_padded_sequence('word_attention_mask', 0),
             word_segment_ids=create_padded_sequence('word_segment_ids', 0),
-            entity_candidate_ids=create_padded_sequence('entity_candidate_ids', 0)[:, :args.max_entity_length, :],
+            entity_ids=create_padded_sequence('entity_ids', 0)[:, :args.max_entity_length],
             entity_attention_mask=create_padded_sequence('entity_attention_mask', 0)[:, :args.max_entity_length],
             entity_position_ids=create_padded_sequence('entity_position_ids', -1)[:, :args.max_entity_length, :],
             entity_segment_ids=create_padded_sequence('entity_segment_ids', 0)[:, :args.max_entity_length],
@@ -250,14 +238,8 @@ def load_and_cache_examples(args, evaluate=False):
         if evaluate:
             ret['example_indices'] = torch.tensor([o[0] for o in batch], dtype=torch.long)
         else:
-            if args.dataset_type == 'record':
-                ret['start_positions'] = torch.tensor([random.choice(o[1].start_positions) for o in batch],
-                                                      dtype=torch.long)
-                ret['end_positions'] = torch.tensor([random.choice(o[1].end_positions) for o in batch],
-                                                    dtype=torch.long)
-            else:
-                ret['start_positions'] = torch.tensor([o[1].start_positions[0] for o in batch], dtype=torch.long)
-                ret['end_positions'] = torch.tensor([o[1].end_positions[0] for o in batch], dtype=torch.long)
+            ret['start_positions'] = torch.tensor([o[1].start_positions[0] for o in batch], dtype=torch.long)
+            ret['end_positions'] = torch.tensor([o[1].end_positions[0] for o in batch], dtype=torch.long)
 
         return ret
 
