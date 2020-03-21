@@ -5,16 +5,15 @@ https://github.com/huggingface/transformers/blob/23c6998bf46e43092fc59543ea77950
 import json
 import logging
 import os
+import urllib.parse
 
 logger = logging.getLogger(__name__)
 
-RECORD_PLACEHOLDER_TOKEN = '[placeholder]'
-RECORD_HIGHLIGHT_TOKEN = '[highlight]'
 
-
-class BaseExample(object):
-    def __init__(self, qas_id, question_text, context_text, answers, is_impossible=False):
+class SquadExample(object):
+    def __init__(self, qas_id, title, question_text, context_text, answers, is_impossible=False):
         self.qas_id = qas_id
+        self.title = title.replace('_', ' ')
         self.question_text = question_text
         self.context_text = context_text
         self.answers = answers
@@ -53,61 +52,6 @@ class BaseExample(object):
         return False
 
 
-class RecordExample(BaseExample):
-    def __init__(self, qas_id, question_text, context_text, answers, entities):
-        super(RecordExample, self).__init__(qas_id, question_text, context_text, answers)
-        self.entities = entities
-
-
-class SquadExample(BaseExample):
-    pass
-
-
-class RecordProcessor(object):
-    train_file = 'train.json'
-    dev_file = 'dev.json'
-
-    def __init__(self, placeholder_token=RECORD_PLACEHOLDER_TOKEN, highlight_token=RECORD_HIGHLIGHT_TOKEN):
-        self.placeholder_token = placeholder_token
-        self.highlight_token = highlight_token
-
-    def get_train_examples(self, data_dir):
-        with open(os.path.join(data_dir, self.train_file)) as reader:
-            input_data = json.load(reader)['data']
-        return self._create_examples(input_data)
-
-    def get_dev_examples(self, data_dir):
-        with open(os.path.join(data_dir, self.dev_file)) as reader:
-            input_data = json.load(reader)['data']
-        return self._create_examples(input_data)
-
-    def _create_examples(self, input_data):
-        examples = []
-        for entry in input_data:
-            context_text = entry['passage']['text']
-            entities = entry['passage']['entities']
-            for qa in entry['qas']:
-                qas_id = qa['id']
-                question_text = qa['query']
-                answers = qa.get('answers', [])
-                for answer in answers:
-                    answer['answer_start'] = answer['start']  # for compatibility for SQuAD
-
-                example = RecordExample(
-                    qas_id=qas_id,
-                    question_text=question_text,
-                    context_text=context_text,
-                    answers=answers,
-                    entities=entities,
-                )
-                example.question_text = example.question_text.replace('@placeholder', self.placeholder_token)
-                example.doc_tokens = [t.replace('@highlight', self.highlight_token) for t in example.doc_tokens]
-
-                examples.append(example)
-
-        return examples
-
-
 class SquadProcessor(object):
     train_file = None
     dev_file = None
@@ -122,9 +66,14 @@ class SquadProcessor(object):
             input_data = json.load(reader)['data']
         return self._create_examples(input_data)
 
+    # def __init__(self, qas_id, title, question_text, context_text, answers, is_impossible=False):
     def _create_examples(self, input_data):
-        return [SquadExample(qa['id'], qa['question'], para['context'], qa.get('answers', []),
-                             qa.get('is_impossible', False))
+        return [SquadExample(qas_id=qa['id'],
+                             title=urllib.parse.unquote(entry['title'].replace('_', ' ')),
+                             question_text=qa['question'],
+                             context_text=para['context'],
+                             answers=qa.get('answers', []),
+                             is_impossible=qa.get('is_impossible', False))
                 for entry in input_data for para in entry['paragraphs'] for qa in para['qas']]
 
 

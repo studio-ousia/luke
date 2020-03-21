@@ -193,10 +193,10 @@ def load_and_cache_examples(args, fold='train'):
         fold
     )) + '.pkl')
     if os.path.exists(cache_file):
-        logger.info("Loading features from cached file %s", cache_file)
+        logger.info('Loading features from cached file %s', cache_file)
         features = torch.load(cache_file)
     else:
-        logger.info("Creating features from dataset file")
+        logger.info('Creating features from dataset file')
 
         features = convert_examples_to_features(examples, label_list, args.tokenizer, args.max_mention_length)
 
