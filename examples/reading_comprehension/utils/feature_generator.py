@@ -119,10 +119,10 @@ class PassageEncoder(object):
         all_mentions = mentions_a + mentions_b
 
         if not all_mentions:
-            entity_segment_ids = [0]
-            entity_attention_mask = [0]
-            entity_ids = [0]
-            entity_position_ids = [[-1 for y in range(self._max_mention_length)]]
+            entity_segment_ids = [0, 0]
+            entity_attention_mask = [0, 0]
+            entity_ids = [0, 0]
+            entity_position_ids = [[-1 for y in range(self._max_mention_length)]] * 2
         else:
             entity_segment_ids = [0] * len(mentions_a) + [self._segment_b_id] * len(mentions_b)
             entity_attention_mask = [1] * len(all_mentions)
@@ -138,6 +138,12 @@ class PassageEncoder(object):
                                                                         zip(repeat(offset_b), mentions_b))):
                 entity_ids[i] = entity_id
                 entity_position_ids[i][:end - start] = range(start + offset, end + offset)
+
+            if len(all_mentions) == 1:
+                entity_ids.append(0)
+                entity_segment_ids.append(0)
+                entity_attention_mask.append(0)
+                entity_position_ids.append([-1 for y in range(self._max_mention_length)])
 
         return dict(
             tokens=all_tokens,
