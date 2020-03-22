@@ -114,19 +114,19 @@ class PassageEncoder(object):
             mention_candidates = {}
             logger.warning('Not found in the Dump DB: %s', title)
 
-        mentions_a = self.detect_mentions(tokens_a, mention_candidates)
-        mentions_b = self.detect_mentions(tokens_b, mention_candidates)
+        mentions_a = self._detect_mentions(tokens_a, mention_candidates)
+        mentions_b = self._detect_mentions(tokens_b, mention_candidates)
         all_mentions = mentions_a + mentions_b
 
         if not all_mentions:
+            entity_ids = [0, 0]
             entity_segment_ids = [0, 0]
             entity_attention_mask = [0, 0]
-            entity_ids = [0, 0]
             entity_position_ids = [[-1 for y in range(self._max_mention_length)]] * 2
         else:
+            entity_ids = [0] * len(all_mentions)
             entity_segment_ids = [0] * len(mentions_a) + [self._segment_b_id] * len(mentions_b)
             entity_attention_mask = [1] * len(all_mentions)
-            entity_ids = [0] * len(all_mentions)
             entity_position_ids = [[-1 for y in range(self._max_mention_length)] for x in range(len(all_mentions))]
 
             offset_a = 1
@@ -157,7 +157,7 @@ class PassageEncoder(object):
             entity_attention_mask=entity_attention_mask,
         )
 
-    def detect_mentions(self, tokens, mention_candidates):
+    def _detect_mentions(self, tokens, mention_candidates):
         mentions = []
         cur = 0
         for start, token in enumerate(tokens):
@@ -169,8 +169,8 @@ class PassageEncoder(object):
             for end in range(min(start + self._max_mention_length, len(tokens)), start, -1):
                 if end < len(tokens) and self._is_subword(tokens[end]):
                     continue
-                mention_text = self._tokenizer.convert_tokens_to_string(tokens[start:end]).lower()
-                mention_text = ' '.join(mention_text.split(' ')).strip()
+                mention_text = self._tokenizer.convert_tokens_to_string(tokens[start:end])
+                mention_text = self._normalize_mention(mention_text)
                 if mention_text in mention_candidates:
                     cur = end
                     title = mention_candidates[mention_text]
