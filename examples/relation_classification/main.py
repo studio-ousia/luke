@@ -30,14 +30,15 @@ def cli():
 @click.option('--data-dir', default='data/tacred', type=click.Path(exists=True))
 @click.option('--do-train/--no-train', default=True)
 @click.option('--train-batch-size', default=1)
-@click.option('--num-train-epochs', default=2.0)
+@click.option('--num-train-epochs', default=5.0)
 @click.option('--do-eval/--no-eval', default=True)
 @click.option('--eval-batch-size', default=8)
 @click.option('--use-entity-type-token', is_flag=True)
 @click.option('--use-marker-token', is_flag=True)
 @click.option('--use-difference-feature', is_flag=True)
+@click.option('--use-hidden-layer', is_flag=True)
 @click.option('--dropout-prob', default=0.1)
-@click.option('--seed', default=42)
+@click.option('--seed', default=10)
 @word_entity_model_args
 @trainer_args
 @click.pass_obj

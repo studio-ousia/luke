@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers.modeling_bert import gelu
 
 from ..word_entity_model import LukeWordEntityAttentionModel
 
@@ -17,6 +18,9 @@ class LukeForEntitySpanQA(LukeWordEntityAttentionModel):
                 feature_size = args.model_config.hidden_size * 2
         else:
             feature_size = args.model_config.hidden_size
+
+        if args.use_hidden_layer:
+            self.dense = nn.Linear(feature_size, feature_size)
 
         self.dropout = nn.Dropout(args.dropout_prob)
         self.scorer = nn.Linear(feature_size, 1)
@@ -39,6 +43,10 @@ class LukeForEntitySpanQA(LukeWordEntityAttentionModel):
                 feature_vector = torch.cat([feature_vector, diff_feature_vector], dim=2)
         else:
             feature_vector = doc_entity_emb
+
+        if self.args.use_hidden_layer:
+            feature_vector = self.dense(feature_vector)
+            feature_vector = gelu(feature_vector)
 
         feature_vector = self.dropout(feature_vector)
         logits = self.scorer(feature_vector)

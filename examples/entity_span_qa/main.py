@@ -42,6 +42,7 @@ def cli():
 @click.option('--use-marker-token', is_flag=True)
 @click.option('--use-placeholder-emb', is_flag=True)
 @click.option('--use-difference-feature', is_flag=True)
+@click.option('--use-hidden-layer', is_flag=True)
 @click.option('--dropout-prob', default=0.1)
 @click.option('--seed', default=1)
 @trainer_args
