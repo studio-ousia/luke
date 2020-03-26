@@ -35,11 +35,12 @@ class InputFeatures(object):
 
 
 def convert_examples_to_features(
-        examples, tokenizer, entity_vocab, mention_db, dump_db, redirect_mappings, max_seq_length, max_mention_length,
-        doc_stride, max_query_length, min_mention_link_prob, segment_b_id, add_extra_sep_token, is_training,
-        pool_size=multiprocessing.cpu_count(), chunk_size=30):
-    passage_encoder = PassageEncoder(tokenizer, entity_vocab, mention_db, dump_db, redirect_mappings,
-                                     max_mention_length, min_mention_link_prob, add_extra_sep_token, segment_b_id)
+        examples, tokenizer, entity_vocab, wiki_link_db, model_redirect_mappings, link_redirect_mappings,
+        max_seq_length, max_mention_length, doc_stride, max_query_length, min_mention_link_prob, segment_b_id,
+        add_extra_sep_token, is_training, pool_size=multiprocessing.cpu_count(), chunk_size=30):
+    passage_encoder = PassageEncoder(
+        tokenizer, entity_vocab, wiki_link_db, model_redirect_mappings, link_redirect_mappings, max_mention_length,
+        min_mention_link_prob, add_extra_sep_token, segment_b_id)
 
     worker_params = Namespace(
         tokenizer=tokenizer,
@@ -64,13 +65,13 @@ def convert_examples_to_features(
 
 
 class PassageEncoder(object):
-    def __init__(self, tokenizer, entity_vocab, mention_db, dump_db, redirect_mappings, max_mention_length,
-                 min_mention_link_prob, add_extra_sep_token, segment_b_id):
+    def __init__(self, tokenizer, entity_vocab, wiki_link_db, model_redirect_mappings, link_redirect_mappings,
+                 max_mention_length, min_mention_link_prob, add_extra_sep_token, segment_b_id):
         self._tokenizer = tokenizer
         self._entity_vocab = entity_vocab
-        self._mention_db = mention_db
-        self._dump_db = dump_db
-        self._redirect_mappings = redirect_mappings
+        self._wiki_link_db = wiki_link_db
+        self._model_redirect_mappings = model_redirect_mappings
+        self._link_redirect_mappings = link_redirect_mappings
         self._max_mention_length = max_mention_length
         self._add_extra_sep_token = add_extra_sep_token
         self._segment_b_id = segment_b_id
@@ -89,23 +90,19 @@ class PassageEncoder(object):
         word_attention_mask = [1] * len(all_tokens)
 
         try:
-            title = self._dump_db.resolve_redirect(title)
+            title = self._link_redirect_mappings.get(title, title)
             mention_candidates = {}
             ambiguous_mentions = set()
-            for paragraph in self._dump_db.get_paragraphs(title):
-                for link in paragraph.wiki_links:
-                    link_text = self._normalize_mention(link.text)
-                    link_title = self._dump_db.resolve_redirect(link.title)
+            for link in self._wiki_link_db.get(title):
+                if link.link_prob < self._min_mention_link_prob:
+                    continue
 
-                    if link_text in mention_candidates and mention_candidates[link_text] != link_title:
-                        ambiguous_mentions.add(link_text)
-                        continue
+                link_text = self._normalize_mention(link.text)
+                if link_text in mention_candidates and mention_candidates[link_text] != link.title:
+                    ambiguous_mentions.add(link_text)
+                    continue
 
-                    mentions = self._mention_db.query(link_text)
-                    if title in [m.title for m in mentions]:
-                        continue
-                    if mentions and mentions[0].link_prob >= self._min_mention_link_prob:
-                        mention_candidates[link_text] = link_title
+                mention_candidates[link_text] = link.title
 
             for link_text in ambiguous_mentions:
                 del mention_candidates[link_text]
@@ -114,19 +111,19 @@ class PassageEncoder(object):
             mention_candidates = {}
             logger.warning('Not found in the Dump DB: %s', title)
 
-        mentions_a = self.detect_mentions(tokens_a, mention_candidates)
-        mentions_b = self.detect_mentions(tokens_b, mention_candidates)
+        mentions_a = self._detect_mentions(tokens_a, mention_candidates)
+        mentions_b = self._detect_mentions(tokens_b, mention_candidates)
         all_mentions = mentions_a + mentions_b
 
         if not all_mentions:
+            entity_ids = [0, 0]
             entity_segment_ids = [0, 0]
             entity_attention_mask = [0, 0]
-            entity_ids = [0, 0]
             entity_position_ids = [[-1 for y in range(self._max_mention_length)]] * 2
         else:
+            entity_ids = [0] * len(all_mentions)
             entity_segment_ids = [0] * len(mentions_a) + [self._segment_b_id] * len(mentions_b)
             entity_attention_mask = [1] * len(all_mentions)
-            entity_ids = [0] * len(all_mentions)
             entity_position_ids = [[-1 for y in range(self._max_mention_length)] for x in range(len(all_mentions))]
 
             offset_a = 1
@@ -157,7 +154,7 @@ class PassageEncoder(object):
             entity_attention_mask=entity_attention_mask,
         )
 
-    def detect_mentions(self, tokens, mention_candidates):
+    def _detect_mentions(self, tokens, mention_candidates):
         mentions = []
         cur = 0
         for start, token in enumerate(tokens):
@@ -169,12 +166,12 @@ class PassageEncoder(object):
             for end in range(min(start + self._max_mention_length, len(tokens)), start, -1):
                 if end < len(tokens) and self._is_subword(tokens[end]):
                     continue
-                mention_text = self._tokenizer.convert_tokens_to_string(tokens[start:end]).lower()
-                mention_text = ' '.join(mention_text.split(' ')).strip()
+                mention_text = self._tokenizer.convert_tokens_to_string(tokens[start:end])
+                mention_text = self._normalize_mention(mention_text)
                 if mention_text in mention_candidates:
                     cur = end
                     title = mention_candidates[mention_text]
-                    title = self._redirect_mappings.get(title, title)  # resolve mismatch between two dumps
+                    title = self._model_redirect_mappings.get(title, title)  # resolve mismatch between two dumps
                     if title in self._entity_vocab:
                         mentions.append((self._entity_vocab[title], start, end))
                     break

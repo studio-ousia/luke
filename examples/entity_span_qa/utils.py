@@ -135,8 +135,7 @@ def _process_example(args):
     query_tokens = tokenize(text_a, add_prefix_space=True)
 
     placeholder_start = len(query_tokens) + 1
-    if params.use_marker_token:
-        query_tokens.extend([ENTITY_MARKER_TOKEN, PLACEHOLDER_TOKEN, ENTITY_MARKER_TOKEN])
+    query_tokens.append(PLACEHOLDER_TOKEN)
     placeholder_end = len(query_tokens) + 1
 
     placeholder_position_ids = list(range(placeholder_start, placeholder_end))
