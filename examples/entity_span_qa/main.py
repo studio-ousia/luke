@@ -124,7 +124,8 @@ def run(common_args, **task_args):
             model = torch.nn.DataParallel(model)
         model.to(args.device)
 
-        results.update({f'dev_{k}':v for k, v in evaluate(args, model, fold='dev').items()})
+        output_file = os.path.join(args.output_dir, 'predictions.json')
+        results.update({f'dev_{k}':v for k, v in evaluate(args, model, fold='dev', out_file=output_file).items()})
 
     print(results)
     args.experiment.log_metrics(results)
@@ -134,7 +135,7 @@ def run(common_args, **task_args):
     return results
 
 
-def evaluate(args, model, fold='dev'):
+def evaluate(args, model, fold='dev', out_file=None):
     dataloader, examples, features, processor = load_and_cache_examples(args, fold)
     doc_predictions = defaultdict(list)
     for batch in tqdm(dataloader, desc='Eval'):
@@ -151,6 +152,8 @@ def evaluate(args, model, fold='dev'):
             doc_predictions[example_id].append((max_logit, entity))
 
     predictions = {k: sorted(v, key=lambda o: o[0])[-1][1]['text'] for k, v in doc_predictions.items()}
+    with open(out_file, 'w') as f:
+        json.dump(predictions, f)
 
     with open(os.path.join(args.data_dir, processor.dev_file)) as f:
         dev_data = json.load(f)['data']
