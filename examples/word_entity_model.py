@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers.modeling_bert import BertIntermediate, BertOutput, BertSelfOutput
-from entmax import sparsemax, entmax15, entmax_bisect
 
 from luke.model import LukeModel
 
@@ -15,8 +14,6 @@ def word_entity_model_args(func):
     @click.option('--word-entity-query', is_flag=True)
     @click.option('--word-entity-key', is_flag=True)
     @click.option('--word-entity-value', is_flag=True)
-    @click.option('--attention-activation', type=click.Choice(['softmax', 'sparsemax', 'entmax15', 'entmax_bisect']),
-                  default='softmax')
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -52,9 +49,6 @@ class LukeWordEntityAttentionModel(LukeModel):
                     if f'encoder.layer.{num}.attention.self.e2e_{mat_name}.{attr_name}' not in state_dict:
                         new_state_dict[f'encoder.layer.{num}.attention.self.e2e_{mat_name}.{attr_name}'] =\
                             state_dict[f'encoder.layer.{num}.attention.self.{mat_name}.{attr_name}']
-            # TODO: initialize entmax_alpha properly
-            if f'encoder.layer.{num}.attention.self.entmax_alpha' not in state_dict:
-                new_state_dict[f'encoder.layer.{num}.attention.self.entmax_alpha'] = torch.tensor(1.5)
 
         kwargs['strict'] = False
         super(LukeWordEntityAttentionModel, self).load_state_dict(new_state_dict, *args, **kwargs)
@@ -91,9 +85,6 @@ class WordEntitySelfAttention(nn.Module):
                 self.w2e_value = nn.Linear(config.hidden_size, self.all_head_size)
                 self.e2w_value = nn.Linear(config.hidden_size, self.all_head_size)
                 self.e2e_value = nn.Linear(config.hidden_size, self.all_head_size)
-
-        if args.attention_activation == 'entmax_bisect':
-            self.entmax_alpha = nn.Parameter(torch.tensor(0.0), requires_grad=True)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
@@ -164,15 +155,7 @@ class WordEntitySelfAttention(nn.Module):
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         attention_scores = attention_scores + attention_mask
 
-        if self.args.attention_activation == 'sparsemax':
-            attention_probs = sparsemax(attention_scores, dim=-1)
-        elif self.args.attention_activation == 'entmax15':
-            attention_probs = entmax15(attention_scores, dim=-1)
-        elif self.args.attention_activation == 'entmax_bisect':
-            attention_probs = entmax_bisect(attention_scores, self.entmax_alpha, dim=-1)
-        else:
-            attention_probs = F.softmax(attention_scores, dim=-1)
-
+        attention_probs = F.softmax(attention_scores, dim=-1)
         attention_probs = self.dropout(attention_probs)
 
         if self.args.word_entity_attention and self.args.word_entity_value:
