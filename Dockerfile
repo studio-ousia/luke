@@ -21,7 +21,7 @@ WORKDIR /workspace/apex
 RUN git checkout 5633f6dbf7952026264e3aba42413f06752b0515
 RUN pip3 install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
 
-RUN transformers-cli download --cache-dir=/workspace/.cache/transformers roberta-large
-RUN transformers-cli download --cache-dir=/workspace/.cache/transformers roberta-base
+RUN transformers-cli download roberta-large
+RUN transformers-cli download roberta-base
 
 WORKDIR /workspace
