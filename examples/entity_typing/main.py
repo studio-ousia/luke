@@ -32,7 +32,6 @@ def cli():
 @click.option('--do-eval/--no-eval', default=True)
 @click.option('--eval-batch-size', default=32)
 @click.option('--num-train-epochs', default=2.0)
-@click.option('--dropout-prob', default=0.1)
 @click.option('--seed', default=1)
 @word_entity_model_args
 @trainer_args
@@ -145,29 +144,27 @@ def evaluate(args, model, fold='dev'):
         all_predicted_indexes.append([i for i, v in enumerate(logits) if v > 0])
         all_label_indexes.append([i for i, v in enumerate(labels) if v > 0])
 
-    def micro_precision_recall_f1(all_predicted_indexes, all_label_indexes):
-        num_predicted_labels = 0
-        num_gold_labels = 0
-        num_correct_labels = 0
+    num_predicted_labels = 0
+    num_gold_labels = 0
+    num_correct_labels = 0
 
-        for predicted_indexes, label_indexes in zip(all_predicted_indexes, all_label_indexes):
-            num_predicted_labels += len(predicted_indexes)
-            num_gold_labels += len(label_indexes)
-            num_correct_labels += len(frozenset(predicted_indexes).intersection(frozenset(label_indexes)))
+    for predicted_indexes, label_indexes in zip(all_predicted_indexes, all_label_indexes):
+        num_predicted_labels += len(predicted_indexes)
+        num_gold_labels += len(label_indexes)
+        num_correct_labels += len(frozenset(predicted_indexes).intersection(frozenset(label_indexes)))
 
-        if num_predicted_labels > 0:
-            precision = num_correct_labels / num_predicted_labels
-        else:
-            precision = 0.
+    if num_predicted_labels > 0:
+        precision = num_correct_labels / num_predicted_labels
+    else:
+        precision = 0.
 
-        recall = num_correct_labels / num_gold_labels
-        if precision + recall == 0.:
-            f1 = 0.
-        else:
-            f1 = 2 * precision * recall / (precision + recall)
-        return dict(precision=precision, recall=recall, f1=f1)
+    recall = num_correct_labels / num_gold_labels
+    if precision + recall == 0.:
+        f1 = 0.
+    else:
+        f1 = 2 * precision * recall / (precision + recall)
 
-    return micro_precision_recall_f1(all_predicted_indexes, all_label_indexes)
+    return dict(precision=precision, recall=recall, f1=f1)
 
 
 def load_and_cache_examples(args, fold='train'):
@@ -188,7 +185,6 @@ def load_and_cache_examples(args, fold='train'):
 
     cache_file = os.path.join(args.data_dir, 'cache_' + '_'.join((
         bert_model_name.split('-')[0],
-        str(len(args.entity_vocab)),
         str(args.max_mention_length),
         fold
     )) + '.pkl')
@@ -197,7 +193,6 @@ def load_and_cache_examples(args, fold='train'):
         features = torch.load(cache_file)
     else:
         logger.info('Creating features from dataset file')
-
         features = convert_examples_to_features(examples, label_list, args.tokenizer, args.max_mention_length)
 
         if args.local_rank in (-1, 0):

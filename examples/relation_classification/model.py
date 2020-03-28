@@ -12,17 +12,9 @@ class LukeForRelationClassification(LukeWordEntityAttentionModel):
 
         self.args = args
 
-        if self.args.use_difference_feature:
-            feature_size = args.model_config.hidden_size * 3
-        else:
-            feature_size = args.model_config.hidden_size * 2
-
-        if args.use_hidden_layer:
-            self.dense = nn.Linear(feature_size, feature_size)
-
         self.num_labels = num_labels
-        self.dropout = nn.Dropout(args.dropout_prob)
-        self.classifier = nn.Linear(feature_size, num_labels, False)
+        self.dropout = nn.Dropout(args.model_config.hidden_dropout_prob)
+        self.classifier = nn.Linear(args.model_config.hidden_size * 2, num_labels, False)
 
         self.apply(self.init_weights)
 
@@ -33,16 +25,8 @@ class LukeForRelationClassification(LukeWordEntityAttentionModel):
             entity_attention_mask)
 
         feature_vector = torch.cat([encoder_outputs[1][:, 0, :], encoder_outputs[1][:, 1, :]], dim=1)
-
-        if self.args.use_difference_feature:
-            diff_feature_vector = torch.abs(encoder_outputs[1][:, 0, :] - encoder_outputs[1][:, 1, :])
-            feature_vector = torch.cat([feature_vector, diff_feature_vector], dim=1)
-
-        if self.args.use_hidden_layer:
-            feature_vector = self.dense(feature_vector)
-            feature_vector = gelu(feature_vector)
-
         feature_vector = self.dropout(feature_vector)
+
         logits = self.classifier(feature_vector)
         if label is None:
             return logits

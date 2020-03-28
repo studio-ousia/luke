@@ -61,26 +61,10 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_mention_le
         ('-RRB-', ')'),
         ('-RCB-', ')'),
         ('-RSB-', ')'),
-        # ('( ', '('),
-        # (' )', ')'),
-        # (' ,', ','),
-        # (' .', '.'),
-        # (' :', ':'),
-        # (' ;', ';'),
-        # (' ?', '?'),
-        # (" '", "'"),
-        # ("`` ", "``"),
-        # (' - ', '-'),
     )
     features = []
     for example in tqdm(examples):
-
-        # prev_text = [None]
-
         def preprocess_and_tokenize(text, start, end=None):
-            # if start == end:
-            #     return []
-
             target_text = text[start:end]
             for a, b in conv_tables:
                 target_text = target_text.replace(a, b)
@@ -89,15 +73,6 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_mention_le
                 return tokenizer.tokenize(target_text, add_prefix_space=True)
             else:
                 return tokenizer.tokenize(target_text)
-            # if isinstance(tokenizer, RobertaTokenizer) and\
-            #     (prev_text[0] is None or (prev_text[0] and prev_text[0][-1] == ' ') or (target_text and target_text[0] == ' ')):
-            #     tokens = tokenizer.tokenize(target_text, add_prefix_space=True)
-            # else:
-            #     tokens = tokenizer.tokenize(target_text)
-
-            # prev_text[0] = target_text
-
-            # return tokens
 
         tokens = [tokenizer.cls_token]
         tokens += preprocess_and_tokenize(example.text, 0, example.span[0])

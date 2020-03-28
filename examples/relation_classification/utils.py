@@ -88,11 +88,9 @@ class DatasetProcessor(object):
         return examples
 
 
-def convert_examples_to_features(examples, label_list, tokenizer, max_mention_length, use_entity_type_token,
-                                 use_marker_token):
+def convert_examples_to_features(examples, label_list, tokenizer, max_mention_length):
     label_map = {l: i for i, l in enumerate(label_list)}
-    if use_entity_type_token:
-        type_map = {t: i + 1 for i, t in enumerate(ENTITY_TYPES)}  # 1 for padding emb
+    type_map = {t: i + 1 for i, t in enumerate(ENTITY_TYPES)}  # 1 for padding emb
 
     def tokenize(text):
         if isinstance(tokenizer, RobertaTokenizer):
@@ -114,11 +112,9 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_mention_le
             span = getattr(example, span_name)
             tokens += tokenize(example.text[cur:span[0]])
             start = len(tokens)
-            if use_marker_token:
-                tokens.append(HEAD_TOKEN if span_name == 'span_a' else TAIL_TOKEN)
+            tokens.append(HEAD_TOKEN if span_name == 'span_a' else TAIL_TOKEN)
             tokens += tokenize(example.text[span[0]:span[1]])
-            if use_marker_token:
-                tokens.append(HEAD_TOKEN if span_name == 'span_a' else TAIL_TOKEN)
+            tokens.append(HEAD_TOKEN if span_name == 'span_a' else TAIL_TOKEN)
             token_spans[span_name] = (start, len(tokens))
             cur = span[1]
 
@@ -129,10 +125,7 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_mention_le
         word_attention_mask = [1] * len(tokens)
         word_segment_ids = [0] * len(tokens)
 
-        if use_entity_type_token:
-            entity_ids = [type_map[example.type_a], type_map[example.type_b]]
-        else:
-            entity_ids = [1, 1]
+        entity_ids = [type_map[example.type_a], type_map[example.type_b]]
 
         entity_position_ids = []
         for span_name in ('span_a', 'span_b'):
