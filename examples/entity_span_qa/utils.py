@@ -84,15 +84,14 @@ class InputFeatures(object):
 
 
 def convert_examples_to_features(
-        examples, tokenizer, max_seq_length, max_mention_length, doc_stride, max_query_length, use_marker_token,
-        segment_b_id, add_extra_sep_token, pool_size=multiprocessing.cpu_count(), chunk_size=30):
+        examples, tokenizer, max_seq_length, max_mention_length, doc_stride, max_query_length, segment_b_id,
+        add_extra_sep_token, pool_size=multiprocessing.cpu_count(), chunk_size=30):
     worker_params = Namespace(
         tokenizer=tokenizer,
         max_seq_length=max_seq_length,
         max_mention_length=max_mention_length,
         doc_stride=doc_stride,
         max_query_length=max_query_length,
-        use_marker_token=use_marker_token,
         add_extra_sep_token=add_extra_sep_token,
         segment_b_id=segment_b_id,
     )
@@ -184,11 +183,9 @@ def _process_example(args):
         doc_tokens.extend(preprocess_and_tokenize(example.context_text, cur, entity['start']))
         entity_start = len(doc_tokens)
 
-        if params.use_marker_token:
-            doc_tokens.append(ENTITY_MARKER_TOKEN)
+        doc_tokens.append(ENTITY_MARKER_TOKEN)
         doc_tokens.extend(preprocess_and_tokenize(example.context_text, entity['start'], entity['end']))
-        if params.use_marker_token:
-            doc_tokens.append(ENTITY_MARKER_TOKEN)
+        doc_tokens.append(ENTITY_MARKER_TOKEN)
 
         entities_with_spans.append((entity_start, len(doc_tokens), entity))
         cur = entity['end']

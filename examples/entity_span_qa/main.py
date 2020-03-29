@@ -39,11 +39,6 @@ def cli():
 @click.option('--num-train-epochs', default=2.0)
 @click.option('--do-eval/--no-eval', default=True)
 @click.option('--eval-batch-size', default=8)
-@click.option('--use-marker-token', is_flag=True)
-@click.option('--use-placeholder-emb', is_flag=True)
-@click.option('--use-difference-feature', is_flag=True)
-@click.option('--use-hidden-layer', is_flag=True)
-@click.option('--dropout-prob', default=0.1)
 @click.option('--seed', default=1)
 @trainer_args
 @word_entity_model_args
@@ -152,8 +147,9 @@ def evaluate(args, model, fold='dev', out_file=None):
             doc_predictions[example_id].append((max_logit, entity))
 
     predictions = {k: sorted(v, key=lambda o: o[0])[-1][1]['text'] for k, v in doc_predictions.items()}
-    with open(out_file, 'w') as f:
-        json.dump(predictions, f)
+    if out_file:
+        with open(out_file, 'w') as f:
+            json.dump(predictions, f)
 
     with open(os.path.join(args.data_dir, processor.dev_file)) as f:
         dev_data = json.load(f)['data']
@@ -173,13 +169,19 @@ def load_and_cache_examples(args, fold):
 
     bert_model_name = args.model_config.bert_model_name
 
+    if 'roberta' in bert_model_name:
+        segment_b_id = 0
+        add_extra_sep_token = True
+    else:
+        segment_b_id = 1
+        add_extra_sep_token = False
+
     cache_file = os.path.join(args.data_dir, 'cached_' + '_'.join((
         bert_model_name.split('-')[0],
         str(args.max_seq_length),
         str(args.max_mention_length),
         str(args.doc_stride),
         str(args.max_query_length),
-        str(args.use_marker_token),
         fold,
     )) + '.pkl')
     if os.path.exists(cache_file):
@@ -188,16 +190,9 @@ def load_and_cache_examples(args, fold):
     else:
         logger.info('Creating features from the dataset...')
 
-        if 'roberta' in bert_model_name:
-            segment_b_id = 0
-            add_extra_sep_token = True
-        else:
-            segment_b_id = 1
-            add_extra_sep_token = False
-
         features = convert_examples_to_features(
             examples, args.tokenizer, args.max_seq_length, args.max_mention_length, args.doc_stride,
-            args.max_query_length, args.use_marker_token, segment_b_id, add_extra_sep_token)
+            args.max_query_length, segment_b_id, add_extra_sep_token)
 
         if args.local_rank in (-1, 0):
             torch.save(features, cache_file)
@@ -221,7 +216,7 @@ def load_and_cache_examples(args, fold):
         for _, item in batch:
             entity_length = len(item.entity_position_ids) + 1
             entity_ids.append([1] * entity_length)
-            entity_segment_ids.append([0] * entity_length)
+            entity_segment_ids.append([0] + [segment_b_id] * (entity_length - 1))
             entity_attention_mask.append([1] * entity_length)
             entity_position_ids.append(item.placeholder_position_ids + item.entity_position_ids)
             if entity_length == 1:
