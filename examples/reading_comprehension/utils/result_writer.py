@@ -4,6 +4,7 @@ import math
 import collections
 
 from transformers.tokenization_bert import BasicTokenizer
+from transformers.tokenization_roberta import RobertaTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -104,18 +105,21 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
             feature = features[pred.feature_index]
             if pred.start_index > 0:  # this is a non-null prediction
                 tok_tokens = feature.tokens[pred.start_index:(pred.end_index + 1)]
-                orig_doc_start = feature.token_to_orig_map[pred.start_index]
-                orig_doc_end = feature.token_to_orig_map[pred.end_index]
-                orig_tokens = example.doc_tokens[orig_doc_start:(orig_doc_end + 1)]
-
                 tok_text = tokenizer.convert_tokens_to_string(tok_tokens)
+                if isinstance(tokenizer, RobertaTokenizer):
+                    final_text = tokenizer.convert_tokens_to_string(tok_tokens).strip()
 
-                # Clean whitespace
-                tok_text = tok_text.strip()
-                tok_text = " ".join(tok_text.split())
-                orig_text = " ".join(orig_tokens)
+                else:
+                    orig_doc_start = feature.token_to_orig_map[pred.start_index]
+                    orig_doc_end = feature.token_to_orig_map[pred.end_index]
+                    orig_tokens = example.doc_tokens[orig_doc_start:(orig_doc_end + 1)]
 
-                final_text = get_final_text(tok_text, orig_text, do_lower_case, verbose_logging)
+                    tok_text = tok_text.strip()
+                    tok_text = " ".join(tok_text.split())
+                    orig_text = " ".join(orig_tokens)
+
+                    final_text = get_final_text(tok_text, orig_text, do_lower_case, True)
+
                 if final_text in seen_predictions:
                     continue
 
