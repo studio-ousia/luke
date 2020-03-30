@@ -9,7 +9,7 @@ class LukeForEntityTyping(LukeWordEntityAttentionModel):
         super(LukeForEntityTyping, self).__init__(args)
 
         self.num_labels = num_labels
-        self.dropout = nn.Dropout(args.dropout_prob)
+        self.dropout = nn.Dropout(args.model_config.hidden_dropout_prob)
         self.typing = nn.Linear(args.model_config.hidden_size, num_labels)
 
         self.apply(self.init_weights)

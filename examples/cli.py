@@ -104,11 +104,12 @@ def cli(ctx, num_gpus, master_port, output_dir, verbose, local_rank, model_dir, 
             if comet_offline:
                 ctx.obj['experiment'] = comet_ml.OfflineExperiment(
                     project_name=comet_project, offline_directory=comet_offline_dir, auto_metric_logging=False,
-                    auto_output_logging=None, log_code=False, log_graph=False, log_env_host=False, log_env_gpu=False)
+                    auto_output_logging=None, log_code=False, log_graph=False, log_env_host=False, log_env_gpu=False,
+                    log_env_cpu=False)
             else:
                 ctx.obj['experiment'] = comet_ml.Experiment(
                     project_name=comet_project, auto_metric_logging=False, auto_output_logging=None, log_code=False,
-                    log_graph=False, log_env_host=False, log_env_gpu=False)
+                    log_graph=False, log_env_host=False, log_env_gpu=False, log_env_cpu=False)
         else:
             ctx.obj['experiment'] = comet_ml.OfflineExperiment(offline_directory=output_dir, disabled=True)
 

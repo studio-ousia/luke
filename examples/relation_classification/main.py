@@ -33,11 +33,6 @@ def cli():
 @click.option('--num-train-epochs', default=5.0)
 @click.option('--do-eval/--no-eval', default=True)
 @click.option('--eval-batch-size', default=8)
-@click.option('--use-entity-type-token', is_flag=True)
-@click.option('--use-marker-token', is_flag=True)
-@click.option('--use-difference-feature', is_flag=True)
-@click.option('--use-hidden-layer', is_flag=True)
-@click.option('--dropout-prob', default=0.1)
 @click.option('--seed', default=10)
 @word_entity_model_args
 @trainer_args
@@ -50,23 +45,18 @@ def run(common_args, **task_args):
 
     args.experiment.log_parameters({p.name: getattr(args, p.name) for p in run.params})
 
-    if args.use_marker_token:
-        args.model_config.vocab_size += 2
-        word_emb = args.model_weights['embeddings.word_embeddings.weight']
-        head_emb = word_emb[args.tokenizer.convert_tokens_to_ids(['@'])[0]].unsqueeze(0)
-        tail_emb = word_emb[args.tokenizer.convert_tokens_to_ids(['#'])[0]].unsqueeze(0)
-        args.model_weights['embeddings.word_embeddings.weight'] = torch.cat([word_emb, head_emb, tail_emb])
-        args.tokenizer.add_special_tokens(dict(additional_special_tokens=[HEAD_TOKEN, TAIL_TOKEN]))
+    args.model_config.vocab_size += 2
+    word_emb = args.model_weights['embeddings.word_embeddings.weight']
+    head_emb = word_emb[args.tokenizer.convert_tokens_to_ids(['@'])[0]].unsqueeze(0)
+    tail_emb = word_emb[args.tokenizer.convert_tokens_to_ids(['#'])[0]].unsqueeze(0)
+    args.model_weights['embeddings.word_embeddings.weight'] = torch.cat([word_emb, head_emb, tail_emb])
+    args.tokenizer.add_special_tokens(dict(additional_special_tokens=[HEAD_TOKEN, TAIL_TOKEN]))
 
     entity_emb = args.model_weights['entity_embeddings.entity_embeddings.weight']
     mask_emb = entity_emb[args.entity_vocab[MASK_TOKEN]].unsqueeze(0)
-    if args.use_entity_type_token:
-        args.model_config.entity_vocab_size = len(ENTITY_TYPES) + 1
-        mask_emb = mask_emb.expand(len(ENTITY_TYPES), -1)
-        args.model_weights['entity_embeddings.entity_embeddings.weight'] = torch.cat([entity_emb[:1], mask_emb])
-    else:
-        args.model_config.entity_vocab_size = 2
-        args.model_weights['entity_embeddings.entity_embeddings.weight'] = torch.cat([entity_emb[:1], mask_emb])
+    args.model_config.entity_vocab_size = len(ENTITY_TYPES) + 1
+    mask_emb = mask_emb.expand(len(ENTITY_TYPES), -1)
+    args.model_weights['entity_embeddings.entity_embeddings.weight'] = torch.cat([entity_emb[:1], mask_emb])
 
     train_dataloader, _, _, label_list = load_and_cache_examples(args, fold='train')
     num_labels = len(label_list)
@@ -190,10 +180,7 @@ def load_and_cache_examples(args, fold='train'):
 
     cache_file = os.path.join(args.data_dir, 'cached_' + '_'.join((
         bert_model_name.split('-')[0],
-        str(len(args.entity_vocab)),
         str(args.max_mention_length),
-        str(args.use_entity_type_token),
-        str(args.use_marker_token),
         fold
     )) + '.pkl')
     if os.path.exists(cache_file):
@@ -201,10 +188,7 @@ def load_and_cache_examples(args, fold='train'):
         features = torch.load(cache_file)
     else:
         logger.info('Creating features from dataset file')
-
-        features = convert_examples_to_features(
-            examples, label_list, args.tokenizer, args.max_mention_length, args.use_entity_type_token,
-            args.use_marker_token)
+        features = convert_examples_to_features(examples, label_list, args.tokenizer, args.max_mention_length)
 
         if args.local_rank in (-1, 0):
             torch.save(features, cache_file)

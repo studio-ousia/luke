@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers.modeling_bert import gelu
 
 from ..word_entity_model import LukeWordEntityAttentionModel
 
@@ -11,19 +10,8 @@ class LukeForEntitySpanQA(LukeWordEntityAttentionModel):
         super(LukeForEntitySpanQA, self).__init__(args)
         self.args = args
 
-        if args.use_placeholder_emb:
-            if args.use_difference_feature:
-                feature_size = args.model_config.hidden_size * 3
-            else:
-                feature_size = args.model_config.hidden_size * 2
-        else:
-            feature_size = args.model_config.hidden_size
-
-        if args.use_hidden_layer:
-            self.dense = nn.Linear(feature_size, feature_size)
-
-        self.dropout = nn.Dropout(args.dropout_prob)
-        self.scorer = nn.Linear(feature_size, 1)
+        self.dropout = nn.Dropout(args.model_config.hidden_dropout_prob)
+        self.scorer = nn.Linear(args.model_config.hidden_size * 2, 1)
 
         self.apply(self.init_weights)
 
@@ -35,19 +23,9 @@ class LukeForEntitySpanQA(LukeWordEntityAttentionModel):
 
         entity_hidden_states = encoder_outputs[1]
         doc_entity_emb = entity_hidden_states[:, 1:, :]
-        if self.args.use_placeholder_emb:
-            placeholder_emb = entity_hidden_states[:, :1, :]
-            feature_vector = torch.cat([placeholder_emb.expand_as(doc_entity_emb), doc_entity_emb], dim=2)
-            if self.args.use_difference_feature:
-                diff_feature_vector = torch.abs(placeholder_emb - doc_entity_emb)
-                feature_vector = torch.cat([feature_vector, diff_feature_vector], dim=2)
-        else:
-            feature_vector = doc_entity_emb
+        placeholder_emb = entity_hidden_states[:, :1, :]
 
-        if self.args.use_hidden_layer:
-            feature_vector = self.dense(feature_vector)
-            feature_vector = gelu(feature_vector)
-
+        feature_vector = torch.cat([placeholder_emb.expand_as(doc_entity_emb), doc_entity_emb], dim=2)
         feature_vector = self.dropout(feature_vector)
         logits = self.scorer(feature_vector)
 

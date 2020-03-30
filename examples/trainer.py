@@ -103,7 +103,6 @@ class Trainer(object):
                         self.scheduler.step()
                         model.zero_grad()
 
-                        # self.args.experiment.log_metric('train_loss', batch_loss, step=global_step)
                         batch_loss = 0.
 
                         pbar.set_description('epoch: %d loss: %.7f lr: %.7f' %
