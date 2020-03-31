@@ -1,0 +1,11 @@
+Click==7.0
+comet-ml==2.0.14
+joblib==0.13.0
+marisa-trie==0.7.5
+numpy==1.16.4
+optuna==1.2.0
+tensorflow==1.14.0
+torch==1.2.0
+transformers==2.4.1
+tqdm==4.28.1
+wikipedia2vec==1.0.1
