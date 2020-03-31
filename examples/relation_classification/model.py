@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers.modeling_bert import gelu
 
 from ..word_entity_model import LukeWordEntityAttentionModel
 
