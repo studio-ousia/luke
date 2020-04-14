@@ -40,6 +40,7 @@ def cli():
 @click.option('--num-train-epochs', default=2.0)
 @click.option('--do-eval/--no-eval', default=True)
 @click.option('--eval-batch-size', default=8)
+@click.option('--train-on-dev-set', is_flag=True)
 @click.option('--seed', default=1)
 @trainer_args
 @word_entity_model_args
@@ -68,35 +69,12 @@ def run(common_args, **task_args):
         num_train_steps_per_epoch = len(train_dataloader) // args.gradient_accumulation_steps
         num_train_steps = int(num_train_steps_per_epoch * args.num_train_epochs)
 
-        best_dev_score = [-1]
-        best_weights = [None]
-
-        def step_callback(model, global_step, tqdm_ins):
-            if global_step % num_train_steps_per_epoch == 0 and args.local_rank in (0, -1):
-                epoch = int(global_step / num_train_steps_per_epoch - 1)
-                dev_results = evaluate(args, model, fold='dev')
-                args.experiment.log_metrics({f'dev_{k}_epoch{epoch}': v for k, v in dev_results.items()}, epoch=epoch)
-                results.update({f'dev_{k}_epoch{epoch}': v for k, v in dev_results.items()})
-                tqdm_ins.write('dev: ' + str(dev_results))
-
-                if dev_results['f1'] > best_dev_score[0]:
-                    if hasattr(model, 'module'):
-                        best_weights[0] = {k: v.to('cpu').clone() for k, v in model.module.state_dict().items()}
-                    else:
-                        best_weights[0] = {k: v.to('cpu').clone() for k, v in model.state_dict().items()}
-                    best_dev_score[0] = dev_results['f1']
-                    results['best_epoch'] = epoch
-
-                model.train()
-
-        trainer = Trainer(args, model=model, dataloader=train_dataloader, num_train_steps=num_train_steps,
-                          step_callback=step_callback)
+        trainer = Trainer(args, model=model, dataloader=train_dataloader, num_train_steps=num_train_steps)
         trainer.train()
 
     if args.do_train and args.local_rank in (0, -1):
         logger.info('Saving the model checkpoint to %s', args.output_dir)
-        # torch.save(model.state_dict(), os.path.join(args.output_dir, WEIGHTS_NAME))
-        torch.save(best_weights[0], os.path.join(args.output_dir, WEIGHTS_NAME))
+        torch.save(model.state_dict(), os.path.join(args.output_dir, WEIGHTS_NAME))
 
     if args.local_rank not in (0, -1):
         return {}
@@ -181,6 +159,9 @@ def load_and_cache_examples(args, fold):
     else:
         examples = processor.get_test_examples(args.data_dir)
 
+    if args.train_on_dev_set:
+        examples += processor.get_dev_examples(args.data_dir)
+
     label_list = processor.get_labels()
 
     bert_model_name = args.model_config.bert_model_name
@@ -190,6 +171,7 @@ def load_and_cache_examples(args, fold):
         str(args.max_seq_length),
         str(args.max_entity_length),
         str(args.max_mention_length),
+        str(args.train_on_dev_set),
         fold,
     )) + '.pkl')
     if os.path.exists(cache_file):
