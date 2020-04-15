@@ -1,16 +1,31 @@
 import pkg_resources
+import re
 
 
 class NLTKSentenceTokenizer(object):
     def __init__(self):
         import nltk
-        self._sentence_tokenizer = nltk.tokenize.punkt.PunktSentenceTokenizer()
+        punkt_param = nltk.tokenize.punkt.PunktParameters()
+        punkt_param.abbrev_types = {'dr', 'vs', 'mr', 'bros', 'mrs', 'prof', 'jr', 'inc', 'i.e', 'e.g', 'et al'}
+        self._sentence_tokenizer = nltk.tokenize.punkt.PunktSentenceTokenizer(punkt_param)
 
     def __reduce__(self):
         return self.__class__, tuple()
 
     def span_tokenize(self, text):
         return list(self._sentence_tokenizer.span_tokenize(text))
+
+
+class JapaneseSentenceTokenizer(object):
+
+    def __init__(self):
+        self.pattern = re.compile(r".*?[。|？]")
+
+    def __reduce__(self):
+        return self.__class__, tuple()
+
+    def span_tokenize(self, text):
+        return [match.span() for match in re.finditer(self.pattern, text)]
 
 
 class OpenNLPSentenceTokenizer(object):
