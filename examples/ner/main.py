@@ -89,8 +89,10 @@ def run(common_args, **task_args):
             model = torch.nn.DataParallel(model)
         model.to(args.device)
 
-        results.update({f'dev_{k}':v for k, v in evaluate(args, model, fold='dev').items()})
-        results.update({f'test_{k}':v for k, v in evaluate(args, model, fold='test').items()})
+        dev_output_file = os.path.join(args.output_dir, 'dev_predictions.txt')
+        test_output_file = os.path.join(args.output_dir, 'test_predictions.txt')
+        results.update({f'dev_{k}':v for k, v in evaluate(args, model, 'dev', dev_output_file).items()})
+        results.update({f'test_{k}':v for k, v in evaluate(args, model, 'test', test_output_file).items()})
 
     print(results)
     args.experiment.log_metrics(results)
@@ -100,10 +102,10 @@ def run(common_args, **task_args):
     return results
 
 
-def evaluate(args, model, fold='dev'):
+def evaluate(args, model, fold, output_file=None):
     dataloader, examples, features, processor = load_and_cache_examples(args, fold)
     label_list = processor.get_labels()
-    doc_predictions = defaultdict(dict)
+    all_predictions = defaultdict(dict)
 
     for batch in tqdm(dataloader, desc='Eval'):
         model.eval()
@@ -114,22 +116,22 @@ def evaluate(args, model, fold='dev'):
         for i, feature_index in enumerate(batch['feature_indices']):
             feature = features[feature_index.item()]
             for j, span in enumerate(feature.original_entity_spans):
-                doc_predictions[feature.example_index][span] = logits[i, j].detach().cpu().max(dim=0)
+                all_predictions[feature.example_index][span] = logits[i, j].detach().cpu().max(dim=0)
 
-    assert len(doc_predictions) == len(examples)
+    assert len(all_predictions) == len(examples)
 
     final_labels = []
     final_predictions = []
 
-    for example_index, predictions in doc_predictions.items():
-        example = examples[example_index]
-        all_results = []
+    for example_index, example in enumerate(examples):
+        predictions = all_predictions[example_index]
+        doc_results = []
         for span, (max_logit, max_index) in predictions.items():
             if max_index != 0:
-                all_results.append((max_logit.item(), span, label_list[max_index.item()]))
+                doc_results.append((max_logit.item(), span, label_list[max_index.item()]))
 
         predicted_sequence = ['O'] * len(example.words)
-        for _, span, label in sorted(all_results, key=lambda o: o[0], reverse=True):
+        for _, span, label in sorted(doc_results, key=lambda o: o[0], reverse=True):
             if all([o == 'O' for o in predicted_sequence[span[0]:span[1]]]):
                 predicted_sequence[span[0]] = 'B-' + label
                 if span[1] - span[0] > 1:
@@ -137,6 +139,19 @@ def evaluate(args, model, fold='dev'):
 
         final_predictions += predicted_sequence
         final_labels += example.labels
+
+    # convert IOB2 -> IOB1
+    prev_type = None
+    for n, label in enumerate(final_predictions):
+        if label[0] == 'B' and label[2:] != prev_type:
+            final_predictions[n] = 'I' + label[1:]
+        prev_type = label[2:]
+
+    if output_file:
+        all_words = [w for e in examples for w in e.words]
+        with open(output_file, 'w') as f:
+            for item in zip(all_words, final_labels, final_predictions):
+                f.write(' '.join(item) + '\n')
 
     assert len(final_predictions) == len(final_labels)
     print('The number of labels:', len(final_labels))
@@ -159,7 +174,7 @@ def load_and_cache_examples(args, fold):
     else:
         examples = processor.get_test_examples(args.data_dir)
 
-    if args.train_on_dev_set:
+    if fold == 'train' and args.train_on_dev_set:
         examples += processor.get_dev_examples(args.data_dir)
 
     label_list = processor.get_labels()
@@ -208,6 +223,9 @@ def load_and_cache_examples(args, fold):
             entity_position_ids=create_padded_sequence('entity_position_ids', -1),
             entity_segment_ids=create_padded_sequence('entity_segment_ids', 0),
         )
+        if args.no_entity_feature:
+            ret['entity_attention_mask'].fill_(0)
+
         if fold == 'train':
             ret['labels'] = create_padded_sequence('labels', -1)
         else:

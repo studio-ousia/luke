@@ -33,13 +33,13 @@ class InputFeatures(object):
 
 class CoNLLProcessor(object):
     def get_train_examples(self, data_dir):
-        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, 'train.txt')), 'train'))
+        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, 'eng.train')), 'train'))
 
     def get_dev_examples(self, data_dir):
-        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, 'valid.txt')), 'dev'))
+        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, 'eng.testa')), 'dev'))
 
     def get_test_examples(self, data_dir):
-        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, 'test.txt')), 'test'))
+        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, 'eng.testb')), 'test'))
 
     def get_labels(self):
         return ['NIL', 'MISC', 'PER', 'ORG', 'LOC']
@@ -104,18 +104,26 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
         start = None
         cur_type = None
         for n, label in enumerate(example.labels):
-            if label.startswith('I'):
-                assert cur_type == label[2:]
-                continue
-
-            if start is not None:
-                entity_labels[(token2subword_positions[start], token2subword_positions[n])] = label_map[cur_type]
-                start = None
-                cur_type = None
+            if label == 'O' or n in example.sentence_boundaries:
+                if start is not None:
+                    entity_labels[(token2subword_positions[start], token2subword_positions[n])] = label_map[cur_type]
+                    start = None
+                    cur_type = None
 
             if label.startswith('B'):
+                if start is not None:
+                    entity_labels[(token2subword_positions[start], token2subword_positions[n])] = label_map[cur_type]
                 start = n
                 cur_type = label[2:]
+
+            elif label.startswith('I'):
+                if start is None:
+                    start = n
+                    cur_type = label[2:]
+                elif cur_type != label[2:]:
+                    entity_labels[(token2subword_positions[start], token2subword_positions[n])] = label_map[cur_type]
+                    start = n
+                    cur_type = label[2:]
 
         if start is not None:
             entity_labels[(token2subword_positions[start], len(subwords))] = label_map[cur_type]
@@ -179,9 +187,11 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
                     labels.append(entity_labels.get((doc_entity_start, doc_entity_end), 0))
                     entity_labels.pop((doc_entity_start, doc_entity_end), None)
 
-            for i in range(math.ceil(len(entity_ids) / max_entity_length)):
-                start = i * max_entity_length
-                end = start + max_entity_length
+            split_size = math.ceil(len(entity_ids) / max_entity_length)
+            entity_size = math.ceil(len(entity_ids) / split_size)
+            for i in range(split_size):
+                start = i * entity_size
+                end = start + entity_size
                 features.append(InputFeatures(example_index=example_index,
                                               word_ids=word_ids,
                                               word_attention_mask=word_attention_mask,
