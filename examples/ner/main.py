@@ -116,7 +116,8 @@ def evaluate(args, model, fold, output_file=None):
         for i, feature_index in enumerate(batch['feature_indices']):
             feature = features[feature_index.item()]
             for j, span in enumerate(feature.original_entity_spans):
-                all_predictions[feature.example_index][span] = logits[i, j].detach().cpu().max(dim=0)
+                if span is not None:
+                    all_predictions[feature.example_index][span] = logits[i, j].detach().cpu().max(dim=0)
 
     assert len(all_predictions) == len(examples)
 
