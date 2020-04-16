@@ -95,9 +95,9 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
         tokens = [tokenize_word(w) for w in example.words]
         subwords = [w for l in tokens for w in l]
 
-        subword2token_positions = list(itertools.chain(*[[i] * len(l) for i, l in enumerate(tokens)]))
-        token2subword_positions = [0] + list(itertools.accumulate(len(l) for l in tokens))
-        subword_start_positions = frozenset(token2subword_positions)
+        subword2token = list(itertools.chain(*[[i] * len(l) for i, l in enumerate(tokens)]))
+        token2subword = [0] + list(itertools.accumulate(len(l) for l in tokens))
+        subword_start_positions = frozenset(token2subword)
         subword_sentence_boundaries = [sum(len(l) for l in tokens[:p]) for p in example.sentence_boundaries]
 
         entity_labels = {}
@@ -106,13 +106,13 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
         for n, label in enumerate(example.labels):
             if label == 'O' or n in example.sentence_boundaries:
                 if start is not None:
-                    entity_labels[(token2subword_positions[start], token2subword_positions[n])] = label_map[cur_type]
+                    entity_labels[(token2subword[start], token2subword[n])] = label_map[cur_type]
                     start = None
                     cur_type = None
 
             if label.startswith('B'):
                 if start is not None:
-                    entity_labels[(token2subword_positions[start], token2subword_positions[n])] = label_map[cur_type]
+                    entity_labels[(token2subword[start], token2subword[n])] = label_map[cur_type]
                 start = n
                 cur_type = label[2:]
 
@@ -121,12 +121,12 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
                     start = n
                     cur_type = label[2:]
                 elif cur_type != label[2:]:
-                    entity_labels[(token2subword_positions[start], token2subword_positions[n])] = label_map[cur_type]
+                    entity_labels[(token2subword[start], token2subword[n])] = label_map[cur_type]
                     start = n
                     cur_type = label[2:]
 
         if start is not None:
-            entity_labels[(token2subword_positions[start], len(subwords))] = label_map[cur_type]
+            entity_labels[(token2subword[start], len(subwords))] = label_map[cur_type]
 
         for n in range(len(subword_sentence_boundaries) - 1):
             doc_sent_start, doc_sent_end = subword_sentence_boundaries[n:n + 2]
@@ -181,15 +181,25 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
                     position_ids += [-1] * (max_mention_length - entity_end + entity_start)
                     entity_position_ids.append(position_ids)
 
-                    original_entity_spans.append((subword2token_positions[doc_entity_start],
-                                                  subword2token_positions[doc_entity_end - 1] + 1))
+                    original_entity_spans.append((subword2token[doc_entity_start],
+                                                  subword2token[doc_entity_end - 1] + 1))
 
                     labels.append(entity_labels.get((doc_entity_start, doc_entity_end), 0))
                     entity_labels.pop((doc_entity_start, doc_entity_end), None)
 
+            if len(entity_ids) == 1:
+                entity_start_positions.append(0)
+                entity_end_positions.append(0)
+                entity_ids.append(0)
+                entity_attention_mask.append(0)
+                entity_segment_ids.append(0)
+                entity_position_ids.append(([-1] * max_mention_length))
+                original_entity_spans.append(None)
+                labels.append(-1)
+
             split_size = math.ceil(len(entity_ids) / max_entity_length)
-            entity_size = math.ceil(len(entity_ids) / split_size)
             for i in range(split_size):
+                entity_size = math.ceil(len(entity_ids) / split_size)
                 start = i * entity_size
                 end = start + entity_size
                 features.append(InputFeatures(example_index=example_index,
