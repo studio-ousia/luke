@@ -60,3 +60,7 @@ cli.add_command(luke.pretraining.dataset.build_wikipedia_pretraining_dataset)
 cli.add_command(luke.pretraining.train.pretrain)
 cli.add_command(luke.pretraining.train.resume_pretraining)
 cli.add_command(luke.pretraining.train.start_pretraining_worker)
+
+
+if __name__ == '__main__':
+    cli()
