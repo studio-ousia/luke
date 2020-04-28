@@ -1,3 +1,5 @@
+from typing import List, Tuple
+
 import pkg_resources
 import re
 
@@ -12,7 +14,7 @@ class NLTKSentenceTokenizer(object):
     def __reduce__(self):
         return self.__class__, tuple()
 
-    def span_tokenize(self, text):
+    def span_tokenize(self, text: str) -> List[Tuple[int, int]]:
         return list(self._sentence_tokenizer.span_tokenize(text))
 
 
@@ -58,7 +60,7 @@ class OpenNLPSentenceTokenizer(object):
 
         self._initialized = True
 
-    def span_tokenize(self, text):
+    def span_tokenize(self, text: str) -> List[Tuple[int, int]]:
         if not self._initialized:
             self.initialize()
 

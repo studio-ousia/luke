@@ -21,7 +21,7 @@ from luke.utils.sentence_tokenizer import NLTKSentenceTokenizer, OpenNLPSentence
 
 DATASET_FILE = 'dataset.tf'
 METADATA_FILE = 'metadata.json'
-ENTITY_VOCAB_FILE = 'entity_vocab.tsv'
+ENTITY_VOCAB_FILE = 'entity_vocab.json'
 
 # global variables used in pool workers
 _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length =\

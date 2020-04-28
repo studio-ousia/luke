@@ -11,7 +11,12 @@ EPS = 1e-7
 
 
 class LukeConfig(BertConfig):
-    def __init__(self, vocab_size, entity_vocab_size, bert_model_name, entity_emb_size=None, **kwargs):
+    def __init__(self,
+                 vocab_size: int,
+                 entity_vocab_size: int,
+                 bert_model_name: str,
+                 entity_emb_size: int = None,
+                 **kwargs):
         super(LukeConfig, self).__init__(vocab_size, **kwargs)
 
         self.entity_vocab_size = entity_vocab_size
@@ -20,7 +25,9 @@ class LukeConfig(BertConfig):
 
 
 class EntityEmbeddings(nn.Module):
-    def __init__(self, config, entity_vocab_size=None):
+    def __init__(self,
+                 config: LukeConfig,
+                 entity_vocab_size: int = None):
         super(EntityEmbeddings, self).__init__()
         self.config = config
         if entity_vocab_size is None:
@@ -39,7 +46,10 @@ class EntityEmbeddings(nn.Module):
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, entity_ids, position_ids, token_type_ids=None):
+    def forward(self,
+                entity_ids: torch.LongTensor,
+                position_ids: torch.LongTensor,
+                token_type_ids: torch.LongTensor = None):
         if token_type_ids is None:
             token_type_ids = torch.zeros_like(entity_ids)
 
@@ -63,7 +73,7 @@ class EntityEmbeddings(nn.Module):
 
 
 class LukeModel(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: LukeConfig):
         super(LukeModel, self).__init__()
 
         self.config = config
@@ -77,8 +87,14 @@ class LukeModel(nn.Module):
             self.embeddings = BertEmbeddings(config)
         self.entity_embeddings = EntityEmbeddings(config)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                entity_segment_ids, entity_attention_mask):
+    def forward(self,
+                word_ids: torch.LongTensor,
+                word_segment_ids: torch.LongTensor,
+                word_attention_mask: torch.LongTensor,
+                entity_ids: torch.LongTensor,
+                entity_position_ids: torch.LongTensor,
+                entity_segment_ids: torch.LongTensor,
+                entity_attention_mask: torch.LongTensor):
         word_seq_size = word_ids.size(1)
         extended_attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
 
@@ -94,7 +110,7 @@ class LukeModel(nn.Module):
 
         return (word_sequence_output, entity_sequence_output, pooled_output,) + encoder_outputs[1:]
 
-    def init_weights(self, module):
+    def init_weights(self, module: nn.Module):
         if isinstance(module, nn.Linear):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
         elif isinstance(module, nn.Embedding):
@@ -146,7 +162,9 @@ class LukeModel(nn.Module):
             raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(self.__class__.__name__,
                                                                                      "\n\t".join(error_msgs)))
 
-    def _compute_extended_attention_mask(self, word_attention_mask, entity_attention_mask):
+    def _compute_extended_attention_mask(self,
+                                         word_attention_mask: torch.LongTensor,
+                                         entity_attention_mask: torch.LongTensor):
         attention_mask = torch.cat([word_attention_mask, entity_attention_mask], dim=1)
         extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)

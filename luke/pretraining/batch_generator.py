@@ -15,7 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 class LukePretrainingBatchGenerator(object):
-    def __init__(self, dataset_dir, batch_size, masked_lm_prob, masked_entity_prob, whole_word_masking,
+    """
+    Launch a new process in order to avoid data processing being a bottleneck during training.
+    """
+    def __init__(self,
+                 dataset_dir: str,
+                 batch_size: int,
+                 masked_lm_prob: float,
+                 masked_entity_prob: float,
+                 whole_word_masking: bool,
                  **dataset_kwargs):
         self._worker_func = functools.partial(LukePretrainingBatchWorker,
                                               dataset_dir=dataset_dir,
@@ -25,7 +33,7 @@ class LukePretrainingBatchGenerator(object):
                                               whole_word_masking=whole_word_masking,
                                               **dataset_kwargs)
 
-    def generate_batches(self, queue_size=10000):
+    def generate_batches(self, queue_size: int = 10000):
         output_queue = multiprocessing.Queue(queue_size)
         worker = self._worker_func(output_queue)
         worker.daemon = True
@@ -45,7 +53,13 @@ class LukePretrainingBatchGenerator(object):
 
 
 class LukePretrainingBatchWorker(multiprocessing.Process):
-    def __init__(self, output_queue, dataset_dir, batch_size, masked_lm_prob, masked_entity_prob, whole_word_masking,
+    def __init__(self,
+                 output_queue: multiprocessing.Queue,
+                 dataset_dir: str,
+                 batch_size: int,
+                 masked_lm_prob: float,
+                 masked_entity_prob: float,
+                 whole_word_masking: bool,
                  **dataset_kwargs):
         super(LukePretrainingBatchWorker, self).__init__()
 
@@ -172,9 +186,9 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         return ret
 
     def _is_subword(self, token):
-        if isinstance(self._tokenizer, RobertaTokenizer) and\
-            not self._tokenizer.convert_tokens_to_string(token).startswith(' ') and\
-            not self._is_punctuation(token[0]):
+        if isinstance(self._tokenizer, RobertaTokenizer) and \
+                not self._tokenizer.convert_tokens_to_string(token).startswith(' ') and \
+                not self._is_punctuation(token[0]):
             return True
         elif token.startswith('##'):
             return True
@@ -186,7 +200,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         # obtained from:
         # https://github.com/huggingface/transformers/blob/5f25a5f367497278bf19c9994569db43f96d5278/transformers/tokenization_bert.py#L489
         cp = ord(char)
-        if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or(cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
+        if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
             return True
         cat = unicodedata.category(char)
         if cat.startswith("P"):
