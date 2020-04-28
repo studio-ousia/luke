@@ -1,3 +1,5 @@
+from typing import List, Iterator
+
 import contextlib
 import datetime
 import json
@@ -15,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers.modeling_bert import BertConfig, BertForPreTraining
 from transformers.modeling_roberta import RobertaConfig, RobertaForMaskedLM
-from transformers.optimization import WarmupConstantSchedule, WarmupLinearSchedule
+from pytorch_transformers.optimization import WarmupConstantSchedule, WarmupLinearSchedule
 from wikipedia2vec import Wikipedia2Vec
 
 from luke.model import LukeConfig
@@ -27,18 +29,20 @@ from luke.pretraining.model import LukePretrainingModel
 
 logger = logging.getLogger(__name__)
 
+
 # NCCL_SOCKET_IF_NAME = 'lo'  # this code does not currently support distributed training
 # MASTER_ADDR = '127.0.0.1'
 # MASTER_PORT = '29502'
 
 
 @click.command()
-@click.argument('dataset_dir', type=click.Path(file_okay=False, exists=True))
+@click.argument('dataset_dir_list_file', type=click.Path(file_okay=True, exists=True))
 @click.argument('output_dir', type=click.Path())
 @click.option('--parallel', is_flag=True)
 @click.option('--bert-model-name', default='bert-base-uncased')
 @click.option('--entity-emb-size', default=None, type=int)
 @click.option('--batch-size', default=256)
+@click.option('--sampling-smoothing', default=0.7)
 @click.option('--gradient-accumulation-steps', default=1)
 @click.option('--learning-rate', default=1e-4)
 @click.option('--lr-schedule', type=click.Choice(['warmup_constant', 'warmup_linear']), default='warmup_linear')
@@ -126,6 +130,35 @@ def start_pretraining_worker(local_rank, args):
     run_pretraining(Namespace(**args))
 
 
+def parse_dataset_dir_list_file(dataset_dir_list_file: str) -> List[str]:
+    with open(dataset_dir_list_file, 'r') as f:
+        dataset_dir_list = f.read().strip().split('\n')
+    return dataset_dir_list
+
+
+def get_sampling_rate(data_size_list: List[int], smoothing_factor: float = 0.7) -> List[float]:
+    """
+    Exponentially smoothing the weighting of multilingual data.
+    When ``smoothing_factor`` is set to 1, the sampling distribution is faithful to the original data size.
+    When 0, the distribution will be the uniform distribution.
+    """
+    data_size_list = [size ** smoothing_factor for size in data_size_list]
+    size_sum = sum(data_size_list)
+    return [size / size_sum for size in data_size_list]
+
+
+def sampling_from_iterators(iterators: List[Iterator], sampling_rate: List[float]):
+    """
+    Randomly choose an iterator according to ``sampling_rate``, and yield an element from it.
+    """
+    while True:
+        g = np.random.choice(iterators, p=sampling_rate)
+        try:
+            yield next(g)
+        except StopIteration:
+            break
+
+
 def run_pretraining(args):
     if args.parallel and args.local_rank == -1:
         run_parallel_pretraining(args)
@@ -147,29 +180,34 @@ def run_pretraining(args):
 
     logger.info('Starting pretraining with the following arguments: %s', args)
 
-    dataset = WikipediaPretrainingDataset(args.dataset_dir)
+    dataset_dir_list = parse_dataset_dir_list_file(args.dataset_dir_list_file)
+    dataset_list = [WikipediaPretrainingDataset(dataset_dir) for dataset_dir in dataset_dir_list]
+
     if args.bert_model_name.startswith('roberta'):
         bert_config = RobertaConfig.from_pretrained(args.bert_model_name)
     else:
         bert_config = BertConfig.from_pretrained(args.bert_model_name)
 
-    num_train_steps_per_epoch = math.ceil(len(dataset) / args.batch_size)
-    num_train_steps = math.ceil(len(dataset) / args.batch_size * args.num_epochs)
+    data_size_list = [len(dataset) for dataset in dataset_list]
+    total_data_size = sum(data_size_list)
+    num_train_steps_per_epoch = math.ceil(total_data_size / args.batch_size)
+    num_train_steps = math.ceil(total_data_size / args.batch_size * args.num_epochs)
     logger.info('The number of training steps: %d', num_train_steps)
     train_batch_size = int(args.batch_size / args.gradient_accumulation_steps / num_workers)
 
     if args.entity_emb_size is None:
         args.entity_emb_size = bert_config.hidden_size
 
-    config = LukeConfig(entity_vocab_size=dataset.entity_vocab.size, bert_model_name=args.bert_model_name,
+    config = LukeConfig(entity_vocab_size=dataset_list[0].entity_vocab.size, bert_model_name=args.bert_model_name,
                         entity_emb_size=args.entity_emb_size, **bert_config.to_dict())
     model = LukePretrainingModel(config)
 
     global_step = args.global_step
-    batch_generator = LukePretrainingBatchGenerator(args.dataset_dir, train_batch_size, args.masked_lm_prob,
-                                                    args.masked_entity_prob, args.whole_word_masking,
-                                                    num_workers=num_workers, worker_index=worker_index,
-                                                    skip=global_step * args.batch_size)
+    batch_generator_list = [LukePretrainingBatchGenerator(dataset_dir, train_batch_size, args.masked_lm_prob,
+                                                          args.masked_entity_prob, args.whole_word_masking,
+                                                          num_workers=num_workers, worker_index=worker_index,
+                                                          skip=global_step * args.batch_size)
+                            for dataset_dir in dataset_dir_list]
 
     logger.info('Model configuration: %s', config)
 
@@ -220,7 +258,9 @@ def run_pretraining(args):
             logger.info('Loading Wikipedia2Vec embeddings...')
             wiki2vec = Wikipedia2Vec.load(args.wikipedia2vec_file, numpy_mmap_mode=None)
             oov_titles = []
-            for title, index in tqdm(dataset.entity_vocab.vocab.items(), disable=args.local_rank not in [0, -1]):
+            # here, we implicitly assume that entity_vocab is shared across datasets
+            for title, index in tqdm(dataset_list[0].entity_vocab.vocab.items(),
+                                     disable=args.local_rank not in [0, -1]):
                 try:
                     entity_vector = torch.from_numpy(wiki2vec.get_entity_vector(title))
                     model.entity_embeddings.entity_embeddings.weight.data[index].copy_(entity_vector)
@@ -260,12 +300,18 @@ def run_pretraining(args):
 
     # if args.local_rank in (0, -1):
     if args.local_rank == -1 or worker_index == 0:
-        dataset.tokenizer.save_pretrained(args.output_dir)
-        dataset.entity_vocab.save(os.path.join(args.output_dir, ENTITY_VOCAB_FILE))
+        # again, we implicitly assume that entity_vocab and tokenizer is shared across datasets
+        dataset_list[0].tokenizer.save_pretrained(args.output_dir)
+        dataset_list[0].entity_vocab.save(os.path.join(args.output_dir, ENTITY_VOCAB_FILE))
+
+        max_seq_length = max([dataset.max_seq_length for dataset in dataset_list])
+        max_entity_length = max([dataset.max_entity_length for dataset in dataset_list])
+        max_mention_length = max([dataset.max_mention_length for dataset in dataset_list])
+
         metadata = dict(model_config=config.to_dict(),
-                        max_seq_length=dataset.max_seq_length,
-                        max_entity_length=dataset.max_entity_length,
-                        max_mention_length=dataset.max_mention_length,
+                        max_seq_length=max_seq_length,
+                        max_entity_length=max_entity_length,
+                        max_mention_length=max_mention_length,
                         arguments=vars(args))
         with open(os.path.join(args.output_dir, 'metadata.json'), 'w') as metadata_file:
             json.dump(metadata, metadata_file, indent=2, sort_keys=True)
@@ -303,7 +349,9 @@ def run_pretraining(args):
     prev_step_time = time.time()
     prev_save_time = time.time()
 
-    for batch in batch_generator.generate_batches():
+    sampling_rate = get_sampling_rate(data_size_list, smoothing_factor=args.sampling_smoothing)
+    batch_iterators = [g.generate_batches() for g in batch_generator_list]
+    for batch in sampling_from_iterators(batch_iterators, sampling_rate=sampling_rate):
         try:
             batch = {k: torch.from_numpy(v).to(device) for k, v in batch.items()}
             result = model(**batch)
@@ -314,8 +362,8 @@ def run_pretraining(args):
                 loss = loss / args.gradient_accumulation_steps
 
             def maybe_no_sync():
-                if hasattr(model, 'no_sync') and num_workers > 1 and\
-                    accumulation_count + 1 != args.gradient_accumulation_steps:
+                if hasattr(model, 'no_sync') and num_workers > 1 and \
+                        accumulation_count + 1 != args.gradient_accumulation_steps:
                     return model.no_sync()
                 else:
                     return contextlib.ExitStack()
@@ -376,19 +424,19 @@ def run_pretraining(args):
             results = []
 
             if args.local_rank == -1 or worker_index == 0:
-            # if args.local_rank in (0, -1):
+                # if args.local_rank in (0, -1):
                 for (name, value) in summary.items():
                     summary_writer.add_scalar(name, value, global_step)
-                desc = f'epoch: {int(global_step / num_train_steps_per_epoch)} '\
-                    f'loss: {summary["loss"]:.4f} '\
-                    f'time: {datetime.datetime.now().strftime("%H:%M:%S")}'
+                desc = f'epoch: {int(global_step / num_train_steps_per_epoch)} ' \
+                       f'loss: {summary["loss"]:.4f} ' \
+                       f'time: {datetime.datetime.now().strftime("%H:%M:%S")}'
                 pbar.set_description(desc)
                 pbar.update()
 
             global_step += 1
 
             if args.local_rank == -1 or worker_index == 0:
-            # if args.local_rank in (0, -1):
+                # if args.local_rank in (0, -1):
                 if global_step == num_train_steps:
                     save_model(model, f'epoch{args.num_epochs}')
                     time.sleep(60)
