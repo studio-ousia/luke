@@ -1,3 +1,4 @@
+from typing import List, Iterator
 import functools
 import logging
 import multiprocessing
@@ -18,6 +19,7 @@ class LukePretrainingBatchGenerator(object):
     """
     Launch a new process in order to avoid data processing being a bottleneck during training.
     """
+
     def __init__(self,
                  dataset_dir: str,
                  batch_size: int,
@@ -206,3 +208,56 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         if cat.startswith("P"):
             return True
         return False
+
+
+class MultilingualBatchGenerator(LukePretrainingBatchGenerator):
+    """
+    Launch a new process in order to avoid data processing being a bottleneck during training.
+    """
+
+    def __init__(self,
+                 dataset_dir_list: List[str],
+                 dataset_size_list: List[int],
+                 sampling_smoothing_factor: float,
+                 batch_size: int,
+                 masked_lm_prob: float,
+                 masked_entity_prob: float,
+                 whole_word_masking: bool,
+                 **dataset_kwargs
+                 ):
+
+        self.batch_generator_list = [LukePretrainingBatchGenerator(dataset_dir,
+                                                                   batch_size,
+                                                                   masked_lm_prob,
+                                                                   masked_entity_prob,
+                                                                   whole_word_masking,
+                                                                   **dataset_kwargs)
+                                     for dataset_dir in dataset_dir_list]
+        self.sampling_rate = self.get_sampling_rate(dataset_size_list, sampling_smoothing_factor)
+
+    def generate_batches(self, queue_size: int = 10000):
+        batch_iterators = [g.generate_batches(queue_size) for g in self.batch_generator_list]
+        yield from self.sampling_from_iterators(batch_iterators, sampling_rate=self.sampling_rate)
+
+    @staticmethod
+    def get_sampling_rate(data_size_list: List[int], smoothing_factor: float = 0.7) -> List[float]:
+        """
+        Exponentially smoothing the weighting of multilingual data.
+        When ``smoothing_factor`` is set to 1, the sampling distribution is faithful to the original data size.
+        When 0, the distribution will be the uniform distribution.
+        """
+        data_size_list = [size ** smoothing_factor for size in data_size_list]
+        size_sum = sum(data_size_list)
+        return [size / size_sum for size in data_size_list]
+
+    @staticmethod
+    def sampling_from_iterators(iterators: List[Iterator], sampling_rate: List[float]):
+        """
+        Randomly choose an iterator according to ``sampling_rate``, and yield an element from it.
+        """
+        while True:
+            g = np.random.choice(iterators, p=sampling_rate)
+            try:
+                yield next(g)
+            except StopIteration:
+                break

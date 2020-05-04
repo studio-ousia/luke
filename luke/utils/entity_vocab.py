@@ -1,5 +1,6 @@
-from typing import Dict, List
+from typing import List
 import json
+
 import multiprocessing
 from collections import Counter, OrderedDict, defaultdict
 from contextlib import closing
@@ -8,6 +9,7 @@ from multiprocessing.pool import Pool
 import click
 from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
+
 from .interwiki_db import InterwikiDB
 
 PAD_TOKEN = '[PAD]'
@@ -25,29 +27,27 @@ _dump_db = None  # global variable used in multiprocessing workers
 @click.option('--white-list-only', is_flag=True)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', default=100)
-def build_entity_vocab(dump_db_file: str, white_list: List[str], **kwargs):
+def build_entity_vocab(dump_db_file, white_list, **kwargs):
     dump_db = DumpDB(dump_db_file)
     white_list = [line.rstrip() for f in white_list for line in f]
     EntityVocab.build(dump_db, white_list=white_list, **kwargs)
 
 
 class EntityVocab(object):
-    def __init__(self, vocab_file: str):
+    def __init__(self, vocab_file):
         self._vocab_file = vocab_file
 
         self.vocab = {}
         self.counter = {}
-        self.inv_vocab = {}
-
-        entities_json = json.load(open(vocab_file, 'r'))
-        for ent_id, record in enumerate(entities_json):
-            for title in record["entities"]:
-                self.vocab[title] = ent_id
-                self.counter[title] = record["count"]
-            self.inv_vocab[ent_id] = record["entities"]
+        with open(vocab_file) as f:
+            for (index, line) in enumerate(f):
+                title, count = line.rstrip().split('\t')
+                self.vocab[title] = index
+                self.counter[title] = int(count)
+        self.inv_vocab = {v: k for k, v in self.vocab.items()}
 
     @property
-    def size(self) -> int:
+    def size(self):
         return len(self)
 
     def __reduce__(self):
@@ -65,31 +65,25 @@ class EntityVocab(object):
     def __iter__(self):
         return iter(self.vocab)
 
-    def get_id(self, key: str, default=None) -> int:
+    def get_id(self, key, default=None):
         try:
             return self[key]
         except KeyError:
             return default
 
-    def get_title_by_id(self, id_: int) -> str:
+    def get_title_by_id(self, id_):
         return self.inv_vocab[id_]
 
-    def get_count_by_title(self, title: str) -> int:
+    def get_count_by_title(self, title):
         return self.counter.get(title, 0)
 
-    def save(self, out_file: str):
+    def save(self, out_file):
         with open(self._vocab_file, 'r') as src:
             with open(out_file, 'w') as dst:
                 dst.write(src.read())
 
     @staticmethod
-    def build(dump_db: DumpDB,
-              out_file: str,
-              vocab_size: int,
-              white_list: List[str],
-              white_list_only: bool,
-              pool_size: int,
-              chunk_size: int):
+    def build(dump_db, out_file, vocab_size, white_list, white_list_only, pool_size, chunk_size):
         counter = Counter()
         with tqdm(total=dump_db.page_size(), mininterval=0.5) as pbar:
             with closing(Pool(pool_size, initializer=EntityVocab._initialize_worker, initargs=(dump_db,))) as pool:
@@ -114,23 +108,39 @@ class EntityVocab(object):
                     if len(title_dict) == vocab_size:
                         break
 
-        instances = [{"entities": [title], "count": count} for title, count in title_dict.items()]
         with open(out_file, 'w') as f:
-            json.dump(instances, f, indent=4)
+            for title, count in title_dict.items():
+                f.write('%s\t%d\n' % (title, count))
 
     @staticmethod
-    def _initialize_worker(dump_db: DumpDB):
+    def _initialize_worker(dump_db):
         global _dump_db
         _dump_db = dump_db
 
     @staticmethod
-    def _count_entities(title: str):
+    def _count_entities(title):
         counter = Counter()
         for paragraph in _dump_db.get_paragraphs(title):
             for wiki_link in paragraph.wiki_links:
                 title = _dump_db.resolve_redirect(wiki_link.title)
                 counter[title] += 1
         return counter
+
+
+class MultilingualEntityVocab(EntityVocab):
+    def __init__(self, vocab_file: str):
+        self._vocab_file = vocab_file
+
+        self.vocab = {}
+        self.counter = {}
+        self.inv_vocab = {}
+
+        entities_json = json.load(open(vocab_file, 'r'))
+        for ent_id, record in enumerate(entities_json):
+            for title in record["entities"]:
+                self.vocab[title] = ent_id
+                self.counter[title] = record["count"]
+            self.inv_vocab[ent_id] = record["entities"]
 
 
 def build_multilingual_voacb(vocab_files: List[str],
@@ -146,13 +156,13 @@ def build_multilingual_voacb(vocab_files: List[str],
     new_id = 0
     for vocab_path, lang in zip(vocab_files, languages):
         with open(vocab_path, 'r') as f:
-            for instance in json.load(f):
-                entities = instance['entities']
-                count = instance['count']
-                multilingual_entities = set(entities)
-                for ent in entities:
-                    aligned_entities = {e for e, _ in db.query(ent, lang)}
-                    multilingual_entities.update(aligned_entities)
+            for line in f:
+                entity, count = line.strip().split('\t')
+                count = int(count)
+
+                multilingual_entities = {entity}
+                aligned_entities = {e for e, _ in db.query(entity, lang)}
+                multilingual_entities.update(aligned_entities)
 
                 # judge if we assign a new id to these entities
                 use_new_id = True
@@ -164,9 +174,8 @@ def build_multilingual_voacb(vocab_files: List[str],
                     ent_id = new_id
                     new_id += 1
 
-                for ent in entities:
-                    vocab[ent] = ent_id
-                inv_vocab[ent_id].update(entities)
+                vocab[entity] = ent_id
+                inv_vocab[ent_id].add(entity)
                 count_dict[ent_id] += count
     json_dicts = [{"entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]} for ent_id in range(new_id)]
 

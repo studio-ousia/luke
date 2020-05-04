@@ -1,3 +1,4 @@
+from typing import List
 import functools
 import itertools
 import json
@@ -16,15 +17,14 @@ from transformers import BertTokenizer, RobertaTokenizer
 from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
 
-from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab
+from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab
 from luke.utils.sentence_tokenizer import NLTKSentenceTokenizer, OpenNLPSentenceTokenizer
 
 DATASET_FILE = 'dataset.tf'
 METADATA_FILE = 'metadata.json'
-ENTITY_VOCAB_FILE = 'entity_vocab.json'
 
 # global variables used in pool workers
-_dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length =\
+_dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length = \
     _max_mention_length = _min_sentence_length = _include_sentences_without_entities = _include_unk_entities = None
 
 
@@ -33,6 +33,7 @@ _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = 
 @click.argument('tokenizer_name')
 @click.argument('entity_vocab_file', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path(file_okay=False))
+@click.option('--multilingual', is_flag=True)
 @click.option('--sentence-tokenizer', default='opennlp', type=click.Choice(['opennlp', 'nltk']))
 @click.option('--max-seq-length', default=512)
 @click.option('--max-entity-length', default=128)
@@ -42,7 +43,7 @@ _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = 
 @click.option('--include-unk-entities/--skip-unk-entities', default=False)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', default=100)
-def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_vocab_file, output_dir,
+def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_vocab_file, output_dir, multilingual,
                                         sentence_tokenizer, **kwargs):
     dump_db = DumpDB(dump_db_file)
     if 'roberta' in tokenizer_name:
@@ -53,14 +54,21 @@ def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_voc
         sentence_tokenizer = OpenNLPSentenceTokenizer()
     else:
         sentence_tokenizer = NLTKSentenceTokenizer()
-    entity_vocab = EntityVocab(entity_vocab_file)
+
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    WikipediaPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
+    if multilingual:
+        entity_vocab = MultilingualEntityVocab(entity_vocab_file)
+        MultilingualPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
+    else:
+        entity_vocab = EntityVocab(entity_vocab_file)
+        WikipediaPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
 
 
 class WikipediaPretrainingDataset(object):
+    ENTITY_VOCAB_FILE = 'entity_vocab.tsv'
+
     def __init__(self, dataset_dir):
         self._dataset_dir = dataset_dir
 
@@ -91,7 +99,7 @@ class WikipediaPretrainingDataset(object):
 
     @property
     def entity_vocab(self):
-        return EntityVocab(os.path.join(self._dataset_dir, ENTITY_VOCAB_FILE))
+        return EntityVocab(os.path.join(self._dataset_dir, self.ENTITY_VOCAB_FILE))
 
     def create_iterator(self, skip=0, num_workers=1, worker_index=0, shuffle_buffer_size=1000, shuffle_seed=0,
                         num_parallel_reads=10):
@@ -124,8 +132,8 @@ class WikipediaPretrainingDataset(object):
             except tf.errors.OutOfRangeError:
                 pass
 
-    @staticmethod
-    def build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, max_seq_length, max_entity_length,
+    @classmethod
+    def build(cls, dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, max_seq_length, max_entity_length,
               max_mention_length, min_sentence_length, include_sentences_without_entities, include_unk_entities,
               pool_size, chunk_size):
         target_titles = [title for title in dump_db.titles()
@@ -135,7 +143,7 @@ class WikipediaPretrainingDataset(object):
         max_num_tokens = max_seq_length - 2  # 2 for [CLS] and [SEP]
 
         tokenizer.save_pretrained(output_dir)
-        entity_vocab.save(os.path.join(output_dir, ENTITY_VOCAB_FILE))
+        entity_vocab.save(os.path.join(output_dir, cls.ENTITY_VOCAB_FILE))
 
         number_of_items = 0
         tf_file = os.path.join(output_dir, DATASET_FILE)
@@ -168,7 +176,7 @@ class WikipediaPretrainingDataset(object):
     def _initialize_worker(dump_db, tokenizer, sentence_tokenizer, entity_vocab, max_num_tokens, max_entity_length,
                            max_mention_length, min_sentence_length, include_sentences_without_entities,
                            include_unk_entities):
-        global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length,\
+        global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length, \
             _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
 
         _dump_db = dump_db
@@ -206,7 +214,7 @@ class WikipediaPretrainingDataset(object):
                 # remove category links
                 if link_title.startswith('Category:') and link.text.lower().startswith('category:'):
                     paragraph_text = paragraph_text[:link.start] + ' ' * \
-                        (link.end - link.start) + paragraph_text[link.end:]
+                                     (link.end - link.start) + paragraph_text[link.end:]
                 else:
                     if link_title in _entity_vocab:
                         paragraph_links.append((link_title, link.start, link.end))
@@ -278,3 +286,38 @@ class WikipediaPretrainingDataset(object):
                 links = []
 
         return ret
+
+
+class MultilingualPretrainingDataset(WikipediaPretrainingDataset):
+    ENTITY_VOCAB_FILE = 'multilingual_entity_vocab.json'
+
+    def __init__(self,
+                 dataset_dir_list: List[str]):
+        self.dataset_dir_list = dataset_dir_list
+        self.dataset_list = [WikipediaPretrainingDataset(d) for d in dataset_dir_list]
+
+        self.data_size_list = [len(dataset) for dataset in self.dataset_list]
+        self.total_data_size = sum(self.data_size_list)
+
+    def __len__(self):
+        return self.total_data_size
+
+    @property
+    def max_seq_length(self):
+        return max([dataset.max_seq_length for dataset in self.dataset_list])
+
+    @property
+    def max_entity_length(self):
+        return max([dataset.max_entity_length for dataset in self.dataset_list])
+
+    @property
+    def max_mention_length(self):
+        return max([dataset.max_mention_length for dataset in self.dataset_list])
+
+    @property
+    def tokenizer(self):
+        return self.dataset_list[0].tokenizer
+
+    @property
+    def entity_vocab(self):
+        return MultilingualEntityVocab(os.path.join(self.dataset_dir_list[0], self.ENTITY_VOCAB_FILE))
