@@ -51,6 +51,7 @@ logger = logging.getLogger(__name__)
 @click.option('--masked-lm-prob', default=0.15)
 @click.option('--masked-entity-prob', default=0.15)
 @click.option('--whole-word-masking', is_flag=True)
+@click.option('--no-entities', is_flag=True)
 @click.option('--fix-bert-weights', is_flag=True)
 @click.option('--grad-avg-on-cpu/--grad-avg-on-gpu', default=False)
 @click.option('--num-epochs', default=5)
@@ -306,6 +307,8 @@ def run_pretraining(args):
     for batch in batch_generator.generate_batches():
         try:
             batch = {k: torch.from_numpy(v).to(device) for k, v in batch.items()}
+            if args.no_entities:
+                batch['entity_attention_mask'].fill_(0)
             result = model(**batch)
             loss = result['loss']
             result = {k: v.to('cpu').detach().numpy() for k, v in result.items()}
