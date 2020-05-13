@@ -34,7 +34,7 @@ _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = 
 @click.argument('entity_vocab_file', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path(file_okay=False))
 @click.option('--multilingual', is_flag=True)
-@click.option('--sentence-tokenizer', default='opennlp', type=click.Choice(['opennlp', 'nltk']))
+@click.option('--sentence-tokenizer', default='opennlp', type=click.Choice(['opennlp', 'nltk', 'ja']))
 @click.option('--max-seq-length', default=512)
 @click.option('--max-entity-length', default=128)
 @click.option('--max-mention-length', default=30)
