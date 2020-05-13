@@ -13,7 +13,7 @@ import click
 import tensorflow as tf
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Int64List
-from transformers import BertTokenizer, RobertaTokenizer
+from transformers import BertTokenizer, RobertaTokenizer, XLMRobertaTokenizer
 from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
 
@@ -46,10 +46,13 @@ _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = 
 def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_vocab_file, output_dir, multilingual,
                                         sentence_tokenizer, **kwargs):
     dump_db = DumpDB(dump_db_file)
-    if 'roberta' in tokenizer_name:
+    if 'xlm-roberta' in tokenizer_name:
+        tokenizer = XLMRobertaTokenizer.from_pretrained(tokenizer_name)
+    elif 'roberta' in tokenizer_name:
         tokenizer = RobertaTokenizer.from_pretrained(tokenizer_name)
     else:
         tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
+
     if sentence_tokenizer == 'opennlp':
         sentence_tokenizer = OpenNLPSentenceTokenizer()
     else:
