@@ -18,7 +18,7 @@ from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab
-from luke.utils.sentence_tokenizer import NLTKSentenceTokenizer, OpenNLPSentenceTokenizer
+from luke.utils.sentence_tokenizer import NLTKSentenceTokenizer, OpenNLPSentenceTokenizer, JapaneseSentenceTokenizer
 
 DATASET_FILE = 'dataset.tf'
 METADATA_FILE = 'metadata.json'
@@ -55,8 +55,12 @@ def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_voc
 
     if sentence_tokenizer == 'opennlp':
         sentence_tokenizer = OpenNLPSentenceTokenizer()
-    else:
+    elif sentence_tokenizer == 'ja':
+        sentence_tokenizer = JapaneseSentenceTokenizer()
+    elif sentence_tokenizer == 'nltk':
         sentence_tokenizer = NLTKSentenceTokenizer()
+    else:
+        raise Exception(f"sentence_tokenizer: {sentence_tokenizer} is not defined.")
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
