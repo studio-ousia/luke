@@ -15,6 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers.modeling_bert import BertConfig, BertForPreTraining
 from transformers.modeling_roberta import RobertaConfig, RobertaForMaskedLM
+from transformers.modeling_xlm_roberta import XLMRobertaConfig, XLMRobertaForMaskedLM
 from pytorch_transformers.optimization import WarmupConstantSchedule, WarmupLinearSchedule
 from wikipedia2vec import Wikipedia2Vec
 
@@ -155,7 +156,9 @@ def run_pretraining(args):
     else:
         dataset = WikipediaPretrainingDataset(args.dataset_dir)
 
-    if args.bert_model_name.startswith('roberta'):
+    if 'xlm-roberta' in args.bert_model_name:
+        bert_config = XLMRobertaConfig.from_pretrained(args.bert_model_name)
+    elif 'roberta' in args.bert_model_name:
         bert_config = RobertaConfig.from_pretrained(args.bert_model_name)
     else:
         bert_config = BertConfig.from_pretrained(args.bert_model_name)
@@ -226,10 +229,13 @@ def run_pretraining(args):
                                               max_loss_scale=args.fp16_max_loss_scale)
 
     if args.model_file is None:
-        if args.bert_model_name.startswith('roberta'):
+        if 'xlm-roberta' in args.bert_model_name:
+            bert_model = XLMRobertaForMaskedLM.from_pretrained(args.bert_model_name)
+        elif 'roberta' in args.bert_model_name:
             bert_model = RobertaForMaskedLM.from_pretrained(args.bert_model_name)
         else:
             bert_model = BertForPreTraining.from_pretrained(args.bert_model_name)
+
         bert_state_dict = bert_model.state_dict()
         model.load_bert_weights(bert_state_dict)
 
