@@ -315,6 +315,7 @@ class MultilingualPretrainingDataset(WikipediaPretrainingDataset):
                  dataset_dir_list: List[str]):
         self.dataset_dir_list = dataset_dir_list
         self.dataset_list = [WikipediaPretrainingDataset(d, multilingual=True) for d in dataset_dir_list]
+        self.entity_vocab_file = MULTILINGULA_ENTITY_VOCAB_FILE
 
         self.data_size_list = [len(dataset) for dataset in self.dataset_list]
         self.total_data_size = sum(self.data_size_list)
