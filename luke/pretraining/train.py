@@ -22,7 +22,8 @@ from wikipedia2vec import Wikipedia2Vec
 from luke.model import LukeConfig
 from luke.optimization import LukeDenseSparseAdam
 from luke.pretraining.batch_generator import LukePretrainingBatchGenerator, MultilingualBatchGenerator
-from luke.pretraining.dataset import WikipediaPretrainingDataset, MultilingualPretrainingDataset
+from luke.pretraining.dataset import WikipediaPretrainingDataset, MultilingualPretrainingDataset, \
+    ENTITY_VOCAB_FILE, MULTILINGULA_ENTITY_VOCAB_FILE
 from luke.pretraining.model import LukePretrainingModel
 
 logger = logging.getLogger(__name__)
@@ -153,8 +154,10 @@ def run_pretraining(args):
     if args.multilingual:
         dataset_dir_list = args.dataset_dir.split(',')
         dataset = MultilingualPretrainingDataset(dataset_dir_list)
+        entity_vocab_file = MULTILINGULA_ENTITY_VOCAB_FILE
     else:
         dataset = WikipediaPretrainingDataset(args.dataset_dir)
+        entity_vocab_file = ENTITY_VOCAB_FILE
 
     if 'xlm-roberta' in args.bert_model_name:
         bert_config = XLMRobertaConfig.from_pretrained(args.bert_model_name)
@@ -284,7 +287,8 @@ def run_pretraining(args):
     # if args.local_rank in (0, -1):
     if args.local_rank == -1 or worker_index == 0:
         dataset.tokenizer.save_pretrained(args.output_dir)
-        dataset.entity_vocab.save(os.path.join(args.output_dir, dataset.entity_vocab_file))
+
+        dataset.entity_vocab.save(os.path.join(args.output_dir, entity_vocab_file))
         metadata = dict(model_config=config.to_dict(),
                         max_seq_length=dataset.max_seq_length,
                         max_entity_length=dataset.max_entity_length,
