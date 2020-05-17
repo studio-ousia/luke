@@ -22,6 +22,8 @@ from luke.utils.sentence_tokenizer import NLTKSentenceTokenizer, OpenNLPSentence
 
 DATASET_FILE = 'dataset.tf'
 METADATA_FILE = 'metadata.json'
+ENTITY_VOCAB_FILE = 'entity_vocab.tsv'
+MULTILINGULA_ENTITY_VOCAB_FILE = 'multilingual_entity_vocab.json'
 
 # global variables used in pool workers
 _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length = \
@@ -74,10 +76,11 @@ def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_voc
 
 
 class WikipediaPretrainingDataset(object):
-    ENTITY_VOCAB_FILE = 'entity_vocab.tsv'
 
-    def __init__(self, dataset_dir):
+    def __init__(self, dataset_dir: str, multilingual: bool = False):
         self._dataset_dir = dataset_dir
+
+        self.multilingual = multilingual
 
         with open(os.path.join(dataset_dir, METADATA_FILE)) as metadata_file:
             self.metadata = json.load(metadata_file)
@@ -110,7 +113,10 @@ class WikipediaPretrainingDataset(object):
 
     @property
     def entity_vocab(self):
-        return EntityVocab(os.path.join(self._dataset_dir, self.ENTITY_VOCAB_FILE))
+        if self.multilingual:
+            return MultilingualEntityVocab(os.path.join(self._dataset_dir, MULTILINGULA_ENTITY_VOCAB_FILE))
+        else:
+            return EntityVocab(os.path.join(self._dataset_dir, ENTITY_VOCAB_FILE))
 
     def create_iterator(self, skip=0, num_workers=1, worker_index=0, shuffle_buffer_size=1000, shuffle_seed=0,
                         num_parallel_reads=10):
@@ -300,12 +306,11 @@ class WikipediaPretrainingDataset(object):
 
 
 class MultilingualPretrainingDataset(WikipediaPretrainingDataset):
-    ENTITY_VOCAB_FILE = 'multilingual_entity_vocab.json'
 
     def __init__(self,
                  dataset_dir_list: List[str]):
         self.dataset_dir_list = dataset_dir_list
-        self.dataset_list = [WikipediaPretrainingDataset(d) for d in dataset_dir_list]
+        self.dataset_list = [WikipediaPretrainingDataset(d, multilingual=True) for d in dataset_dir_list]
 
         self.data_size_list = [len(dataset) for dataset in self.dataset_list]
         self.total_data_size = sum(self.data_size_list)
@@ -331,4 +336,4 @@ class MultilingualPretrainingDataset(WikipediaPretrainingDataset):
 
     @property
     def entity_vocab(self):
-        return MultilingualEntityVocab(os.path.join(self.dataset_dir_list[0], self.ENTITY_VOCAB_FILE))
+        return self.dataset_list[0].entity_vocab
