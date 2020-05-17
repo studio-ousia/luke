@@ -99,7 +99,11 @@ class WikipediaPretrainingDataset(object):
 
     @property
     def tokenizer(self):
-        if 'roberta' in self.metadata.get('tokenizer_class', '').lower():
+        tokenizer_class = self.metadata.get('tokenizer_class', '').lower()
+
+        if 'xlmroberta' in tokenizer_class:
+            return XLMRobertaTokenizer.from_pretrained(self._dataset_dir)
+        elif 'roberta' in tokenizer_class:
             return RobertaTokenizer.from_pretrained(self._dataset_dir)
         else:
             return BertTokenizer.from_pretrained(self._dataset_dir)
