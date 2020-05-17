@@ -80,7 +80,8 @@ class LukeModel(nn.Module):
 
         self.encoder = BertEncoder(config)
         self.pooler = BertPooler(config)
-        if self.config.bert_model_name and self.config.bert_model_name.startswith('roberta'):
+
+        if self.config.bert_model_name and 'roberta' in self.config.bert_model_name:
             self.embeddings = RobertaEmbeddings(config)
             self.embeddings.token_type_embeddings.requires_grad = False
         else:
