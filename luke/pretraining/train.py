@@ -284,7 +284,7 @@ def run_pretraining(args):
     # if args.local_rank in (0, -1):
     if args.local_rank == -1 or worker_index == 0:
         dataset.tokenizer.save_pretrained(args.output_dir)
-        dataset.entity_vocab.save(os.path.join(args.output_dir, dataset.ENTITY_VOCAB_FILE))
+        dataset.entity_vocab.save(os.path.join(args.output_dir, dataset.entity_vocab_file))
         metadata = dict(model_config=config.to_dict(),
                         max_seq_length=dataset.max_seq_length,
                         max_entity_length=dataset.max_entity_length,
