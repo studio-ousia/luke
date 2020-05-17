@@ -81,6 +81,10 @@ class WikipediaPretrainingDataset(object):
         self._dataset_dir = dataset_dir
 
         self.multilingual = multilingual
+        if self.multilingual:
+            self.entity_vocab_file = MULTILINGULA_ENTITY_VOCAB_FILE
+        else:
+            self.entity_vocab_file = ENTITY_VOCAB_FILE
 
         with open(os.path.join(dataset_dir, METADATA_FILE)) as metadata_file:
             self.metadata = json.load(metadata_file)
@@ -114,9 +118,9 @@ class WikipediaPretrainingDataset(object):
     @property
     def entity_vocab(self):
         if self.multilingual:
-            return MultilingualEntityVocab(os.path.join(self._dataset_dir, MULTILINGULA_ENTITY_VOCAB_FILE))
+            return MultilingualEntityVocab(os.path.join(self._dataset_dir, self.entity_vocab_file))
         else:
-            return EntityVocab(os.path.join(self._dataset_dir, ENTITY_VOCAB_FILE))
+            return EntityVocab(os.path.join(self._dataset_dir, self.entity_vocab_file))
 
     def create_iterator(self, skip=0, num_workers=1, worker_index=0, shuffle_buffer_size=1000, shuffle_seed=0,
                         num_parallel_reads=10):
