@@ -1,7 +1,5 @@
 from typing import List, Tuple
-
 import pkg_resources
-import re
 
 
 class SentenceTokenizer:
@@ -15,14 +13,28 @@ class SentenceTokenizer:
 
         if name == 'nltk':
             return NLTKSentenceTokenizer()
-
-        elif name == 'jp':
-            return JapaneseSentenceTokenizer()
-
         elif name == 'opennlp':
             return OpenNLPSentenceTokenizer()
         else:
-            raise NotImplementedError()
+            return ICUSentenceTokenizer(name)
+
+
+class ICUSentenceTokenizer:
+    """ Segment text to sentences. """
+
+    def __init__(self, locale='en'):
+        from icu import Locale, BreakIterator
+        self.locale = Locale(locale)
+        self.breaker = BreakIterator.createSentenceInstance(self.locale)
+
+    def span_tokenize(self, text: str):
+        self.breaker.setText(text)
+        start_idx = 0
+        spans = []
+        for end_idx in self.breaker:
+            spans.append((start_idx, end_idx))
+            start_idx = end_idx
+        return spans
 
 
 class NLTKSentenceTokenizer(SentenceTokenizer):
@@ -37,18 +49,6 @@ class NLTKSentenceTokenizer(SentenceTokenizer):
 
     def span_tokenize(self, text: str) -> List[Tuple[int, int]]:
         return list(self._sentence_tokenizer.span_tokenize(text))
-
-
-class JapaneseSentenceTokenizer(SentenceTokenizer):
-
-    def __init__(self):
-        self.pattern = re.compile(r".*?[。|？]")
-
-    def __reduce__(self):
-        return self.__class__, tuple()
-
-    def span_tokenize(self, text):
-        return [match.span() for match in re.finditer(self.pattern, text)]
 
 
 class OpenNLPSentenceTokenizer(SentenceTokenizer):
