@@ -16,7 +16,7 @@ from tqdm import tqdm
 from transformers.modeling_bert import BertConfig, BertForPreTraining
 from transformers.modeling_roberta import RobertaConfig, RobertaForMaskedLM
 from transformers.modeling_xlm_roberta import XLMRobertaConfig, XLMRobertaForMaskedLM
-from pytorch_transformers.optimization import WarmupConstantSchedule, WarmupLinearSchedule
+from transformers import get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
 from wikipedia2vec import Wikipedia2Vec
 
 from luke.model import LukeConfig
@@ -272,11 +272,12 @@ def run_pretraining(args):
         amp.load_state_dict(torch.load(args.amp_file, map_location='cpu'))
 
     if args.lr_schedule == 'warmup_constant':
-        scheduler = WarmupConstantSchedule(optimizer, warmup_steps=args.warmup_steps)
+        scheduler = get_constant_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps)
     elif args.lr_schedule == 'warmup_linear':
-        scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=num_train_steps)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps,
+                                                    num_training_steps=num_train_steps)
     else:
-        raise RuntimeError('Invalid scheduler: ' + scheduler)
+        raise RuntimeError(f'Invalid scheduler: {args.lr_schedule}')
 
     if args.scheduler_file is not None:
         scheduler.load_state_dict(torch.load(args.scheduler_file, map_location='cpu'))
