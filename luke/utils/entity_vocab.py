@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, TextIO
 import json
 
 import multiprocessing
@@ -27,14 +27,14 @@ _dump_db = None  # global variable used in multiprocessing workers
 @click.option('--white-list-only', is_flag=True)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', default=100)
-def build_entity_vocab(dump_db_file, white_list, **kwargs):
+def build_entity_vocab(dump_db_file: str, white_list: List[TextIO], **kwargs):
     dump_db = DumpDB(dump_db_file)
     white_list = [line.rstrip() for f in white_list for line in f]
     EntityVocab.build(dump_db, white_list=white_list, **kwargs)
 
 
 class EntityVocab(object):
-    def __init__(self, vocab_file):
+    def __init__(self, vocab_file: str):
         self._vocab_file = vocab_file
 
         self.vocab = {}
@@ -47,7 +47,7 @@ class EntityVocab(object):
         self.inv_vocab = {v: k for k, v in self.vocab.items()}
 
     @property
-    def size(self):
+    def size(self) -> int:
         return len(self)
 
     def __reduce__(self):
@@ -65,25 +65,31 @@ class EntityVocab(object):
     def __iter__(self):
         return iter(self.vocab)
 
-    def get_id(self, key, default=None):
+    def get_id(self, key: str, default: int = None) -> int:
         try:
             return self[key]
         except KeyError:
             return default
 
-    def get_title_by_id(self, id_):
+    def get_title_by_id(self, id_: int) -> str:
         return self.inv_vocab[id_]
 
-    def get_count_by_title(self, title):
+    def get_count_by_title(self, title: str) -> int:
         return self.counter.get(title, 0)
 
-    def save(self, out_file):
+    def save(self, out_file: str):
         with open(self._vocab_file, 'r') as src:
             with open(out_file, 'w') as dst:
                 dst.write(src.read())
 
     @staticmethod
-    def build(dump_db, out_file, vocab_size, white_list, white_list_only, pool_size, chunk_size):
+    def build(dump_db: DumpDB,
+              out_file: str,
+              vocab_size: int,
+              white_list: List[str],
+              white_list_only: bool,
+              pool_size: int,
+              chunk_size: int):
         counter = Counter()
         with tqdm(total=dump_db.page_size(), mininterval=0.5) as pbar:
             with closing(Pool(pool_size, initializer=EntityVocab._initialize_worker, initargs=(dump_db,))) as pool:
@@ -143,7 +149,7 @@ class MultilingualEntityVocab(EntityVocab):
             self.inv_vocab[ent_id] = record["entities"]
 
 
-def build_multilingual_voacb(vocab_files: List[str],
+def build_multilingual_vocab(vocab_files: List[str],
                              languages: List[str],
                              inter_wiki_db_path: str,
                              out_file: str):

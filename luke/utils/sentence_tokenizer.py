@@ -4,7 +4,28 @@ import pkg_resources
 import re
 
 
-class NLTKSentenceTokenizer(object):
+class SentenceTokenizer:
+    """ Base class for all sentence tokenizers in this project."""
+
+    def span_tokenize(self, text: str) -> List[Tuple[int, int]]:
+        raise NotImplementedError
+
+    @classmethod
+    def from_name(cls, name: str):
+
+        if name == 'nltk':
+            return NLTKSentenceTokenizer()
+
+        elif name == 'jp':
+            return JapaneseSentenceTokenizer()
+
+        elif name == 'opennlp':
+            return OpenNLPSentenceTokenizer()
+        else:
+            raise NotImplementedError()
+
+
+class NLTKSentenceTokenizer(SentenceTokenizer):
     def __init__(self):
         import nltk
         punkt_param = nltk.tokenize.punkt.PunktParameters()
@@ -18,7 +39,7 @@ class NLTKSentenceTokenizer(object):
         return list(self._sentence_tokenizer.span_tokenize(text))
 
 
-class JapaneseSentenceTokenizer(object):
+class JapaneseSentenceTokenizer(SentenceTokenizer):
 
     def __init__(self):
         self.pattern = re.compile(r".*?[。|？]")
@@ -30,7 +51,7 @@ class JapaneseSentenceTokenizer(object):
         return [match.span() for match in re.finditer(self.pattern, text)]
 
 
-class OpenNLPSentenceTokenizer(object):
+class OpenNLPSentenceTokenizer(SentenceTokenizer):
     _java_initialized = False
 
     def __init__(self):

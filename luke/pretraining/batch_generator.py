@@ -109,7 +109,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                 max_word_len = 1
                 max_entity_len = 1
 
-    def _create_word_features(self, word_ids):
+    def _create_word_features(self, word_ids: np.ndarray):
         output_word_ids = np.full(self._max_seq_length, self._pad_id, dtype=np.int)
         output_word_ids[:word_ids.size + 2] = np.concatenate([[self._cls_id], word_ids, [self._sep_id]])
         word_attention_mask = np.zeros(self._max_seq_length, dtype=np.int)
@@ -161,7 +161,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
 
         return ret
 
-    def _create_entity_features(self, entity_ids, entity_position_ids):
+    def _create_entity_features(self, entity_ids: np.ndarray, entity_position_ids: np.ndarray):
         output_entity_ids = np.zeros(self._max_entity_length, dtype=np.int)
         output_entity_ids[:entity_ids.size] = entity_ids
 
@@ -187,7 +187,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
 
         return ret
 
-    def _is_subword(self, token):
+    def _is_subword(self, token: str):
         if isinstance(self._tokenizer, RobertaTokenizer) and \
                 not self._tokenizer.convert_tokens_to_string(token).startswith(' ') and \
                 not self._is_punctuation(token[0]):
@@ -198,7 +198,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         return False
 
     @staticmethod
-    def _is_punctuation(char):
+    def _is_punctuation(char: str):
         # obtained from:
         # https://github.com/huggingface/transformers/blob/5f25a5f367497278bf19c9994569db43f96d5278/transformers/tokenization_bert.py#L489
         cp = ord(char)
