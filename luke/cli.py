@@ -29,7 +29,7 @@ import luke.utils.entity_vocab
 @click.group()
 @click.option('--verbose', is_flag=True)
 @click.option('--seed', type=int, default=None)
-def cli(verbose, seed):
+def cli(verbose: bool, seed: int):
     fmt = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format=fmt)
@@ -50,7 +50,7 @@ def cli(verbose, seed):
 @click.argument('out_file', type=click.Path())
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', type=int, default=100)
-def build_dump_db(dump_file, out_file, **kwargs):
+def build_dump_db(dump_file: str, out_file: str, **kwargs):
     dump_reader = WikiDumpReader(dump_file)
     DumpDB.build(dump_reader, out_file, **kwargs)
 

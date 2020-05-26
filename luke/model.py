@@ -1,3 +1,5 @@
+from typing import Dict
+
 import logging
 
 import torch
@@ -125,7 +127,7 @@ class LukeModel(nn.Module):
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
 
-    def load_bert_weights(self, state_dict):
+    def load_bert_weights(self, state_dict: Dict[str, torch.Tensor]):
         state_dict = state_dict.copy()
         for key in list(state_dict.keys()):
             new_key = key.replace('gamma', 'weight').replace('beta', 'bias')

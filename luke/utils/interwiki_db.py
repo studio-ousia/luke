@@ -28,7 +28,11 @@ def build(wikidata_dump_file: str, language: List[str], out_file: str):
 
 
 class InterwikiDB(object):
-    def __init__(self, title_trie, data, indptr, title_indices):
+    def __init__(self,
+                 title_trie: Trie,
+                 data: np.ndarray,
+                 indptr: np.ndarray,
+                 title_indices: np.ndarray):
         self._title_trie = title_trie
         self._data = data
         self._indptr = indptr

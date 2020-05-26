@@ -23,7 +23,7 @@ from luke.model import LukeConfig
 from luke.optimization import LukeDenseSparseAdam
 from luke.pretraining.batch_generator import LukePretrainingBatchGenerator, MultilingualBatchGenerator
 from luke.pretraining.dataset import WikipediaPretrainingDataset, MultilingualPretrainingDataset, \
-    ENTITY_VOCAB_FILE, MULTILINGULA_ENTITY_VOCAB_FILE
+    ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE
 from luke.pretraining.model import LukePretrainingModel
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 @click.option('--multilingual', is_flag=True)
 @click.option('--sampling-smoothing', default=0.7)
 @click.option('--parallel', is_flag=True)
+@click.option('--cpu', is_flag=True)
 @click.option('--bert-model-name', default='bert-base-uncased')
 @click.option('--entity-emb-size', default=None, type=int)
 @click.option('--batch-size', default=256)
@@ -89,7 +90,7 @@ def pretrain(**kwargs):
 @click.option('--node-rank', default=0)
 @click.option('--master-addr', default='127.0.0.1')
 @click.option('--master-port', default='29502')
-def resume_pretraining(output_dir, **kwargs):
+def resume_pretraining(output_dir: str, **kwargs):
     if 'num_nodes' not in kwargs:
         kwargs['num_nodes'] = 1
         kwargs['node_rank'] = 0
@@ -124,7 +125,7 @@ def resume_pretraining(output_dir, **kwargs):
 @click.command(hidden=True)
 @click.option('--local-rank', type=int)
 @click.option('--args', default='{}')
-def start_pretraining_worker(local_rank, args):
+def start_pretraining_worker(local_rank: int, args):
     args = json.loads(args)
     args['local_rank'] = local_rank
     run_pretraining(Namespace(**args))
@@ -136,7 +137,10 @@ def run_pretraining(args):
         return
 
     if args.local_rank == -1:
-        device = torch.device('cuda')
+        if args.cpu:
+            device = torch.device('cpu')
+        else:
+            device = torch.device('cuda')
         num_workers = 1
         worker_index = 0
     else:
@@ -154,7 +158,7 @@ def run_pretraining(args):
     if args.multilingual:
         dataset_dir_list = args.dataset_dir.split(',')
         dataset = MultilingualPretrainingDataset(dataset_dir_list)
-        entity_vocab_file = MULTILINGULA_ENTITY_VOCAB_FILE
+        entity_vocab_file = MULTILINGUAL_ENTITY_VOCAB_FILE
     else:
         dataset = WikipediaPretrainingDataset(args.dataset_dir)
         entity_vocab_file = ENTITY_VOCAB_FILE

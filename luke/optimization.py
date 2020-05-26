@@ -1,3 +1,4 @@
+from typing import Callable, Dict
 import torch
 from transformers.optimization import AdamW
 
@@ -10,7 +11,7 @@ class LukeDenseSparseAdam(AdamW):
         else:
             self.grad_avg_device = grad_avg_device
 
-    def step(self, closure=None):
+    def step(self, closure: Callable = None):
         loss = None
         if closure is not None:
             loss = closure()
@@ -79,13 +80,13 @@ class LukeDenseSparseAdam(AdamW):
         return loss
 
     @staticmethod
-    def _make_sparse(values, sparse_tensor):
+    def _make_sparse(values: torch.Tensor, sparse_tensor: torch.Tensor):
         indices = sparse_tensor._indices()
         if indices.dim() == 0 or values.dim() == 0:
             return sparse_tensor.new().resize_as_(sparse_tensor)
         return sparse_tensor.new(indices, values, sparse_tensor.size())
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict: Dict[str, torch.Tensor]):
         super(LukeDenseSparseAdam, self).load_state_dict(state_dict)
 
         for state in self.state.values():

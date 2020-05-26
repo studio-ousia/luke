@@ -13,17 +13,17 @@ import click
 import tensorflow as tf
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Int64List
-from transformers import BertTokenizer, RobertaTokenizer, XLMRobertaTokenizer
+from transformers import BertTokenizer, RobertaTokenizer, XLMRobertaTokenizer, PreTrainedTokenizer
 from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab
-from luke.utils.sentence_tokenizer import NLTKSentenceTokenizer, OpenNLPSentenceTokenizer, JapaneseSentenceTokenizer
+from luke.utils.sentence_tokenizer import SentenceTokenizer
 
 DATASET_FILE = 'dataset.tf'
 METADATA_FILE = 'metadata.json'
 ENTITY_VOCAB_FILE = 'entity_vocab.tsv'
-MULTILINGULA_ENTITY_VOCAB_FILE = 'multilingual_entity_vocab.json'
+MULTILINGUAL_ENTITY_VOCAB_FILE = 'multilingual_entity_vocab.json'
 
 # global variables used in pool workers
 _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length = \
@@ -45,8 +45,13 @@ _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = 
 @click.option('--include-unk-entities/--skip-unk-entities', default=False)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', default=100)
-def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_vocab_file, output_dir, multilingual,
-                                        sentence_tokenizer, **kwargs):
+def build_wikipedia_pretraining_dataset(dump_db_file: str,
+                                        tokenizer_name: str,
+                                        entity_vocab_file: str,
+                                        output_dir: str,
+                                        multilingual: bool,
+                                        sentence_tokenizer: str,
+                                        **kwargs):
     dump_db = DumpDB(dump_db_file)
     if 'xlm-roberta' in tokenizer_name:
         tokenizer = XLMRobertaTokenizer.from_pretrained(tokenizer_name)
@@ -55,14 +60,7 @@ def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_voc
     else:
         tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
 
-    if sentence_tokenizer == 'opennlp':
-        sentence_tokenizer = OpenNLPSentenceTokenizer()
-    elif sentence_tokenizer == 'ja':
-        sentence_tokenizer = JapaneseSentenceTokenizer()
-    elif sentence_tokenizer == 'nltk':
-        sentence_tokenizer = NLTKSentenceTokenizer()
-    else:
-        raise Exception(f"sentence_tokenizer: {sentence_tokenizer} is not defined.")
+    sentence_tokenizer = SentenceTokenizer.from_name(sentence_tokenizer)
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -115,11 +113,16 @@ class WikipediaPretrainingDataset(object):
         if os.path.exists(entity_vocab_file_path):
             return EntityVocab(entity_vocab_file_path)
         else:
-            multilingual_entity_vocab_file_path = os.path.join(self._dataset_dir, MULTILINGULA_ENTITY_VOCAB_FILE)
+            multilingual_entity_vocab_file_path = os.path.join(self._dataset_dir, MULTILINGUAL_ENTITY_VOCAB_FILE)
             return MultilingualEntityVocab(multilingual_entity_vocab_file_path)
 
-    def create_iterator(self, skip=0, num_workers=1, worker_index=0, shuffle_buffer_size=1000, shuffle_seed=0,
-                        num_parallel_reads=10):
+    def create_iterator(self,
+                        skip: int = 0,
+                        num_workers: int = 1,
+                        worker_index: int = 0,
+                        shuffle_buffer_size: int = 1000,
+                        shuffle_seed: int = 0,
+                        num_parallel_reads: int = 10):
         features = dict(
             word_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
             entity_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
@@ -150,9 +153,20 @@ class WikipediaPretrainingDataset(object):
                 pass
 
     @classmethod
-    def build(cls, dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, max_seq_length, max_entity_length,
-              max_mention_length, min_sentence_length, include_sentences_without_entities, include_unk_entities,
-              pool_size, chunk_size):
+    def build(cls,
+              dump_db: DumpDB,
+              tokenizer: PreTrainedTokenizer,
+              sentence_tokenizer: SentenceTokenizer,
+              entity_vocab,
+              output_dir,
+              max_seq_length: int,
+              max_entity_length: int,
+              max_mention_length: int,
+              min_sentence_length: int,
+              include_sentences_without_entities: bool,
+              include_unk_entities: bool,
+              pool_size: int,
+              chunk_size: int):
         target_titles = [title for title in dump_db.titles()
                          if not (':' in title and title.lower().split(':')[0] in ('image', 'file', 'category'))]
         random.shuffle(target_titles)
@@ -160,7 +174,14 @@ class WikipediaPretrainingDataset(object):
         max_num_tokens = max_seq_length - 2  # 2 for [CLS] and [SEP]
 
         tokenizer.save_pretrained(output_dir)
-        entity_vocab.save(os.path.join(output_dir, ENTITY_VOCAB_FILE))
+
+        if type(entity_vocab) is EntityVocab:
+            entity_vocab_file = ENTITY_VOCAB_FILE
+        elif type(entity_vocab) is MultilingualEntityVocab:
+            entity_vocab_file = MULTILINGUAL_ENTITY_VOCAB_FILE
+        else:
+            raise Exception()
+        entity_vocab.save(os.path.join(output_dir, entity_vocab_file))
 
         number_of_items = 0
         tf_file = os.path.join(output_dir, DATASET_FILE)
@@ -190,9 +211,16 @@ class WikipediaPretrainingDataset(object):
             ), metadata_file, indent=2)
 
     @staticmethod
-    def _initialize_worker(dump_db, tokenizer, sentence_tokenizer, entity_vocab, max_num_tokens, max_entity_length,
-                           max_mention_length, min_sentence_length, include_sentences_without_entities,
-                           include_unk_entities):
+    def _initialize_worker(dump_db: DumpDB,
+                           tokenizer: PreTrainedTokenizer,
+                           sentence_tokenizer: SentenceTokenizer,
+                           entity_vocab: EntityVocab,
+                           max_num_tokens: int,
+                           max_entity_length: int,
+                           max_mention_length: int,
+                           min_sentence_length: int,
+                           include_sentences_without_entities: bool,
+                           include_unk_entities: bool):
         global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length, \
             _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
 
@@ -208,7 +236,7 @@ class WikipediaPretrainingDataset(object):
         _include_unk_entities = include_unk_entities
 
     @staticmethod
-    def _process_page(page_title):
+    def _process_page(page_title: str):
         if page_title in _entity_vocab:
             page_id = _entity_vocab[page_title]
         else:
