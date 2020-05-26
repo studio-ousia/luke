@@ -13,9 +13,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from transformers.modeling_bert import BertConfig, BertForPreTraining
-from transformers.modeling_roberta import RobertaConfig, RobertaForMaskedLM
-from transformers.modeling_xlm_roberta import XLMRobertaConfig, XLMRobertaForMaskedLM
+
 from transformers import get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
 from wikipedia2vec import Wikipedia2Vec
 
@@ -25,6 +23,8 @@ from luke.pretraining.batch_generator import LukePretrainingBatchGenerator, Mult
 from luke.pretraining.dataset import WikipediaPretrainingDataset, MultilingualPretrainingDataset, \
     ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE
 from luke.pretraining.model import LukePretrainingModel
+
+from luke.utils.registers import get_pretrained_model, get_config
 
 logger = logging.getLogger(__name__)
 
@@ -163,12 +163,7 @@ def run_pretraining(args):
         dataset = WikipediaPretrainingDataset(args.dataset_dir)
         entity_vocab_file = ENTITY_VOCAB_FILE
 
-    if 'xlm-roberta' in args.bert_model_name:
-        bert_config = XLMRobertaConfig.from_pretrained(args.bert_model_name)
-    elif 'roberta' in args.bert_model_name:
-        bert_config = RobertaConfig.from_pretrained(args.bert_model_name)
-    else:
-        bert_config = BertConfig.from_pretrained(args.bert_model_name)
+    bert_config = get_config(args.bert_model_name)
 
     num_train_steps_per_epoch = math.ceil(len(dataset) / args.batch_size)
     num_train_steps = math.ceil(len(dataset) / args.batch_size * args.num_epochs)
@@ -236,13 +231,7 @@ def run_pretraining(args):
                                               max_loss_scale=args.fp16_max_loss_scale)
 
     if args.model_file is None:
-        if 'xlm-roberta' in args.bert_model_name:
-            bert_model = XLMRobertaForMaskedLM.from_pretrained(args.bert_model_name)
-        elif 'roberta' in args.bert_model_name:
-            bert_model = RobertaForMaskedLM.from_pretrained(args.bert_model_name)
-        else:
-            bert_model = BertForPreTraining.from_pretrained(args.bert_model_name)
-
+        bert_model = get_pretrained_model(args.bert_model_name)
         bert_state_dict = bert_model.state_dict()
         model.load_bert_weights(bert_state_dict)
 

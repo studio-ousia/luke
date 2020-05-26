@@ -13,12 +13,13 @@ import click
 import tensorflow as tf
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Int64List
-from transformers import BertTokenizer, RobertaTokenizer, XLMRobertaTokenizer, PreTrainedTokenizer
+from transformers import PreTrainedTokenizer, RobertaTokenizer, XLMRobertaTokenizer
 from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab
 from luke.utils.sentence_tokenizer import SentenceTokenizer
+from luke.utils.registers import get_tokenizer
 
 DATASET_FILE = 'dataset.tf'
 METADATA_FILE = 'metadata.json'
@@ -53,13 +54,7 @@ def build_wikipedia_pretraining_dataset(dump_db_file: str,
                                         sentence_tokenizer: str,
                                         **kwargs):
     dump_db = DumpDB(dump_db_file)
-    if 'xlm-roberta' in tokenizer_name:
-        tokenizer = XLMRobertaTokenizer.from_pretrained(tokenizer_name)
-    elif 'roberta' in tokenizer_name:
-        tokenizer = RobertaTokenizer.from_pretrained(tokenizer_name)
-    else:
-        tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
-
+    tokenizer = get_tokenizer(tokenizer_name)
     sentence_tokenizer = SentenceTokenizer.from_name(sentence_tokenizer)
 
     if not os.path.exists(output_dir):
@@ -98,14 +93,10 @@ class WikipediaPretrainingDataset(object):
 
     @property
     def tokenizer(self):
-        tokenizer_class = self.metadata.get('tokenizer_class', '').lower()
-
-        if 'xlmroberta' in tokenizer_class:
-            return XLMRobertaTokenizer.from_pretrained(self._dataset_dir)
-        elif 'roberta' in tokenizer_class:
-            return RobertaTokenizer.from_pretrained(self._dataset_dir)
-        else:
-            return BertTokenizer.from_pretrained(self._dataset_dir)
+        import transformers
+        tokenizer_class_name = self.metadata.get('tokenizer_class', '')
+        tokenizer_class = getattr(transformers, tokenizer_class_name)
+        return tokenizer_class.from_pretrained(self._dataset_dir)
 
     @property
     def entity_vocab(self):
@@ -244,9 +235,9 @@ class WikipediaPretrainingDataset(object):
 
         sentences = []
 
-        def tokenize(text, add_prefix_space):
+        def tokenize(text: str, add_prefix_space: bool):
             text = re.sub(r'\s+', ' ', text).rstrip()
-            if isinstance(_tokenizer, RobertaTokenizer):
+            if isinstance(_tokenizer, RobertaTokenizer) or isinstance(_tokenizer, XLMRobertaTokenizer):
                 return _tokenizer.tokenize(text, add_prefix_space=add_prefix_space)
             else:
                 return _tokenizer.tokenize(text)
