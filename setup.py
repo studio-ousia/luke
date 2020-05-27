@@ -4,7 +4,7 @@ setup(
     name='luke',
     version='0.0.1',
     description='Language understanding with knowledge-based embeddings',
-    author='Ikuya Yamada',
+    author='Anonymous',
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
