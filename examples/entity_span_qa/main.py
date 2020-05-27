@@ -38,8 +38,8 @@ def cli():
 @click.option('--train-batch-size', default=1)
 @click.option('--num-train-epochs', default=2.0)
 @click.option('--do-eval/--no-eval', default=True)
-@click.option('--eval-batch-size', default=8)
-@click.option('--seed', default=1)
+@click.option('--eval-batch-size', default=32)
+@click.option('--seed', default=4)
 @trainer_args
 @word_entity_model_args
 @click.pass_obj

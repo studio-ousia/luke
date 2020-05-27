@@ -28,11 +28,11 @@ def cli():
 @cli.command()
 @click.option('--data-dir', default='data/open_entity', type=click.Path(exists=True))
 @click.option('--do-train/--no-train', default=True)
-@click.option('--train-batch-size', default=32)
+@click.option('--train-batch-size', default=2)
 @click.option('--do-eval/--no-eval', default=True)
 @click.option('--eval-batch-size', default=32)
-@click.option('--num-train-epochs', default=2.0)
-@click.option('--seed', default=1)
+@click.option('--num-train-epochs', default=3.0)
+@click.option('--seed', default=12)
 @word_entity_model_args
 @trainer_args
 @click.pass_obj
