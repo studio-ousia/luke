@@ -31,17 +31,17 @@ def cli():
 @cli.command()
 @click.option('--data-dir', default='data/conll_2003', type=click.Path(exists=True))
 @click.option('--max-seq-length', default=512)
-@click.option('--max-entity-length', default=64)
+@click.option('--max-entity-length', default=128)
 @click.option('--max-mention-length', default=16)
 @click.option('--no-word-feature', is_flag=True)
 @click.option('--no-entity-feature', is_flag=True)
 @click.option('--do-train/--no-train', default=True)
-@click.option('--train-batch-size', default=1)
-@click.option('--num-train-epochs', default=2.0)
+@click.option('--train-batch-size', default=2)
+@click.option('--num-train-epochs', default=5.0)
 @click.option('--do-eval/--no-eval', default=True)
-@click.option('--eval-batch-size', default=8)
+@click.option('--eval-batch-size', default=32)
 @click.option('--train-on-dev-set', is_flag=True)
-@click.option('--seed', default=1)
+@click.option('--seed', default=15)
 @trainer_args
 @word_entity_model_args
 @click.pass_obj
@@ -225,6 +225,7 @@ def load_and_cache_examples(args, fold):
             entity_segment_ids=create_padded_sequence('entity_segment_ids', 0),
         )
         if args.no_entity_feature:
+            ret['entity_ids'].fill_(0)
             ret['entity_attention_mask'].fill_(0)
 
         if fold == 'train':

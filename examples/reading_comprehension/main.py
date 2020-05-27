@@ -67,16 +67,16 @@ def generate_redirect_file(dump_db_file, out_file, compress):
 @click.option('--max-answer-length', default=30)
 @click.option('--max-seq-length', default=512)
 @click.option('--max-entity-length', default=128)
-@click.option('--min-mention-link-prob', default=0.1)
+@click.option('--min-mention-link-prob', default=0.01)
 @click.option('--do-train/--no-train', default=True)
-@click.option('--train-batch-size', default=1)
+@click.option('--train-batch-size', default=2)
 @click.option('--do-eval/--no-eval', default=True)
-@click.option('--eval-batch-size', default=8)
+@click.option('--eval-batch-size', default=128)
 @click.option('--create-cache', is_flag=True)
 @click.option('--num-train-epochs', default=2)
 @click.option('--no-entity', is_flag=True, default=False)
 @click.option('--eval-all-checkpoints/--no-eval-checkpoints', default=False)
-@click.option('--seed', default=42)
+@click.option('--seed', default=14)
 @word_entity_model_args
 @trainer_args
 @click.pass_obj
