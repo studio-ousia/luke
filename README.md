@@ -1,23 +1,29 @@
 # LUKE
 
-LUKE is contextualized representations of words and entities based on [bidirectional transformer](https://arxiv.org/abs/1706.03762).
+LUKE is a new pretrained contextualized representation of words and entities based on [bidirectional transformer](https://arxiv.org/abs/1706.03762).
+The model is designed to effectively address various entity-related tasks including entity typing, relation classification, named entity recognition, and question answering.
 This repository contains the source code to pretrain the model, and fine-tune the model to solve downstream tasks.
 
 ## Installation
 
 ```bash
 pip install -r requirements.txt
-git clone https://github.com/NVIDIA/apex.git
-cd apex
-pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
-cd ..
 pip install -e .
 transformers-cli download roberta-large
 ```
 
-## Downloading Pretrained Models
+The Apex library needs to be installed if you use the mixed precision training activated by the `--fp16` option.
 
-The models can be downloaded from [this link](https://drive.google.com/file/d/1c7uodwgcHQ68svkzlsWkhw-AbOv4Tt6e/view?usp=sharing).
+```bash
+git clone https://github.com/NVIDIA/apex.git
+cd apex
+pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
+cd ..
+```
+
+## Downloading Pretrained Model
+
+The pretrained model and several data files required to reproduce the experimental results can be downloaded from [this link](https://drive.google.com/file/d/1c7uodwgcHQ68svkzlsWkhw-AbOv4Tt6e/view?usp=sharing).
 
 ```bash
 mkdir model
@@ -33,7 +39,7 @@ The dataset needs to properly placed in the DATA\_DIR.
 ### Entity Typing on Open Entity Dataset
 
 ```bash
-python -m examples.cli --dataset-dir=DATA_DIR --weights-file=model/luke.bin entity-typing run --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=3 --word-entity-query
+python -m examples.cli --data-dir=DATA_DIR --weights-file=model/luke.bin entity-typing run --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=3 --word-entity-query
 ```
 
 ### Relation Classification on TACRED Dataset
