@@ -16,7 +16,7 @@ from ..trainer import Trainer, trainer_args
 from ..utils import set_seed
 from ..word_entity_model import word_entity_model_args
 from .model import LukeForRelationClassification
-from .utils import ENTITY_TYPES, HEAD_TOKEN, TAIL_TOKEN, convert_examples_to_features, DatasetProcessor
+from .utils import HEAD_TOKEN, TAIL_TOKEN, convert_examples_to_features, DatasetProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +53,8 @@ def run(common_args, **task_args):
     args.tokenizer.add_special_tokens(dict(additional_special_tokens=[HEAD_TOKEN, TAIL_TOKEN]))
 
     entity_emb = args.model_weights['entity_embeddings.entity_embeddings.weight']
-    mask_emb = entity_emb[args.entity_vocab[MASK_TOKEN]].unsqueeze(0)
-    args.model_config.entity_vocab_size = len(ENTITY_TYPES) + 1
-    mask_emb = mask_emb.expand(len(ENTITY_TYPES), -1)
+    mask_emb = entity_emb[args.entity_vocab[MASK_TOKEN]].unsqueeze(0).expand(2, -1)
+    args.model_config.entity_vocab_size = 3
     args.model_weights['entity_embeddings.entity_embeddings.weight'] = torch.cat([entity_emb[:1], mask_emb])
 
     train_dataloader, _, _, label_list = load_and_cache_examples(args, fold='train')
