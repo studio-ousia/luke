@@ -33,7 +33,7 @@ def cli():
 @click.option('--num-train-epochs', default=5.0)
 @click.option('--do-eval/--no-eval', default=True)
 @click.option('--eval-batch-size', default=128)
-@click.option('--seed', default=35)
+@click.option('--seed', default=42)
 @word_entity_model_args
 @trainer_args
 @click.pass_obj
