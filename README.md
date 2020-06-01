@@ -51,7 +51,7 @@ python -m examples.cli --data-dir=DATA_DIR --weights-file=model/luke.bin relatio
 ### Named Entity Recognition on CoNLL-2003 Dataset
 
 ```bash
-python -m examples.cli --data-dir=DATA_DIR --weights-file=model/luke.bin ner run --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=5 --word-entity-query
+python -m examples.cli --data-dir=DATA_DIR --weights-file=model/luke.bin ner run --fp16 --train-batch-size=2 --gradient-accumulation-steps=4 --learning-rate=1e-5 --num-train-epochs=5 --word-entity-query
 ```
 
 ### Cloze-style Question Answering on ReCoRD Dataset
