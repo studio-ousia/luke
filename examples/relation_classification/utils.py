@@ -4,9 +4,6 @@ import os
 from tqdm import tqdm
 from transformers.tokenization_roberta import RobertaTokenizer
 
-ENTITY_TYPES = ['CAUSE_OF_DEATH', 'CITY', 'COUNTRY', 'CRIMINAL_CHARGE', 'DATE', 'DURATION', 'IDEOLOGY',
-                'LOCATION', 'MISC', 'NATIONALITY', 'NUMBER', 'ORGANIZATION', 'PERSON', 'RELIGION',
-                'STATE_OR_PROVINCE', 'TITLE', 'URL']
 HEAD_TOKEN = '[HEAD]'
 TAIL_TOKEN = '[TAIL]'
 
@@ -90,7 +87,6 @@ class DatasetProcessor(object):
 
 def convert_examples_to_features(examples, label_list, tokenizer, max_mention_length):
     label_map = {l: i for i, l in enumerate(label_list)}
-    type_map = {t: i + 1 for i, t in enumerate(ENTITY_TYPES)}  # 1 for padding emb
 
     def tokenize(text):
         if isinstance(tokenizer, RobertaTokenizer):
@@ -125,8 +121,7 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_mention_le
         word_attention_mask = [1] * len(tokens)
         word_segment_ids = [0] * len(tokens)
 
-        entity_ids = [type_map[example.type_a], type_map[example.type_b]]
-
+        entity_ids = [1, 2]
         entity_position_ids = []
         for span_name in ('span_a', 'span_b'):
             span = token_spans[span_name]
