@@ -24,10 +24,36 @@ class ICUSentenceTokenizer:
 
     def __init__(self, locale='en'):
         from icu import Locale, BreakIterator
+
+        # ICU includes lists of common abbreviations that can be used to filter, to ignore,
+        # these false sentence boundaries for some languages.
+        # (http://userguide.icu-project.org/boundaryanalysis)
+        if locale in {"en", "de", "es", "it", "pt"}:
+            locale += "@ss=standard"
         self.locale = Locale(locale)
         self.breaker = BreakIterator.createSentenceInstance(self.locale)
 
     def span_tokenize(self, text: str):
+        """
+        ICU's BreakIterator gives boundary indices by counting *codeunits*, not *codepoints*.
+        (https://stackoverflow.com/questions/30775689/python-length-of-unicode-string-confusion)
+        As a result, something like this can happen.
+
+        ```
+        text = "󰡕test."  󰡕 is a non-BMP (Basic Multilingual Place) character, which consists of two codeunits.
+        len(text)
+        >>> 6
+        icu_tokenizer.span_tokenize(text)
+        >>> [(0, 7)]
+        ```
+
+        This results in undesirable bugs in following stages.
+        So, we have decided to replace non-BMP characters with an arbitrary BMP character, and then run BreakIterator.
+        """
+
+        # replace non-BMP characters with a whitespace
+        text = ''.join(c if c <= '\uFFFF' else ' ' for c in text)
+
         self.breaker.setText(text)
         start_idx = 0
         spans = []
