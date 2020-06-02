@@ -261,7 +261,12 @@ class WikipediaPretrainingDataset(object):
                 return _tokenizer.tokenize(text)
 
         for paragraph in _dump_db.get_paragraphs(page_title):
-            paragraph_text = paragraph.text.strip()
+
+            paragraph_text = paragraph.text
+
+            # First, get paragraph links.
+            # Parapraph links are represented its form (link_title) and the start/end positions of strings
+            # (link_start, link_end).
             paragraph_links = []
             for link in paragraph.wiki_links:
                 link_title = _dump_db.resolve_redirect(link.title)
@@ -279,32 +284,50 @@ class WikipediaPretrainingDataset(object):
                 cur = sent_start
                 sent_words = []
                 sent_links = []
+                # Look for links that are within the tokenized sentence.
+                # If a link is found, we separate the sentences across the link and tokenize them.
                 for link_title, link_start, link_end in paragraph_links:
                     if not (sent_start <= link_start < sent_end and link_end <= sent_end):
                         continue
                     entity_id = _entity_vocab[link_title]
 
                     text = paragraph_text[cur:link_start]
-                    if cur == 0 or text.startswith(' ') or paragraph_text[cur - 1] == ' ':
-                        sent_words += tokenize(text, True)
-                    else:
-                        sent_words += tokenize(text, False)
+                    try:
+                        if cur == 0 or text.startswith(' ') or paragraph_text[cur - 1] == ' ':
+                            sent_words += tokenize(text, True)
+                        else:
+                            sent_words += tokenize(text, False)
+                    except IndexError:
+                        raise Exception("Error has occurred during processing \n"
+                                        f"text: {text}\n"
+                                        f"paragraph: {paragraph_text}")
 
                     link_text = paragraph_text[link_start:link_end]
-                    if link_start == 0 or link_text.startswith(' ') or paragraph_text[link_start - 1] == ' ':
-                        link_words = tokenize(link_text, True)
-                    else:
-                        link_words = tokenize(link_text, False)
+
+                    try:
+                        if link_start == 0 or link_text.startswith(' ') or paragraph_text[link_start - 1] == ' ':
+                            link_words = tokenize(link_text, True)
+                        else:
+                            link_words = tokenize(link_text, False)
+                    except IndexError:
+                        raise Exception("Error has occurred during processing \n"
+                                        f"link_text: {link_text}\n"
+                                        f"paragraph: {paragraph_text}")
 
                     sent_links.append((entity_id, len(sent_words), len(sent_words) + len(link_words)))
                     sent_words += link_words
                     cur = link_end
 
                 text = paragraph_text[cur:sent_end]
-                if cur == 0 or text.startswith(' ') or paragraph_text[cur - 1] == ' ':
-                    sent_words += tokenize(text, True)
-                else:
-                    sent_words += tokenize(text, False)
+                try:
+                    if cur == 0 or text.startswith(' ') or paragraph_text[cur - 1] == ' ':
+                        sent_words += tokenize(text, True)
+                    else:
+                        sent_words += tokenize(text, False)
+                except IndexError:
+                    raise Exception("Error has occurred during processing \n"
+                                    f"text: {text}\n"
+                                    f"paragraph: {paragraph_text}")
 
                 if len(sent_words) < _min_sentence_length or len(sent_words) > _max_num_tokens:
                     continue
