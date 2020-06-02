@@ -299,6 +299,7 @@ class WikipediaPretrainingDataset(object):
                             sent_words += tokenize(text, False)
                     except IndexError:
                         raise Exception("Error has occurred during processing \n"
+                                        f"cur: {cur}\n"
                                         f"text: {text}\n"
                                         f"paragraph: {paragraph_text}")
 
@@ -311,6 +312,7 @@ class WikipediaPretrainingDataset(object):
                             link_words = tokenize(link_text, False)
                     except IndexError:
                         raise Exception("Error has occurred during processing \n"
+                                        f"cur: {cur}\n"
                                         f"link_text: {link_text}\n"
                                         f"paragraph: {paragraph_text}")
 
@@ -326,6 +328,7 @@ class WikipediaPretrainingDataset(object):
                         sent_words += tokenize(text, False)
                 except IndexError:
                     raise Exception("Error has occurred during processing \n"
+                                    f"cur: {cur}\n"
                                     f"text: {text}\n"
                                     f"paragraph: {paragraph_text}")
 
