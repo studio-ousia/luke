@@ -59,7 +59,7 @@ class EntityVocab(object):
         return len(self.vocab)
 
     def __contains__(self, key):
-        return key in self.vocab
+        return key in self.inv_vocab
 
     def __getitem__(self, key):
         return self.vocab[key]
