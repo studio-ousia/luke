@@ -77,6 +77,7 @@ logger = logging.getLogger(__name__)
 @click.option('--amp-file', type=click.Path(exists=True), default=None)
 @click.option('--wikipedia2vec-file', type=click.Path(), default=None)
 @click.option('--save-interval-sec', default=1800)
+@click.option('--save-interval-steps', default=None, type=int)
 def pretrain(**kwargs):
     run_pretraining(Namespace(**kwargs))
 
@@ -411,14 +412,18 @@ def run_pretraining(args):
             if args.local_rank == -1 or worker_index == 0:
                 # if args.local_rank in (0, -1):
                 if global_step == num_train_steps:
+                    # save the final model
                     save_model(model, f'epoch{args.num_epochs}')
                     time.sleep(60)
                 elif global_step % num_train_steps_per_epoch == 0:
+                    # save the model at each epoch
                     epoch = int(global_step / num_train_steps_per_epoch)
                     save_model(model, f'epoch{epoch}')
                 if args.save_interval_sec and time.time() - prev_save_time > args.save_interval_sec:
                     save_model(model, f'step{global_step:07}')
                     prev_save_time = time.time()
+                if args.save_interval_steps and global_step % args == 0:
+                    save_model(model, f'step{global_step}')
 
             # if global_step == num_train_steps:
             #     break
