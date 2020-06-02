@@ -47,6 +47,7 @@ _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = 
 @click.option('--include-unk-entities/--skip-unk-entities', default=False)
 @click.option('--pool-size', default=multiprocessing.cpu_count())
 @click.option('--chunk-size', default=100)
+@click.option('--max-num-documents', default=None, type=int)
 def build_wikipedia_pretraining_dataset(dump_db_file: str,
                                         tokenizer_name: str,
                                         entity_vocab_file: str,
@@ -167,10 +168,15 @@ class WikipediaPretrainingDataset(object):
               include_sentences_without_entities: bool,
               include_unk_entities: bool,
               pool_size: int,
-              chunk_size: int):
+              chunk_size: int,
+              max_num_documents: int):
+
         target_titles = [title for title in dump_db.titles()
                          if not (':' in title and title.lower().split(':')[0] in ('image', 'file', 'category'))]
         random.shuffle(target_titles)
+
+        if max_num_documents is not None:
+            target_titles = target_titles[:max_num_documents]
 
         max_num_tokens = max_seq_length - 2  # 2 for [CLS] and [SEP]
 
@@ -255,7 +261,7 @@ class WikipediaPretrainingDataset(object):
                 return _tokenizer.tokenize(text)
 
         for paragraph in _dump_db.get_paragraphs(page_title):
-            paragraph_text = paragraph.text
+            paragraph_text = paragraph.text.strip()
             paragraph_links = []
             for link in paragraph.wiki_links:
                 link_title = _dump_db.resolve_redirect(link.title)
