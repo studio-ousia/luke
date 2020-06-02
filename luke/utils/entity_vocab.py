@@ -15,6 +15,7 @@ from .interwiki_db import InterwikiDB
 PAD_TOKEN = '[PAD]'
 UNK_TOKEN = '[UNK]'
 MASK_TOKEN = '[MASK]'
+LANG_ENTITY_SEPARATOR = ':'
 
 _dump_db = None  # global variable used in multiprocessing workers
 
@@ -133,9 +134,16 @@ class EntityVocab(object):
         return counter
 
 
+def get_language_entity_name(language: str, entity: str) -> str:
+    return f"{language}{LANG_ENTITY_SEPARATOR}{entity}"
+
+
 class MultilingualEntityVocab(EntityVocab):
-    def __init__(self, vocab_file: str):
+    def __init__(self,
+                 vocab_file: str,
+                 language: str):
         self._vocab_file = vocab_file
+        self.language = language
 
         self.vocab = {}
         self.counter = {}
@@ -147,6 +155,18 @@ class MultilingualEntityVocab(EntityVocab):
                 self.vocab[title] = ent_id
                 self.counter[title] = record["count"]
             self.inv_vocab[ent_id] = record["entities"]
+
+    def __contains__(self, key: str):
+        key = get_language_entity_name(language=self.language, entity=key)
+        return key in self.vocab
+
+    def __getitem__(self, key: str):
+        key = get_language_entity_name(language=self.language, entity=key)
+        return self.vocab[key]
+
+    def get_count_by_title(self, title: str) -> int:
+        title = get_language_entity_name(language=self.language, entity=title)
+        return self.counter.get(title, 0)
 
 
 def build_multilingual_vocab(vocab_files: List[str],
@@ -166,22 +186,32 @@ def build_multilingual_vocab(vocab_files: List[str],
                 entity, count = line.strip().split('\t')
                 count = int(count)
 
-                multilingual_entities = {entity}
-                aligned_entities = {e for e, _ in db.query(entity, lang)}
+                # append the language code to the entity name to distinguish homographs across languages
+                # e.g., "fr:Apple" -> IT corporation, "en:Apple" -> fruit
+                entity_name_in_vocab = get_language_entity_name(language=lang, entity=entity)
+                multilingual_entities = {entity_name_in_vocab}
+                if count != 0:
+                    aligned_entities = {get_language_entity_name(language=l, entity=e)
+                                        for e, l in db.query(entity, lang)}
+                else:
+                    aligned_entities = {get_language_entity_name(language=l, entity=entity) for l in languages}
                 multilingual_entities.update(aligned_entities)
 
-                # judge if we assign a new id to these entities
+                # judge if we should assign a new id to these entities
                 use_new_id = True
                 for ent in multilingual_entities:
                     if ent in vocab:
+                        # if any of multilingual entities is found in the current vocab, we use the existing index.
                         ent_id = vocab[ent]
                         use_new_id = False
+                        break
+
                 if use_new_id:
                     ent_id = new_id
                     new_id += 1
 
-                vocab[entity] = ent_id
-                inv_vocab[ent_id].add(entity)
+                vocab[entity_name_in_vocab] = ent_id
+                inv_vocab[ent_id].add(entity_name_in_vocab)
                 count_dict[ent_id] += count
     json_dicts = [{"entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]} for ent_id in range(new_id)]
 

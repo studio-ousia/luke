@@ -37,7 +37,8 @@ _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = 
 @click.argument('entity_vocab_file', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path(file_okay=False))
 @click.option('--multilingual', is_flag=True)
-@click.option('--sentence-tokenizer', default='opennlp', type=click.Choice(['opennlp', 'nltk', 'ja']))
+@click.option('--language', default=None)
+@click.option('--sentence-tokenizer', default='en')
 @click.option('--max-seq-length', default=512)
 @click.option('--max-entity-length', default=128)
 @click.option('--max-mention-length', default=30)
@@ -51,6 +52,7 @@ def build_wikipedia_pretraining_dataset(dump_db_file: str,
                                         entity_vocab_file: str,
                                         output_dir: str,
                                         multilingual: bool,
+                                        language: str,
                                         sentence_tokenizer: str,
                                         **kwargs):
     dump_db = DumpDB(dump_db_file)
@@ -61,7 +63,10 @@ def build_wikipedia_pretraining_dataset(dump_db_file: str,
         os.makedirs(output_dir)
 
     if multilingual:
-        entity_vocab = MultilingualEntityVocab(entity_vocab_file)
+        if language is None:
+            raise RuntimeError("When you set ``multilingual`` True, i.e., use MultilingualLEntityVocab, "
+                               "you have to specify ``language`` in the two-letter ISO language code (e.g., 'en'). ")
+        entity_vocab = MultilingualEntityVocab(entity_vocab_file, language=language)
         MultilingualPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
     else:
         entity_vocab = EntityVocab(entity_vocab_file)
@@ -93,9 +98,12 @@ class WikipediaPretrainingDataset(object):
 
     @property
     def tokenizer(self):
-        import transformers
         tokenizer_class_name = self.metadata.get('tokenizer_class', '')
-        tokenizer_class = getattr(transformers, tokenizer_class_name)
+        if tokenizer_class_name == "XLMRobertaTokenizerDebugged":
+            import luke.utils.tokenization_xlm_roberta_debugged as tokenizer_module
+        else:
+            import transformers as tokenizer_module
+        tokenizer_class = getattr(tokenizer_module, tokenizer_class_name)
         return tokenizer_class.from_pretrained(self._dataset_dir)
 
     @property
@@ -105,7 +113,9 @@ class WikipediaPretrainingDataset(object):
             return EntityVocab(entity_vocab_file_path)
         else:
             multilingual_entity_vocab_file_path = os.path.join(self._dataset_dir, MULTILINGUAL_ENTITY_VOCAB_FILE)
-            return MultilingualEntityVocab(multilingual_entity_vocab_file_path)
+            with open(os.path.join(self._dataset_dir, METADATA_FILE), 'r') as f:
+                language = json.load(f)["language"]
+            return MultilingualEntityVocab(multilingual_entity_vocab_file_path, language=language)
 
     def create_iterator(self,
                         skip: int = 0,
@@ -148,8 +158,8 @@ class WikipediaPretrainingDataset(object):
               dump_db: DumpDB,
               tokenizer: PreTrainedTokenizer,
               sentence_tokenizer: SentenceTokenizer,
-              entity_vocab,
-              output_dir,
+              entity_vocab: EntityVocab,
+              output_dir: str,
               max_seq_length: int,
               max_entity_length: int,
               max_mention_length: int,
@@ -168,12 +178,13 @@ class WikipediaPretrainingDataset(object):
 
         if type(entity_vocab) is EntityVocab:
             entity_vocab_file = ENTITY_VOCAB_FILE
+            language = None
         elif type(entity_vocab) is MultilingualEntityVocab:
             entity_vocab_file = MULTILINGUAL_ENTITY_VOCAB_FILE
+            language = entity_vocab.language
         else:
             raise Exception()
         entity_vocab.save(os.path.join(output_dir, entity_vocab_file))
-
         number_of_items = 0
         tf_file = os.path.join(output_dir, DATASET_FILE)
         options = tf.io.TFRecordOptions(tf.io.TFRecordCompressionType.GZIP)
@@ -199,6 +210,7 @@ class WikipediaPretrainingDataset(object):
                 max_mention_length=max_mention_length,
                 min_sentence_length=min_sentence_length,
                 tokenizer_class=tokenizer.__class__.__name__,
+                language=language,
             ), metadata_file, indent=2)
 
     @staticmethod
@@ -237,7 +249,7 @@ class WikipediaPretrainingDataset(object):
 
         def tokenize(text: str, add_prefix_space: bool):
             text = re.sub(r'\s+', ' ', text).rstrip()
-            if isinstance(_tokenizer, RobertaTokenizer) or isinstance(_tokenizer, XLMRobertaTokenizer):
+            if isinstance(_tokenizer, RobertaTokenizer):
                 return _tokenizer.tokenize(text, add_prefix_space=add_prefix_space)
             else:
                 return _tokenizer.tokenize(text)
@@ -264,7 +276,6 @@ class WikipediaPretrainingDataset(object):
                 for link_title, link_start, link_end in paragraph_links:
                     if not (sent_start <= link_start < sent_end and link_end <= sent_end):
                         continue
-
                     entity_id = _entity_vocab[link_title]
 
                     text = paragraph_text[cur:link_start]
@@ -320,7 +331,6 @@ class WikipediaPretrainingDataset(object):
 
                 words = []
                 links = []
-
         return ret
 
 
