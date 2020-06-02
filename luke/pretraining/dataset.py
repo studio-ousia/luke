@@ -315,7 +315,8 @@ class WikipediaPretrainingDataset(object):
                         raise Exception("Error has occurred during processing \n"
                                         f"cur: {cur}\n"
                                         f"link_text: {link_text}\n"
-                                        f"paragraph: {paragraph_text}")
+                                        f"paragraph: {paragraph_text}\n"
+                                        f"paragraph_links: {paragraph_links}")
 
                     sent_links.append((entity_id, len(sent_words), len(sent_words) + len(link_words)))
                     sent_words += link_words
@@ -331,7 +332,8 @@ class WikipediaPretrainingDataset(object):
                     raise Exception("Error has occurred during processing \n"
                                     f"cur: {cur}\n"
                                     f"text: {text}\n"
-                                    f"paragraph: {paragraph_text}")
+                                    f"paragraph: {paragraph_text}\n"
+                                    f"paragraph_links: {paragraph_links}")
 
                 if len(sent_words) < _min_sentence_length or len(sent_words) > _max_num_tokens:
                     continue
