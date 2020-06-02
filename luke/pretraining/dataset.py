@@ -301,7 +301,8 @@ class WikipediaPretrainingDataset(object):
                         raise Exception("Error has occurred during processing \n"
                                         f"cur: {cur}\n"
                                         f"text: {text}\n"
-                                        f"paragraph: {paragraph_text}")
+                                        f"paragraph: {paragraph_text}\n"
+                                        f"paragraph_links: {paragraph_links}")
 
                     link_text = paragraph_text[link_start:link_end]
 
