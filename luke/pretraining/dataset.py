@@ -280,7 +280,8 @@ class WikipediaPretrainingDataset(object):
                     elif _include_unk_entities:
                         paragraph_links.append((UNK_TOKEN, link.start, link.end))
 
-            for sent_start, sent_end in _sentence_tokenizer.span_tokenize(paragraph_text.rstrip()):
+            spans = _sentence_tokenizer.span_tokenize(paragraph_text.rstrip())
+            for sent_start, sent_end in spans:
                 cur = sent_start
                 sent_words = []
                 sent_links = []
@@ -333,7 +334,8 @@ class WikipediaPretrainingDataset(object):
                                     f"cur: {cur}\n"
                                     f"text: {text}\n"
                                     f"paragraph: {paragraph_text}\n"
-                                    f"paragraph_links: {paragraph_links}")
+                                    f"paragraph_links: {paragraph_links}\n"
+                                    f"spans: {spans}")
 
                 if len(sent_words) < _min_sentence_length or len(sent_words) > _max_num_tokens:
                     continue
