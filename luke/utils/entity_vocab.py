@@ -1,5 +1,6 @@
 from typing import List, TextIO
 import json
+import math
 
 import multiprocessing
 from collections import Counter, OrderedDict, defaultdict
@@ -172,7 +173,8 @@ class MultilingualEntityVocab(EntityVocab):
 def build_multilingual_vocab(vocab_files: List[str],
                              languages: List[str],
                              inter_wiki_db_path: str,
-                             out_file: str):
+                             out_file: str,
+                             vocab_size: int = 1000000):
     db = InterwikiDB.load(inter_wiki_db_path)
 
     vocab = {}  # title -> index
@@ -214,6 +216,8 @@ def build_multilingual_vocab(vocab_files: List[str],
                 inv_vocab[ent_id].add(entity_name_in_vocab)
                 count_dict[ent_id] += count
     json_dicts = [{"entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]} for ent_id in range(new_id)]
+    json_dicts.sort(key=lambda x: -x["count"] if x["count"] != 0 else -math.inf)
+    json_dicts = json_dicts[:vocab_size]
 
     with open(out_file, 'w') as f:
         json.dump(json_dicts, f, indent=4)
