@@ -76,7 +76,7 @@ logger = logging.getLogger(__name__)
 @click.option('--scheduler-file', type=click.Path(exists=True), default=None)
 @click.option('--amp-file', type=click.Path(exists=True), default=None)
 @click.option('--wikipedia2vec-file', type=click.Path(), default=None)
-@click.option('--save-interval-sec', default=1800)
+@click.option('--save-interval-sec', default=None, type=int)
 @click.option('--save-interval-steps', default=None, type=int)
 def pretrain(**kwargs):
     run_pretraining(Namespace(**kwargs))
