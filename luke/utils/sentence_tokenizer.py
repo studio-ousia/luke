@@ -40,7 +40,7 @@ class ICUSentenceTokenizer:
         As a result, something like this can happen.
 
         ```
-        text = "󰡕test."  󰡕 is a non-BMP (Basic Multilingual Place) character, which consists of two codeunits.
+        text = "󰡕test."  󰡕 is a non-BMP (Basic Multilingual Plane) character, which consists of two codeunits.
         len(text)
         >>> 6
         icu_tokenizer.span_tokenize(text)
@@ -52,6 +52,7 @@ class ICUSentenceTokenizer:
         """
 
         # replace non-BMP characters with a whitespace
+        # (https://stackoverflow.com/questions/36283818/remove-characters-outside-of-the-bmp-emojis-in-python-3)
         text = ''.join(c if c <= '\uFFFF' else ' ' for c in text)
 
         self.breaker.setText(text)
