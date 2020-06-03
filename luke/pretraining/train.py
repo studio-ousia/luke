@@ -422,7 +422,7 @@ def run_pretraining(args):
                 if args.save_interval_sec and time.time() - prev_save_time > args.save_interval_sec:
                     save_model(model, f'step{global_step:07}')
                     prev_save_time = time.time()
-                if args.save_interval_steps and global_step % args == 0:
+                if args.save_interval_steps and global_step % args.save_interval_steps == 0:
                     save_model(model, f'step{global_step}')
 
             # if global_step == num_train_steps:
