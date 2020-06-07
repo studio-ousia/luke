@@ -32,7 +32,7 @@ def cli():
 @click.option('--data-dir', type=click.Path(exists=True), default='data/entity-disambiguation')
 @click.option('--titles-file', type=click.Path(exists=True), default='enwiki_20181220_titles.txt')
 @click.option('--redirects-file', type=click.Path(exists=True), default='enwiki_20181220_redirects.tsv')
-@click.option('-t', '--test-set', default=['test_b', 'ace2004', 'aquaint', 'msnbc', 'wikipedia', 'clueweb'],
+@click.option('-t', '--test-set', default=['test_b', 'test_b_ppr', 'ace2004', 'aquaint', 'msnbc', 'wikipedia', 'clueweb'],
               multiple=True)
 @click.option('--do-train/--no-train', default=False)
 @click.option('--do-eval/--no-eval', default=True)
@@ -41,7 +41,6 @@ def cli():
 @click.option('--max-seq-length', default=512)
 @click.option('--max-candidate-length', default=30)
 @click.option('--masked-entity-prob', default=0.7)
-@click.option('--candidate-generation/--no-candidate-generation', default=True)
 @click.option('--use-context-entities/--no-context-entities', default=True)
 @click.option('--context-entity-selection-order', default='highest_prob',
               type=click.Choice(['natural', 'random', 'highest_prob']))
@@ -79,7 +78,7 @@ def run(common_args, **task_args):
     model_weights = args.model_weights
     orig_entity_vocab = args.entity_vocab
     orig_entity_emb = model_weights['entity_embeddings.entity_embeddings.weight']
-    if orig_entity_emb.size(0) != len(entity_vocab):  # detect whether the model is the fine-tuned one
+    if orig_entity_emb.size(0) != len(entity_vocab):  # detect whether the model is fine-tuned
         entity_emb = orig_entity_emb.new_zeros((len(entity_titles) + 2, model_config.hidden_size))
         orig_entity_bias = model_weights['entity_predictions.bias']
         entity_bias = orig_entity_bias.new_zeros(len(entity_titles) + 2)
@@ -113,8 +112,7 @@ def run(common_args, **task_args):
             entity_segment_ids=create_padded_sequence('entity_segment_ids', 0),
             entity_attention_mask=create_padded_sequence('entity_attention_mask', 0),
         )
-        if args.candidate_generation:
-            ret['entity_candidate_ids'] = create_padded_sequence('entity_candidate_ids', 0)
+        ret['entity_candidate_ids'] = create_padded_sequence('entity_candidate_ids', 0)
 
         if is_eval:
             ret['document'] = [o.document for o in batch]
