@@ -11,9 +11,7 @@ class SentenceTokenizer:
     @classmethod
     def from_name(cls, name: str):
 
-        if name == "nltk":
-            return NLTKSentenceTokenizer()
-        elif name == "opennlp":
+        if name == "opennlp":
             return OpenNLPSentenceTokenizer()
         else:
             return ICUSentenceTokenizer(name)
@@ -62,21 +60,6 @@ class ICUSentenceTokenizer:
             spans.append((start_idx, end_idx))
             start_idx = end_idx
         return spans
-
-
-class NLTKSentenceTokenizer(SentenceTokenizer):
-    def __init__(self):
-        import nltk
-
-        punkt_param = nltk.tokenize.punkt.PunktParameters()
-        punkt_param.abbrev_types = {"dr", "vs", "mr", "bros", "mrs", "prof", "jr", "inc", "i.e", "e.g", "et al"}
-        self._sentence_tokenizer = nltk.tokenize.punkt.PunktSentenceTokenizer(punkt_param)
-
-    def __reduce__(self):
-        return self.__class__, tuple()
-
-    def span_tokenize(self, text: str) -> List[Tuple[int, int]]:
-        return list(self._sentence_tokenizer.span_tokenize(text))
 
 
 class OpenNLPSentenceTokenizer(SentenceTokenizer):
