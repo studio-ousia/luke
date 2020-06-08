@@ -123,7 +123,3 @@ class InterwikiDB(object):
         data["title_trie"] = title_trie
 
         return InterwikiDB(**data)
-
-
-if __name__ == "__main__":
-    build()
