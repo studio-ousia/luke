@@ -13,22 +13,22 @@ from wikipedia2vec.dump_db import DumpDB
 
 from .interwiki_db import InterwikiDB
 
-PAD_TOKEN = '[PAD]'
-UNK_TOKEN = '[UNK]'
-MASK_TOKEN = '[MASK]'
-LANG_ENTITY_SEPARATOR = ':'
+PAD_TOKEN = "[PAD]"
+UNK_TOKEN = "[UNK]"
+MASK_TOKEN = "[MASK]"
+LANG_ENTITY_SEPARATOR = ":"
 
 _dump_db = None  # global variable used in multiprocessing workers
 
 
 @click.command()
-@click.argument('dump_db_file', type=click.Path())
-@click.argument('out_file', type=click.Path())
-@click.option('--vocab-size', default=1000000)
-@click.option('-w', '--white-list', type=click.File(), multiple=True)
-@click.option('--white-list-only', is_flag=True)
-@click.option('--pool-size', default=multiprocessing.cpu_count())
-@click.option('--chunk-size', default=100)
+@click.argument("dump_db_file", type=click.Path())
+@click.argument("out_file", type=click.Path())
+@click.option("--vocab-size", default=1000000)
+@click.option("-w", "--white-list", type=click.File(), multiple=True)
+@click.option("--white-list-only", is_flag=True)
+@click.option("--pool-size", default=multiprocessing.cpu_count())
+@click.option("--chunk-size", default=100)
 def build_entity_vocab(dump_db_file: str, white_list: List[TextIO], **kwargs):
     dump_db = DumpDB(dump_db_file)
     white_list = [line.rstrip() for f in white_list for line in f]
@@ -43,7 +43,7 @@ class EntityVocab(object):
         self.counter = {}
         with open(vocab_file) as f:
             for (index, line) in enumerate(f):
-                title, count = line.rstrip().split('\t')
+                title, count = line.rstrip().split("\t")
                 self.vocab[title] = index
                 self.counter[title] = int(count)
         self.inv_vocab = {v: k for k, v in self.vocab.items()}
@@ -80,22 +80,32 @@ class EntityVocab(object):
         return self.counter.get(title, 0)
 
     def save(self, out_file: str):
-        with open(self._vocab_file, 'r') as src:
-            with open(out_file, 'w') as dst:
+        with open(self._vocab_file, "r") as src:
+            with open(out_file, "w") as dst:
                 dst.write(src.read())
 
     @staticmethod
-    def build(dump_db: DumpDB,
-              out_file: str,
-              vocab_size: int,
-              white_list: List[str],
-              white_list_only: bool,
-              pool_size: int,
-              chunk_size: int):
+    def build(
+        dump_db: DumpDB,
+        out_file: str,
+        vocab_size: int,
+        white_list: List[str],
+        white_list_only: bool,
+        pool_size: int,
+        chunk_size: int,
+    ):
         counter = Counter()
         with tqdm(total=dump_db.page_size(), mininterval=0.5) as pbar:
-            with closing(Pool(pool_size, initializer=EntityVocab._initialize_worker, initargs=(dump_db,))) as pool:
-                for ret in pool.imap_unordered(EntityVocab._count_entities, dump_db.titles(), chunksize=chunk_size):
+            with closing(
+                Pool(
+                    pool_size,
+                    initializer=EntityVocab._initialize_worker,
+                    initargs=(dump_db,),
+                )
+            ) as pool:
+                for ret in pool.imap_unordered(
+                    EntityVocab._count_entities, dump_db.titles(), chunksize=chunk_size
+                ):
                     counter.update(ret)
                     pbar.update()
 
@@ -111,14 +121,14 @@ class EntityVocab(object):
         if not white_list_only:
             valid_titles = frozenset(dump_db.titles())
             for title, count in counter.most_common():
-                if title in valid_titles and not title.startswith('Category:'):
+                if title in valid_titles and not title.startswith("Category:"):
                     title_dict[title] = count
                     if len(title_dict) == vocab_size:
                         break
 
-        with open(out_file, 'w') as f:
+        with open(out_file, "w") as f:
             for title, count in title_dict.items():
-                f.write('%s\t%d\n' % (title, count))
+                f.write("%s\t%d\n" % (title, count))
 
     @staticmethod
     def _initialize_worker(dump_db):
@@ -140,9 +150,7 @@ def get_language_entity_name(language: str, entity: str) -> str:
 
 
 class MultilingualEntityVocab(EntityVocab):
-    def __init__(self,
-                 vocab_file: str,
-                 language: str):
+    def __init__(self, vocab_file: str, language: str):
         self._vocab_file = vocab_file
         self.language = language
 
@@ -150,7 +158,7 @@ class MultilingualEntityVocab(EntityVocab):
         self.counter = {}
         self.inv_vocab = {}
 
-        entities_json = json.load(open(vocab_file, 'r'))
+        entities_json = json.load(open(vocab_file, "r"))
         for ent_id, record in enumerate(entities_json):
             for title in record["entities"]:
                 self.vocab[title] = ent_id
@@ -170,11 +178,13 @@ class MultilingualEntityVocab(EntityVocab):
         return self.counter.get(title, 0)
 
 
-def build_multilingual_vocab(vocab_files: List[str],
-                             languages: List[str],
-                             inter_wiki_db_path: str,
-                             out_file: str,
-                             vocab_size: int = 1000000):
+def build_multilingual_vocab(
+    vocab_files: List[str],
+    languages: List[str],
+    inter_wiki_db_path: str,
+    out_file: str,
+    vocab_size: int = 1000000,
+):
     db = InterwikiDB.load(inter_wiki_db_path)
 
     vocab = {}  # title -> index
@@ -183,20 +193,27 @@ def build_multilingual_vocab(vocab_files: List[str],
 
     new_id = 0
     for vocab_path, lang in zip(vocab_files, languages):
-        with open(vocab_path, 'r') as f:
+        with open(vocab_path, "r") as f:
             for line in f:
-                entity, count = line.strip().split('\t')
+                entity, count = line.strip().split("\t")
                 count = int(count)
 
                 # append the language code to the entity name to distinguish homographs across languages
                 # e.g., "fr:Apple" -> IT corporation, "en:Apple" -> fruit
-                entity_name_in_vocab = get_language_entity_name(language=lang, entity=entity)
+                entity_name_in_vocab = get_language_entity_name(
+                    language=lang, entity=entity
+                )
                 multilingual_entities = {entity_name_in_vocab}
                 if count != 0:
-                    aligned_entities = {get_language_entity_name(language=l, entity=e)
-                                        for e, l in db.query(entity, lang)}
+                    aligned_entities = {
+                        get_language_entity_name(language=l, entity=e)
+                        for e, l in db.query(entity, lang)
+                    }
                 else:
-                    aligned_entities = {get_language_entity_name(language=l, entity=entity) for l in languages}
+                    aligned_entities = {
+                        get_language_entity_name(language=l, entity=entity)
+                        for l in languages
+                    }
                 multilingual_entities.update(aligned_entities)
 
                 # judge if we should assign a new id to these entities
@@ -215,9 +232,12 @@ def build_multilingual_vocab(vocab_files: List[str],
                 vocab[entity_name_in_vocab] = ent_id
                 inv_vocab[ent_id].add(entity_name_in_vocab)
                 count_dict[ent_id] += count
-    json_dicts = [{"entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]} for ent_id in range(new_id)]
+    json_dicts = [
+        {"entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]}
+        for ent_id in range(new_id)
+    ]
     json_dicts.sort(key=lambda x: -x["count"] if x["count"] != 0 else -math.inf)
     json_dicts = json_dicts[:vocab_size]
 
-    with open(out_file, 'w') as f:
+    with open(out_file, "w") as f:
         json.dump(json_dicts, f, indent=4)

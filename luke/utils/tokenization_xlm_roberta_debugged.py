@@ -10,7 +10,9 @@ class XLMRobertaTokenizerDebugged(XLMRobertaTokenizer):
     def __init__(self, vocab_file, **kwargs):
         super().__init__(vocab_file, **kwargs)
         self.fairseq_tokens_to_ids["<mask>"] = len(self.sp_model) + self.fairseq_offset
-        self.fairseq_ids_to_tokens = {v: k for k, v in self.fairseq_tokens_to_ids.items()}
+        self.fairseq_ids_to_tokens = {
+            v: k for k, v in self.fairseq_tokens_to_ids.items()
+        }
 
     @property
     def vocab_size(self):
