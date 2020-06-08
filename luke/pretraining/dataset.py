@@ -19,7 +19,7 @@ from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab
 from luke.utils.sentence_tokenizer import SentenceTokenizer
-from luke.utils.registers import get_tokenizer
+from luke.utils.model_utils import get_tokenizer
 
 DATASET_FILE = "dataset.tf"
 METADATA_FILE = "metadata.json"
@@ -112,7 +112,7 @@ class WikipediaPretrainingDataset(object):
     @property
     def tokenizer(self):
         tokenizer_class_name = self.metadata.get("tokenizer_class", "")
-        if tokenizer_class_name == "XLMRobertaTokenizerDebugged":
+        if tokenizer_class_name == "XLMRobertaTokenizer":
             import luke.utils.tokenization_xlm_roberta_debugged as tokenizer_module
         else:
             import transformers as tokenizer_module

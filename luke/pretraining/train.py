@@ -28,7 +28,7 @@ from luke.pretraining.dataset import (
 )
 from luke.pretraining.model import LukePretrainingModel
 
-from luke.utils.registers import get_pretrained_model, get_config
+from luke.utils.model_utils import get_pretrained_model, get_config
 
 logger = logging.getLogger(__name__)
 

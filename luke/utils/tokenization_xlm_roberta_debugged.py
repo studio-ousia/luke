@@ -1,7 +1,7 @@
-from transformers import XLMRobertaTokenizer
+from transformers import XLMRobertaTokenizer as OriginalXLMRobertaTokenizer
 
 
-class XLMRobertaTokenizerDebugged(XLMRobertaTokenizer):
+class XLMRobertaTokenizer(OriginalXLMRobertaTokenizer):
     """
         The original XLMRobertaTokenizer is broken, so fix that ourselves.
         (https://github.com/huggingface/transformers/issues/2976)

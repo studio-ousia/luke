@@ -4,7 +4,7 @@ from transformers.modeling_bert import BertConfig, BertForPreTraining, BertPreTr
 from transformers.modeling_roberta import RobertaConfig, RobertaForMaskedLM
 from transformers.modeling_xlm_roberta import XLMRobertaConfig, XLMRobertaForMaskedLM
 
-from .tokenization_xlm_roberta_debugged import XLMRobertaTokenizerDebugged
+from .tokenization_xlm_roberta_debugged import XLMRobertaTokenizer
 
 
 def get_pretrained_model(mode_name: str) -> BertPreTrainedModel:
@@ -20,7 +20,7 @@ def get_pretrained_model(mode_name: str) -> BertPreTrainedModel:
 
 def get_tokenizer(tokenizer_name: str) -> PreTrainedTokenizer:
     if "xlm-roberta" in tokenizer_name:
-        return XLMRobertaTokenizerDebugged.from_pretrained(tokenizer_name)
+        return XLMRobertaTokenizer.from_pretrained(tokenizer_name)
     elif "roberta" in tokenizer_name:
         return RobertaTokenizer.from_pretrained(tokenizer_name)
     elif "bert" in tokenizer_name:
