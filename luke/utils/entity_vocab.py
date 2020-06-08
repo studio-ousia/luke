@@ -190,11 +190,12 @@ def build_multilingual_vocab(
                 # e.g., "fr:Apple" -> IT corporation, "en:Apple" -> fruit
                 entity_name_in_vocab = get_language_entity_name(language=lang, entity=entity)
                 multilingual_entities = {entity_name_in_vocab}
-                if count != 0:
+                if entity not in {PAD_TOKEN, UNK_TOKEN, MASK_TOKEN}:
                     aligned_entities = {
                         get_language_entity_name(language=l, entity=e) for e, l in db.query(entity, lang)
                     }
                 else:
+                    # for special tokens, we don't need to ask inter_wiki_db to get aligned entities
                     aligned_entities = {get_language_entity_name(language=l, entity=entity) for l in languages}
                 multilingual_entities.update(aligned_entities)
 
