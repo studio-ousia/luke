@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 @click.command()
 @click.argument("wikidata_dump_file", type=click.Path(exists=True))
-@click.option("-l", "--language", multiple=True)
 @click.argument("out_file", type=click.Path())
-def build(wikidata_dump_file: str, language: List[str], out_file: str):
+@click.option("-l", "--language", multiple=True)
+def build_interwiki_db(wikidata_dump_file: str, out_file: str, language: List[str] = None):
     logging.basicConfig(level=logging.INFO)
     if language:
         language = frozenset(language)
