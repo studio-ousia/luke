@@ -11,9 +11,9 @@ class SentenceTokenizer:
     @classmethod
     def from_name(cls, name: str):
 
-        if name == 'nltk':
+        if name == "nltk":
             return NLTKSentenceTokenizer()
-        elif name == 'opennlp':
+        elif name == "opennlp":
             return OpenNLPSentenceTokenizer()
         else:
             return ICUSentenceTokenizer(name)
@@ -22,7 +22,7 @@ class SentenceTokenizer:
 class ICUSentenceTokenizer:
     """ Segment text to sentences. """
 
-    def __init__(self, locale='en'):
+    def __init__(self, locale="en"):
         from icu import Locale, BreakIterator
 
         # ICU includes lists of common abbreviations that can be used to filter, to ignore,
@@ -53,7 +53,7 @@ class ICUSentenceTokenizer:
 
         # replace non-BMP characters with a whitespace
         # (https://stackoverflow.com/questions/36283818/remove-characters-outside-of-the-bmp-emojis-in-python-3)
-        text = ''.join(c if c <= '\uFFFF' else ' ' for c in text)
+        text = "".join(c if c <= "\uFFFF" else " " for c in text)
 
         self.breaker.setText(text)
         start_idx = 0
@@ -67,8 +67,9 @@ class ICUSentenceTokenizer:
 class NLTKSentenceTokenizer(SentenceTokenizer):
     def __init__(self):
         import nltk
+
         punkt_param = nltk.tokenize.punkt.PunktParameters()
-        punkt_param.abbrev_types = {'dr', 'vs', 'mr', 'bros', 'mrs', 'prof', 'jr', 'inc', 'i.e', 'e.g', 'et al'}
+        punkt_param.abbrev_types = {"dr", "vs", "mr", "bros", "mrs", "prof", "jr", "inc", "i.e", "e.g", "et al"}
         self._sentence_tokenizer = nltk.tokenize.punkt.PunktSentenceTokenizer(punkt_param)
 
     def __reduce__(self):
@@ -92,17 +93,18 @@ class OpenNLPSentenceTokenizer(SentenceTokenizer):
         # properly work with multiprocessing
         if not OpenNLPSentenceTokenizer._java_initialized:
             import jnius_config
-            jnius_config.add_options('-Xrs')
-            jnius_config.set_classpath(pkg_resources.resource_filename(__name__, '/resources/opennlp-tools-1.5.3.jar'))
+
+            jnius_config.add_options("-Xrs")
+            jnius_config.set_classpath(pkg_resources.resource_filename(__name__, "/resources/opennlp-tools-1.5.3.jar"))
             OpenNLPSentenceTokenizer._java_initialized = True
 
         from jnius import autoclass
 
-        File = autoclass('java.io.File')
-        SentenceModel = autoclass('opennlp.tools.sentdetect.SentenceModel')
-        SentenceDetectorME = autoclass('opennlp.tools.sentdetect.SentenceDetectorME')
+        File = autoclass("java.io.File")
+        SentenceModel = autoclass("opennlp.tools.sentdetect.SentenceModel")
+        SentenceDetectorME = autoclass("opennlp.tools.sentdetect.SentenceDetectorME")
 
-        sentence_model_file = pkg_resources.resource_filename(__name__, 'resources/en-sent.bin')
+        sentence_model_file = pkg_resources.resource_filename(__name__, "resources/en-sent.bin")
         sentence_model = SentenceModel(File(sentence_model_file))
         self._tokenizer = SentenceDetectorME(sentence_model)
 
