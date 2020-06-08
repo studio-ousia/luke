@@ -1,4 +1,4 @@
-from typing import List, TextIO
+from typing import List, TextIO, Dict
 import json
 import math
 
@@ -169,18 +169,31 @@ class MultilingualEntityVocab(EntityVocab):
         title = get_language_entity_name(language=self.language, entity=title)
         return self.counter.get(title, 0)
 
-
-def build_multilingual_vocab(
-    vocab_files: List[str], languages: List[str], inter_wiki_db_path: str, out_file: str, vocab_size: int = 1000000
+@click.command()
+@click.option("entity_vocab_files", "-v", multiple=True)
+@click.option("inter_wiki_db_path", "-i", type=click.Path())
+@click.option("out_file", "-o", type=click.Path())
+@click.option("vocab_size", "-s", type=int)
+def build_multilingual_entity_vocab(
+    entity_vocab_files: List[str], inter_wiki_db_path: str, out_file: str, vocab_size: int = 1000000
 ):
+
+    try:
+        languages, vocab_paths = zip(*map(lambda x: x.split(":"), entity_vocab_files))
+    except ValueError:
+        raise RuntimeError(
+            "Each element of ``vocab_files`` must specify language_code and vocab_file_path"
+            "in the form or `{language_code}:{vocab_file_path}`."
+        )
+
     db = InterwikiDB.load(inter_wiki_db_path)
 
     vocab = {}  # title -> index
-    inv_vocab = defaultdict(set)  # index -> List[title]
+    inv_vocab = defaultdict(set)  # index -> Set[title]
     count_dict = defaultdict(int)  # index -> count
 
     new_id = 0
-    for vocab_path, lang in zip(vocab_files, languages):
+    for vocab_path, lang in zip(vocab_paths, languages):
         with open(vocab_path, "r") as f:
             for line in f:
                 entity, count = line.strip().split("\t")
