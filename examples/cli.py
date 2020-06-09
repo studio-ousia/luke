@@ -149,6 +149,8 @@ from .entity_disambiguation.main import cli as entity_disambiguation_cli
 cli.add_command(entity_disambiguation_cli)
 from .entity_typing.main import cli as entity_typing_cli
 cli.add_command(entity_typing_cli)
+from .ner.main import cli as ner_cli
+cli.add_command(ner_cli)
 from .reading_comprehension.main import cli as reading_comprehension_cli
 cli.add_command(reading_comprehension_cli)
 from .relation_classification.main import cli as relation_classification_cli

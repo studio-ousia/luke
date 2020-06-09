@@ -12,14 +12,14 @@ logger = logging.getLogger(__name__)
 
 
 def trainer_args(func):
-    @click.option('--learning-rate', default=2e-5)
+    @click.option('--learning-rate', default=1e-5)
     @click.option('--lr-schedule', default='warmup_linear', type=click.Choice(['warmup_linear', 'warmup_constant']))
     @click.option('--weight-decay', default=0.01)
     @click.option('--max-grad-norm', default=0.0)
     @click.option('--adam-b1', default=0.9)
-    @click.option('--adam-b2', default=0.999)
+    @click.option('--adam-b2', default=0.98)
     @click.option('--adam-eps', default=1e-6)
-    @click.option('--warmup-proportion', default=0.1)
+    @click.option('--warmup-proportion', default=0.06)
     @click.option('--gradient-accumulation-steps', default=1)
     @click.option('--fp16', is_flag=True)
     @click.option('--fp16-opt-level', default='O2')

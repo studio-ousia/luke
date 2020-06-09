@@ -65,3 +65,7 @@ cli.add_command(luke.pretraining.train.resume_pretraining)
 cli.add_command(luke.pretraining.train.start_pretraining_worker)
 cli.add_command(luke.utils.interwiki_db.build_interwiki_db)
 cli.add_command(luke.utils.entity_vocab.build_multilingual_entity_vocab)
+
+
+if __name__ == '__main__':
+    cli()
