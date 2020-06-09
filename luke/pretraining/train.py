@@ -15,7 +15,6 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from transformers import get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
-from wikipedia2vec import Wikipedia2Vec
 
 from luke.model import LukeConfig
 from luke.optimization import LukeDenseSparseAdam
@@ -31,11 +30,6 @@ from luke.pretraining.model import LukePretrainingModel
 from luke.utils.model_utils import get_pretrained_model, get_config
 
 logger = logging.getLogger(__name__)
-
-
-# NCCL_SOCKET_IF_NAME = 'lo'  # this code does not currently support distributed training
-# MASTER_ADDR = '127.0.0.1'
-# MASTER_PORT = '29502'
 
 
 @click.command()
@@ -79,7 +73,6 @@ logger = logging.getLogger(__name__)
 @click.option("--optimizer-file", type=click.Path(exists=True), default=None)
 @click.option("--scheduler-file", type=click.Path(exists=True), default=None)
 @click.option("--amp-file", type=click.Path(exists=True), default=None)
-@click.option("--wikipedia2vec-file", type=click.Path(), default=None)
 @click.option("--save-interval-sec", default=None, type=int)
 @click.option("--save-interval-steps", default=None, type=int)
 def pretrain(**kwargs):
@@ -272,21 +265,6 @@ def run_pretraining(args):
         bert_model = get_pretrained_model(args.bert_model_name)
         bert_state_dict = bert_model.state_dict()
         model.load_bert_weights(bert_state_dict)
-
-        if args.wikipedia2vec_file:
-            logger.info("Loading Wikipedia2Vec embeddings...")
-            wiki2vec = Wikipedia2Vec.load(args.wikipedia2vec_file, numpy_mmap_mode=None)
-            oov_titles = []
-            for title, index in tqdm(dataset.entity_vocab.vocab.items(), disable=args.local_rank not in [0, -1]):
-                try:
-                    entity_vector = torch.from_numpy(wiki2vec.get_entity_vector(title))
-                    model.entity_embeddings.entity_embeddings.weight.data[index].copy_(entity_vector)
-                except KeyError:
-                    if not (title.startswith("[") and title.endswith("]")):  # special tokens
-                        oov_titles.append(title)
-            del wiki2vec
-            for title in oov_titles:
-                logging.info("Cannot load pretrained vector from Wikipedia2Vec: %s", title)
 
     else:
         model_state_dict = torch.load(args.model_file, map_location="cpu")
