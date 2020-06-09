@@ -29,11 +29,11 @@ def cli():
 @cli.command()
 @click.option('--data-dir', default='data/tacred', type=click.Path(exists=True))
 @click.option('--do-train/--no-train', default=True)
-@click.option('--train-batch-size', default=1)
+@click.option('--train-batch-size', default=4)
 @click.option('--num-train-epochs', default=5.0)
 @click.option('--do-eval/--no-eval', default=True)
-@click.option('--eval-batch-size', default=8)
-@click.option('--seed', default=10)
+@click.option('--eval-batch-size', default=128)
+@click.option('--seed', default=35)
 @word_entity_model_args
 @trainer_args
 @click.pass_obj
