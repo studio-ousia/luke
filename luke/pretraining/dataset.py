@@ -1,3 +1,4 @@
+from typing import List
 import functools
 import itertools
 import json
@@ -12,97 +13,143 @@ import click
 import tensorflow as tf
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Int64List
-from transformers import BertTokenizer, RobertaTokenizer
+from transformers import PreTrainedTokenizer, RobertaTokenizer, XLMRobertaTokenizer
 from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
 
-from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab
-from luke.utils.sentence_tokenizer import NLTKSentenceTokenizer, OpenNLPSentenceTokenizer
+from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab
+from luke.utils.sentence_tokenizer import SentenceTokenizer
+from luke.utils.model_utils import get_tokenizer
 
-DATASET_FILE = 'dataset.tf'
-METADATA_FILE = 'metadata.json'
-ENTITY_VOCAB_FILE = 'entity_vocab.tsv'
+DATASET_FILE = "dataset.tf"
+METADATA_FILE = "metadata.json"
+ENTITY_VOCAB_FILE = "entity_vocab.tsv"
+MULTILINGUAL_ENTITY_VOCAB_FILE = "multilingual_entity_vocab.json"
 
 # global variables used in pool workers
-_dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length =\
-    _max_mention_length = _min_sentence_length = _include_sentences_without_entities = _include_unk_entities = None
+_dump_db = (
+    _tokenizer
+) = (
+    _sentence_tokenizer
+) = (
+    _entity_vocab
+) = (
+    _max_num_tokens
+) = (
+    _max_entity_length
+) = _max_mention_length = _min_sentence_length = _include_sentences_without_entities = _include_unk_entities = None
 
 
 @click.command()
-@click.argument('dump_db_file', type=click.Path(exists=True))
-@click.argument('tokenizer_name')
-@click.argument('entity_vocab_file', type=click.Path(exists=True))
-@click.argument('output_dir', type=click.Path(file_okay=False))
-@click.option('--sentence-tokenizer', default='opennlp', type=click.Choice(['opennlp', 'nltk']))
-@click.option('--max-seq-length', default=512)
-@click.option('--max-entity-length', default=128)
-@click.option('--max-mention-length', default=30)
-@click.option('--min-sentence-length', default=5)
-@click.option('--include-sentences-without-entities', is_flag=True)
-@click.option('--include-unk-entities/--skip-unk-entities', default=False)
-@click.option('--pool-size', default=multiprocessing.cpu_count())
-@click.option('--chunk-size', default=100)
-def build_wikipedia_pretraining_dataset(dump_db_file, tokenizer_name, entity_vocab_file, output_dir,
-                                        sentence_tokenizer, **kwargs):
+@click.argument("dump_db_file", type=click.Path(exists=True))
+@click.argument("tokenizer_name")
+@click.argument("entity_vocab_file", type=click.Path(exists=True))
+@click.argument("output_dir", type=click.Path(file_okay=False))
+@click.option("--multilingual", is_flag=True)
+@click.option("--language", default=None)
+@click.option("--sentence-tokenizer", default="en")
+@click.option("--max-seq-length", default=512)
+@click.option("--max-entity-length", default=128)
+@click.option("--max-mention-length", default=30)
+@click.option("--min-sentence-length", default=5)
+@click.option("--include-sentences-without-entities", is_flag=True)
+@click.option("--include-unk-entities/--skip-unk-entities", default=False)
+@click.option("--pool-size", default=multiprocessing.cpu_count())
+@click.option("--chunk-size", default=100)
+@click.option("--max-num-documents", default=None, type=int)
+def build_wikipedia_pretraining_dataset(
+    dump_db_file: str,
+    tokenizer_name: str,
+    entity_vocab_file: str,
+    output_dir: str,
+    multilingual: bool,
+    language: str,
+    sentence_tokenizer: str,
+    **kwargs
+):
     dump_db = DumpDB(dump_db_file)
-    if 'roberta' in tokenizer_name:
-        tokenizer = RobertaTokenizer.from_pretrained(tokenizer_name)
-    else:
-        tokenizer = BertTokenizer.from_pretrained(tokenizer_name)
-    if sentence_tokenizer == 'opennlp':
-        sentence_tokenizer = OpenNLPSentenceTokenizer()
-    else:
-        sentence_tokenizer = NLTKSentenceTokenizer()
-    entity_vocab = EntityVocab(entity_vocab_file)
+    tokenizer = get_tokenizer(tokenizer_name)
+    sentence_tokenizer = SentenceTokenizer.from_name(sentence_tokenizer)
+
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    WikipediaPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
+    if multilingual:
+        if language is None:
+            raise RuntimeError(
+                "When you set ``multilingual`` True, i.e., use MultilingualLEntityVocab, "
+                "you have to specify ``language`` in the two-letter ISO language code (e.g., 'en'). "
+            )
+        entity_vocab = MultilingualEntityVocab(entity_vocab_file, language=language)
+        MultilingualPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
+    else:
+        entity_vocab = EntityVocab(entity_vocab_file)
+        WikipediaPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
 
 
 class WikipediaPretrainingDataset(object):
-    def __init__(self, dataset_dir):
+    def __init__(self, dataset_dir: str):
         self._dataset_dir = dataset_dir
 
         with open(os.path.join(dataset_dir, METADATA_FILE)) as metadata_file:
             self.metadata = json.load(metadata_file)
 
     def __len__(self):
-        return self.metadata['number_of_items']
+        return self.metadata["number_of_items"]
 
     @property
     def max_seq_length(self):
-        return self.metadata['max_seq_length']
+        return self.metadata["max_seq_length"]
 
     @property
     def max_entity_length(self):
-        return self.metadata['max_entity_length']
+        return self.metadata["max_entity_length"]
 
     @property
     def max_mention_length(self):
-        return self.metadata['max_mention_length']
+        return self.metadata["max_mention_length"]
 
     @property
     def tokenizer(self):
-        if 'roberta' in self.metadata.get('tokenizer_class', '').lower():
-            return RobertaTokenizer.from_pretrained(self._dataset_dir)
+        tokenizer_class_name = self.metadata.get("tokenizer_class", "")
+        if tokenizer_class_name == "XLMRobertaTokenizer":
+            import luke.utils.tokenization_xlm_roberta_debugged as tokenizer_module
         else:
-            return BertTokenizer.from_pretrained(self._dataset_dir)
+            import transformers as tokenizer_module
+        tokenizer_class = getattr(tokenizer_module, tokenizer_class_name)
+        return tokenizer_class.from_pretrained(self._dataset_dir)
 
     @property
     def entity_vocab(self):
-        return EntityVocab(os.path.join(self._dataset_dir, ENTITY_VOCAB_FILE))
+        entity_vocab_file_path = os.path.join(self._dataset_dir, ENTITY_VOCAB_FILE)
+        if os.path.exists(entity_vocab_file_path):
+            return EntityVocab(entity_vocab_file_path)
+        else:
+            multilingual_entity_vocab_file_path = os.path.join(self._dataset_dir, MULTILINGUAL_ENTITY_VOCAB_FILE)
+            with open(os.path.join(self._dataset_dir, METADATA_FILE), "r") as f:
+                language = json.load(f)["language"]
+            return MultilingualEntityVocab(multilingual_entity_vocab_file_path, language=language)
 
-    def create_iterator(self, skip=0, num_workers=1, worker_index=0, shuffle_buffer_size=1000, shuffle_seed=0,
-                        num_parallel_reads=10):
+    def create_iterator(
+        self,
+        skip: int = 0,
+        num_workers: int = 1,
+        worker_index: int = 0,
+        shuffle_buffer_size: int = 1000,
+        shuffle_seed: int = 0,
+        num_parallel_reads: int = 10,
+    ):
         features = dict(
             word_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
             entity_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
             entity_position_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
             page_id=tf.io.FixedLenFeature([1], tf.int64),
         )
-        dataset = tf.data.TFRecordDataset([os.path.join(self._dataset_dir, DATASET_FILE)], compression_type='GZIP',
-                                          num_parallel_reads=num_parallel_reads)
+        dataset = tf.data.TFRecordDataset(
+            [os.path.join(self._dataset_dir, DATASET_FILE)],
+            compression_type="GZIP",
+            num_parallel_reads=num_parallel_reads,
+        )
         dataset = dataset.repeat()
         dataset = dataset.shuffle(shuffle_buffer_size, seed=shuffle_seed)
         dataset = dataset.skip(skip)
@@ -116,60 +163,113 @@ class WikipediaPretrainingDataset(object):
                 while True:
                     obj = sess.run(it)
                     yield dict(
-                        page_id=obj['page_id'][0],
-                        word_ids=obj['word_ids'],
-                        entity_ids=obj['entity_ids'],
-                        entity_position_ids=obj['entity_position_ids'].reshape(-1, self.metadata['max_mention_length'])
+                        page_id=obj["page_id"][0],
+                        word_ids=obj["word_ids"],
+                        entity_ids=obj["entity_ids"],
+                        entity_position_ids=obj["entity_position_ids"].reshape(-1, self.metadata["max_mention_length"]),
                     )
             except tf.errors.OutOfRangeError:
                 pass
 
-    @staticmethod
-    def build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, max_seq_length, max_entity_length,
-              max_mention_length, min_sentence_length, include_sentences_without_entities, include_unk_entities,
-              pool_size, chunk_size):
-        target_titles = [title for title in dump_db.titles()
-                         if not (':' in title and title.lower().split(':')[0] in ('image', 'file', 'category'))]
+    @classmethod
+    def build(
+        cls,
+        dump_db: DumpDB,
+        tokenizer: PreTrainedTokenizer,
+        sentence_tokenizer: SentenceTokenizer,
+        entity_vocab: EntityVocab,
+        output_dir: str,
+        max_seq_length: int,
+        max_entity_length: int,
+        max_mention_length: int,
+        min_sentence_length: int,
+        include_sentences_without_entities: bool,
+        include_unk_entities: bool,
+        pool_size: int,
+        chunk_size: int,
+        max_num_documents: int,
+    ):
+
+        target_titles = [
+            title
+            for title in dump_db.titles()
+            if not (":" in title and title.lower().split(":")[0] in ("image", "file", "category"))
+        ]
         random.shuffle(target_titles)
+
+        if max_num_documents is not None:
+            target_titles = target_titles[:max_num_documents]
 
         max_num_tokens = max_seq_length - 2  # 2 for [CLS] and [SEP]
 
         tokenizer.save_pretrained(output_dir)
-        entity_vocab.save(os.path.join(output_dir, ENTITY_VOCAB_FILE))
 
+        if type(entity_vocab) is EntityVocab:
+            entity_vocab_file = ENTITY_VOCAB_FILE
+            language = None
+        elif type(entity_vocab) is MultilingualEntityVocab:
+            entity_vocab_file = MULTILINGUAL_ENTITY_VOCAB_FILE
+            language = entity_vocab.language
+        else:
+            raise Exception()
+        entity_vocab.save(os.path.join(output_dir, entity_vocab_file))
         number_of_items = 0
         tf_file = os.path.join(output_dir, DATASET_FILE)
         options = tf.io.TFRecordOptions(tf.io.TFRecordCompressionType.GZIP)
         with TFRecordWriter(tf_file, options=options) as writer:
             with tqdm(total=len(target_titles)) as pbar:
-                initargs = (dump_db, tokenizer, sentence_tokenizer, entity_vocab, max_num_tokens, max_entity_length,
-                            max_mention_length, min_sentence_length, include_sentences_without_entities,
-                            include_unk_entities)
-                with closing(Pool(pool_size, initializer=WikipediaPretrainingDataset._initialize_worker,
-                                  initargs=initargs)) as pool:
-                    for ret in pool.imap(WikipediaPretrainingDataset._process_page, target_titles,
-                                         chunksize=chunk_size):
+                initargs = (
+                    dump_db,
+                    tokenizer,
+                    sentence_tokenizer,
+                    entity_vocab,
+                    max_num_tokens,
+                    max_entity_length,
+                    max_mention_length,
+                    min_sentence_length,
+                    include_sentences_without_entities,
+                    include_unk_entities,
+                )
+                with closing(
+                    Pool(pool_size, initializer=WikipediaPretrainingDataset._initialize_worker, initargs=initargs)
+                ) as pool:
+                    for ret in pool.imap(
+                        WikipediaPretrainingDataset._process_page, target_titles, chunksize=chunk_size
+                    ):
                         for data in ret:
                             writer.write(data)
                             number_of_items += 1
                         pbar.update()
 
-        with open(os.path.join(output_dir, METADATA_FILE), 'w') as metadata_file:
-            json.dump(dict(
-                number_of_items=number_of_items,
-                max_seq_length=max_seq_length,
-                max_entity_length=max_entity_length,
-                max_mention_length=max_mention_length,
-                min_sentence_length=min_sentence_length,
-                tokenizer_class=tokenizer.__class__.__name__,
-            ), metadata_file, indent=2)
+        with open(os.path.join(output_dir, METADATA_FILE), "w") as metadata_file:
+            json.dump(
+                dict(
+                    number_of_items=number_of_items,
+                    max_seq_length=max_seq_length,
+                    max_entity_length=max_entity_length,
+                    max_mention_length=max_mention_length,
+                    min_sentence_length=min_sentence_length,
+                    tokenizer_class=tokenizer.__class__.__name__,
+                    language=language,
+                ),
+                metadata_file,
+                indent=2,
+            )
 
     @staticmethod
-    def _initialize_worker(dump_db, tokenizer, sentence_tokenizer, entity_vocab, max_num_tokens, max_entity_length,
-                           max_mention_length, min_sentence_length, include_sentences_without_entities,
-                           include_unk_entities):
-        global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length,\
-            _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
+    def _initialize_worker(
+        dump_db: DumpDB,
+        tokenizer: PreTrainedTokenizer,
+        sentence_tokenizer: SentenceTokenizer,
+        entity_vocab: EntityVocab,
+        max_num_tokens: int,
+        max_entity_length: int,
+        max_mention_length: int,
+        min_sentence_length: int,
+        include_sentences_without_entities: bool,
+        include_unk_entities: bool,
+    ):
+        global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length, _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
 
         _dump_db = dump_db
         _tokenizer = tokenizer
@@ -183,7 +283,7 @@ class WikipediaPretrainingDataset(object):
         _include_unk_entities = include_unk_entities
 
     @staticmethod
-    def _process_page(page_title):
+    def _process_page(page_title: str):
         if page_title in _entity_vocab:
             page_id = _entity_vocab[page_title]
         else:
@@ -191,46 +291,55 @@ class WikipediaPretrainingDataset(object):
 
         sentences = []
 
-        def tokenize(text, add_prefix_space):
-            text = re.sub(r'\s+', ' ', text).rstrip()
+        def tokenize(text: str, add_prefix_space: bool):
+            text = re.sub(r"\s+", " ", text).rstrip()
             if isinstance(_tokenizer, RobertaTokenizer):
                 return _tokenizer.tokenize(text, add_prefix_space=add_prefix_space)
             else:
                 return _tokenizer.tokenize(text)
 
         for paragraph in _dump_db.get_paragraphs(page_title):
+
             paragraph_text = paragraph.text
+
+            # First, get paragraph links.
+            # Parapraph links are represented its form (link_title) and the start/end positions of strings
+            # (link_start, link_end).
             paragraph_links = []
             for link in paragraph.wiki_links:
                 link_title = _dump_db.resolve_redirect(link.title)
                 # remove category links
-                if link_title.startswith('Category:') and link.text.lower().startswith('category:'):
-                    paragraph_text = paragraph_text[:link.start] + ' ' * \
-                        (link.end - link.start) + paragraph_text[link.end:]
+                if link_title.startswith("Category:") and link.text.lower().startswith("category:"):
+                    paragraph_text = (
+                        paragraph_text[: link.start] + " " * (link.end - link.start) + paragraph_text[link.end :]
+                    )
                 else:
                     if link_title in _entity_vocab:
                         paragraph_links.append((link_title, link.start, link.end))
                     elif _include_unk_entities:
                         paragraph_links.append((UNK_TOKEN, link.start, link.end))
 
-            for sent_start, sent_end in _sentence_tokenizer.span_tokenize(paragraph_text):
+            spans = _sentence_tokenizer.span_tokenize(paragraph_text.rstrip())
+            for sent_start, sent_end in spans:
                 cur = sent_start
                 sent_words = []
                 sent_links = []
+                # Look for links that are within the tokenized sentence.
+                # If a link is found, we separate the sentences across the link and tokenize them.
                 for link_title, link_start, link_end in paragraph_links:
                     if not (sent_start <= link_start < sent_end and link_end <= sent_end):
                         continue
-
                     entity_id = _entity_vocab[link_title]
 
                     text = paragraph_text[cur:link_start]
-                    if cur == 0 or text.startswith(' ') or paragraph_text[cur - 1] == ' ':
+                    if cur == 0 or text.startswith(" ") or paragraph_text[cur - 1] == " ":
                         sent_words += tokenize(text, True)
                     else:
                         sent_words += tokenize(text, False)
 
                     link_text = paragraph_text[link_start:link_end]
-                    if link_start == 0 or link_text.startswith(' ') or paragraph_text[link_start - 1] == ' ':
+
+                    if link_start == 0 or link_text.startswith(" ") or paragraph_text[link_start - 1] == " ":
                         link_words = tokenize(link_text, True)
                     else:
                         link_words = tokenize(link_text, False)
@@ -240,7 +349,7 @@ class WikipediaPretrainingDataset(object):
                     cur = link_end
 
                 text = paragraph_text[cur:sent_end]
-                if cur == 0 or text.startswith(' ') or paragraph_text[cur - 1] == ' ':
+                if cur == 0 or text.startswith(" ") or paragraph_text[cur - 1] == " ":
                     sent_words += tokenize(text, True)
                 else:
                     sent_words += tokenize(text, False)
@@ -263,18 +372,56 @@ class WikipediaPretrainingDataset(object):
                     entity_ids = [id_ for id_, _, _, in links]
                     assert len(entity_ids) <= _max_entity_length
                     entity_position_ids = itertools.chain(
-                        *[(list(range(start, end)) + [-1] * (_max_mention_length - end + start))[:_max_mention_length]
-                          for _, start, end in links])
+                        *[
+                            (list(range(start, end)) + [-1] * (_max_mention_length - end + start))[:_max_mention_length]
+                            for _, start, end in links
+                        ]
+                    )
 
-                    example = tf.train.Example(features=tf.train.Features(feature=dict(
-                        page_id=tf.train.Feature(int64_list=tf.train.Int64List(value=[page_id])),
-                        word_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=word_ids)),
-                        entity_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=entity_ids)),
-                        entity_position_ids=tf.train.Feature(int64_list=Int64List(value=entity_position_ids)),
-                    )))
+                    example = tf.train.Example(
+                        features=tf.train.Features(
+                            feature=dict(
+                                page_id=tf.train.Feature(int64_list=tf.train.Int64List(value=[page_id])),
+                                word_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=word_ids)),
+                                entity_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=entity_ids)),
+                                entity_position_ids=tf.train.Feature(int64_list=Int64List(value=entity_position_ids)),
+                            )
+                        )
+                    )
                     ret.append((example.SerializeToString()))
 
                 words = []
                 links = []
-
         return ret
+
+
+class MultilingualPretrainingDataset(WikipediaPretrainingDataset):
+    def __init__(self, dataset_dir_list: List[str]):
+        self.dataset_dir_list = dataset_dir_list
+        self.dataset_list = [WikipediaPretrainingDataset(d) for d in dataset_dir_list]
+
+        self.data_size_list = [len(dataset) for dataset in self.dataset_list]
+        self.total_data_size = sum(self.data_size_list)
+
+    def __len__(self):
+        return self.total_data_size
+
+    @property
+    def max_seq_length(self):
+        return max([dataset.max_seq_length for dataset in self.dataset_list])
+
+    @property
+    def max_entity_length(self):
+        return max([dataset.max_entity_length for dataset in self.dataset_list])
+
+    @property
+    def max_mention_length(self):
+        return max([dataset.max_mention_length for dataset in self.dataset_list])
+
+    @property
+    def tokenizer(self):
+        return self.dataset_list[0].tokenizer
+
+    @property
+    def entity_vocab(self):
+        return self.dataset_list[0].entity_vocab
