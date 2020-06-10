@@ -4,7 +4,7 @@ from transformers.modeling_bert import BertConfig, BertForPreTraining, BertPreTr
 from transformers.modeling_roberta import RobertaConfig, RobertaForMaskedLM
 from transformers.modeling_xlm_roberta import XLMRobertaConfig, XLMRobertaForMaskedLM
 
-from .tokenization_xlm_roberta_debugged import XLMRobertaTokenizer
+from .word_tokenizer import XLMRobertaTokenizer
 
 
 def get_pretrained_model(mode_name: str) -> BertPreTrainedModel:
