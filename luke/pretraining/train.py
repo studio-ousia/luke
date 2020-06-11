@@ -13,14 +13,18 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-
-from transformers import get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
-from transformers import AutoConfig, AutoModelForPreTraining
+from transformers import (
+    AdamW,
+    AutoConfig,
+    AutoModelForPreTraining,
+    get_constant_schedule_with_warmup,
+    get_linear_schedule_with_warmup,
+)
 
 from luke.model import LukeConfig
 from luke.optimization import LukeAdamW
 from luke.pretraining.batch_generator import LukePretrainingBatchGenerator, MultilingualBatchGenerator
-from luke.pretraining.dataset import WikipediaPretrainingDataset, MultilingualPretrainingDataset
+from luke.pretraining.dataset import MultilingualPretrainingDataset, WikipediaPretrainingDataset
 from luke.pretraining.model import LukePretrainingModel
 from luke.utils.model_utils import ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE
 
@@ -222,16 +226,21 @@ def run_pretraining(args):
         },
         {"params": [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
-    grad_avg_device = device
+    optimizer_args = dict(
+        params=optimizer_parameters, lr=args.learning_rate, betas=(args.adam_b1, args.adam_b2), eps=args.adam_eps
+    )
     if args.grad_avg_on_cpu:
         grad_avg_device = torch.device("cpu")
-    optimizer = LukeAdamW(
-        optimizer_parameters,
-        lr=args.learning_rate,
-        betas=(args.adam_b1, args.adam_b2),
-        eps=args.adam_eps,
-        grad_avg_device=grad_avg_device,
-    )
+        optimizer = LukeAdamW(grad_avg_device=grad_avg_device, **optimizer_args)
+    else:
+        try:
+            from apex.optimizers.fused_adam import FusedAdam
+
+            optimizer = FusedAdam(bias_correction=False, adam_w_mode=True, **optimizer_args)
+
+        except ImportError:
+            logger.warning("Failed to import FusedAdam.")
+            optimizer = AdamW(correct_bias=False, **optimizer_args)
 
     if args.fp16:
         from apex import amp
