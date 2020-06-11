@@ -74,6 +74,7 @@ tqdm==4.28.1
 transformers==2.4.1
 urllib3==1.25.8           # via botocore, comet-git-pure, requests
 wcwidth==0.1.9            # via cmd2
+ujson==3.0.0
 websocket-client==0.57.0  # via comet-ml
 werkzeug==1.0.1           # via tensorboard
 wheel==0.34.2             # via tensorboard, tensorflow
