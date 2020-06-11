@@ -13,7 +13,7 @@ import click
 import tensorflow as tf
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Int64List
-from transformers import PreTrainedTokenizer, RobertaTokenizer, XLMRobertaTokenizer
+from transformers import PreTrainedTokenizer, RobertaTokenizer
 from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
 
@@ -269,7 +269,8 @@ class WikipediaPretrainingDataset(object):
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
     ):
-        global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length, _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
+        global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length
+        global _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
 
         _dump_db = dump_db
         _tokenizer = tokenizer
