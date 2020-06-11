@@ -9,4 +9,5 @@ tensorflow==1.14.0
 torch==1.2.0
 transformers==2.4.1
 tqdm==4.28.1
+ujson==3.0.0
 wikipedia2vec==1.0.1
