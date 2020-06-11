@@ -59,11 +59,6 @@ class InterwikiDB(object):
                 if n % 1000 == 0 and n != 0:
                     logger.info("Processed %d lines", n)
 
-                if n == 10000:
-                    logger.info("Stop")
-
-                    break
-
                 try:
                     line = line.rstrip().decode("utf-8")
                     if line in ("[", "]"):
