@@ -10,7 +10,7 @@ from wikipedia2vec.utils.wiki_dump_reader import WikiDumpReader
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"  # filter out INFO messages from Tensordflow
 try:
-    import tensorflow
+    import tensorflow  # noqa: F401
     import absl.logging
 
     # https://github.com/tensorflow/tensorflow/issues/27045#issuecomment-519642980
@@ -23,10 +23,10 @@ try:
 except ImportError:
     pass
 
-import luke.pretraining.dataset
-import luke.pretraining.train
-import luke.utils.entity_vocab
-import luke.utils.interwiki_db
+import luke.pretraining.dataset  # noqa: E402
+import luke.pretraining.train  # noqa: E402
+import luke.utils.entity_vocab  # noqa: E402
+import luke.utils.interwiki_db  # noqa: E402
 
 
 @click.group()
@@ -67,5 +67,5 @@ cli.add_command(luke.utils.interwiki_db.build_interwiki_db)
 cli.add_command(luke.utils.entity_vocab.build_multilingual_entity_vocab)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

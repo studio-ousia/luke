@@ -1,4 +1,4 @@
-from typing import List, TextIO, Dict
+from typing import List, TextIO
 import json
 import math
 
@@ -169,6 +169,7 @@ class MultilingualEntityVocab(EntityVocab):
         title = get_language_entity_name(language=self.language, entity=title)
         return self.counter.get(title, 0)
 
+
 @click.command()
 @click.option("entity_vocab_files", "-v", multiple=True)
 @click.option("inter_wiki_db_path", "-i", type=click.Path())
@@ -205,11 +206,11 @@ def build_multilingual_entity_vocab(
                 multilingual_entities = {entity_name_in_vocab}
                 if entity not in {PAD_TOKEN, UNK_TOKEN, MASK_TOKEN}:
                     aligned_entities = {
-                        get_language_entity_name(language=l, entity=e) for e, l in db.query(entity, lang)
+                        get_language_entity_name(language=ln, entity=e) for e, ln in db.query(entity, lang)
                     }
                 else:
                     # for special tokens, we don't need to ask inter_wiki_db to get aligned entities
-                    aligned_entities = {get_language_entity_name(language=l, entity=entity) for l in languages}
+                    aligned_entities = {get_language_entity_name(language=ln, entity=entity) for ln in languages}
                 multilingual_entities.update(aligned_entities)
 
                 # judge if we should assign a new id to these entities
