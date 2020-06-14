@@ -59,36 +59,31 @@ class InterwikiDB(object):
                 if n % 1000 == 0 and n != 0:
                     logger.info("Processed %d lines", n)
 
-                try:
-                    line = line.rstrip().decode("utf-8")
-                    if line in ("[", "]"):
+                line = line.rstrip().decode("utf-8")
+                if line in ("[", "]"):
+                    continue
+
+                if line[-1] == ",":
+                    line = line[:-1]
+                obj = ujson.loads(line)
+                if obj["type"] != "item":
+                    continue
+
+                for link_obj in obj["sitelinks"].values():
+                    site = link_obj["site"]
+                    if not site.endswith("wiki"):
+                        continue
+                    lang = site[:-4]
+                    if target_languages and lang not in target_languages:
                         continue
 
-                    if line[-1] == ",":
-                        line = line[:-1]
-                    obj = ujson.loads(line)
-                    if obj["type"] != "item":
-                        continue
+                    title_indices.append(len(indptr) - 1)
+                    data.append(len(titles))
 
-                    for link_obj in obj["sitelinks"].values():
-                        site = link_obj["site"]
-                        if not site.endswith("wiki"):
-                            continue
-                        lang = site[:-4]
-                        if target_languages and lang not in target_languages:
-                            continue
+                    title = "%s:%s" % (link_obj["title"], lang)
+                    titles.append(title)
 
-                        title_indices.append(len(indptr) - 1)
-                        data.append(len(titles))
-
-                        title = "%s:%s" % (link_obj["title"], lang)
-                        titles.append(title)
-
-                    indptr.append(len(data))
-
-                except BaseException:
-                    logging.exception("")
-                    print(line)
+                indptr.append(len(data))
 
         title_trie = Trie(titles)
         data = np.fromiter((title_trie[titles[n]] for n in data), dtype=np.int)
