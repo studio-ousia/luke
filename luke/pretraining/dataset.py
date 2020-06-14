@@ -27,17 +27,8 @@ ENTITY_VOCAB_FILE = "entity_vocab.tsv"
 MULTILINGUAL_ENTITY_VOCAB_FILE = "multilingual_entity_vocab.json"
 
 # global variables used in pool workers
-_dump_db = (
-    _tokenizer
-) = (
-    _sentence_tokenizer
-) = (
-    _entity_vocab
-) = (
-    _max_num_tokens
-) = (
-    _max_entity_length
-) = _max_mention_length = _min_sentence_length = _include_sentences_without_entities = _include_unk_entities = None
+_dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length = None
+_max_mention_length = _min_sentence_length = _include_sentences_without_entities = _include_unk_entities = None
 
 
 @click.command()
