@@ -299,7 +299,6 @@ def run_pretraining(args):
 
     model.train()
 
-    # if args.local_rank in (0, -1):
     if args.local_rank == -1 or worker_index == 0:
         dataset.tokenizer.save_pretrained(args.output_dir)
 
@@ -334,7 +333,6 @@ def run_pretraining(args):
         with open(os.path.join(args.output_dir, f"metadata_{suffix}.json"), "w") as f:
             json.dump(metadata, f, indent=2, sort_keys=True)
 
-    # if args.local_rank in (0, -1):
     if args.local_rank == -1 or worker_index == 0:
         summary_writer = SummaryWriter(args.log_dir)
         pbar = tqdm(total=num_train_steps, initial=global_step)
@@ -422,7 +420,6 @@ def run_pretraining(args):
             results = []
 
             if args.local_rank == -1 or worker_index == 0:
-                # if args.local_rank in (0, -1):
                 for (name, value) in summary.items():
                     summary_writer.add_scalar(name, value, global_step)
                 desc = (
@@ -436,7 +433,6 @@ def run_pretraining(args):
             global_step += 1
 
             if args.local_rank == -1 or worker_index == 0:
-                # if args.local_rank in (0, -1):
                 if global_step == num_train_steps:
                     # save the final model
                     save_model(model, f"epoch{args.num_epochs}")
@@ -451,10 +447,9 @@ def run_pretraining(args):
                 if args.save_interval_steps and global_step % args.save_interval_steps == 0:
                     save_model(model, f"step{global_step}")
 
-            # if global_step == num_train_steps:
-            #     break
+            if global_step == num_train_steps:
+                break
 
-    # if args.local_rank in (0, -1):
     if args.local_rank == -1 or worker_index == 0:
         summary_writer.close()
 
@@ -463,17 +458,14 @@ def run_parallel_pretraining(args):
     num_workers = torch.cuda.device_count()
 
     current_env = os.environ.copy()
-    # current_env['NCCL_SOCKET_IFNAME'] = NCCL_SOCKET_IF_NAME
     current_env["MASTER_ADDR"] = args.master_addr
     current_env["MASTER_PORT"] = args.master_port
-    # current_env['WORLD_SIZE'] = str(num_workers)
     current_env["WORLD_SIZE"] = str(num_workers * args.num_nodes)
     current_env["OMP_NUM_THREADS"] = str(1)
     processes = []
     for local_rank in range(num_workers):
         cmd = ["luke", "start-pretraining-worker", f"--local-rank={local_rank}", f"--args={json.dumps(vars(args))}"]
         current_env["RANK"] = str(num_workers * args.node_rank + local_rank)
-        # current_env['RANK'] = str(local_rank)
         current_env["LOCAL_RANK"] = str(local_rank)
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)
