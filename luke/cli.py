@@ -27,6 +27,7 @@ import luke.pretraining.dataset  # noqa: E402
 import luke.pretraining.train  # noqa: E402
 import luke.utils.entity_vocab  # noqa: E402
 import luke.utils.interwiki_db  # noqa: E402
+import luke.utils.model_utils  # noqa: E402
 
 
 @click.group()
@@ -65,6 +66,7 @@ cli.add_command(luke.pretraining.train.resume_pretraining)
 cli.add_command(luke.pretraining.train.start_pretraining_worker)
 cli.add_command(luke.utils.interwiki_db.build_interwiki_db)
 cli.add_command(luke.utils.entity_vocab.build_multilingual_entity_vocab)
+cli.add_command(luke.utils.model_utils.create_model_archive)
 
 
 if __name__ == "__main__":
