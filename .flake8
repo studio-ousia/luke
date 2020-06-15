@@ -5,3 +5,6 @@ ignore =
     # these rules don't play well with black
     E203  # whitespace before :
     W503  # line break before binary operator
+
+per-file-ignores =
+    */__init__.py:F401
