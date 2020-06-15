@@ -1,2 +1,37 @@
+[tool.poetry]
+name = "luke"
+version = "0.1.0"
+description = ""
+authors = ["Ikuya Yamada <ikuya@ousia.jp>"]
+
+[tool.poetry.dependencies]
+python = "^3.6.1"
+Click = "^7.1.2"
+comet-ml = "^3.1.10"
+joblib = "^0.15.1"
+marisa-trie = "^0.7.5"
+optuna = "^1.5.0"
+seqeval = "^0.0.12"
+tensorflow = "1.14.0"
+torch = "^1.5.0"
+transformers = "^2.11.0"
+tqdm = "^4.46.1"
+ujson = "^3.0.0"
+wikipedia2vec = "^1.0.4"
+numpy = "1.16.4"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+flake8 = "^3.8.3"
+black = "^19.10b0"
+mypy = "^0.780"
+
+[tool.poetry.scripts]
+luke = 'luke:cli.cli'
+
 [tool.black]
 line-length = 120
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
