@@ -19,12 +19,9 @@ from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab
 from luke.utils.sentence_tokenizer import SentenceTokenizer
-from luke.utils.model_utils import get_tokenizer
+from luke.utils.model_utils import METADATA_FILE, ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE, get_tokenizer
 
 DATASET_FILE = "dataset.tf"
-METADATA_FILE = "metadata.json"
-ENTITY_VOCAB_FILE = "entity_vocab.tsv"
-MULTILINGUAL_ENTITY_VOCAB_FILE = "multilingual_entity_vocab.json"
 
 # global variables used in pool workers
 _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length = None
