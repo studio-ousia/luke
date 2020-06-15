@@ -300,8 +300,6 @@ def run_pretraining(args):
     model.train()
 
     if args.local_rank == -1 or worker_index == 0:
-        dataset.tokenizer.save_pretrained(args.output_dir)
-
         dataset.entity_vocab.save(os.path.join(args.output_dir, entity_vocab_file))
         metadata = dict(
             model_config=config.to_dict(),
