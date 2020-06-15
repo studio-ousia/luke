@@ -19,15 +19,9 @@ from transformers import get_constant_schedule_with_warmup, get_linear_schedule_
 from luke.model import LukeConfig
 from luke.optimization import LukeDenseSparseAdam
 from luke.pretraining.batch_generator import LukePretrainingBatchGenerator, MultilingualBatchGenerator
-from luke.pretraining.dataset import (
-    WikipediaPretrainingDataset,
-    MultilingualPretrainingDataset,
-    ENTITY_VOCAB_FILE,
-    MULTILINGUAL_ENTITY_VOCAB_FILE,
-)
+from luke.pretraining.dataset import WikipediaPretrainingDataset, MultilingualPretrainingDataset
 from luke.pretraining.model import LukePretrainingModel
-
-from luke.utils.model_utils import get_pretrained_model, get_config
+from luke.utils.model_utils import ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE, get_pretrained_model, get_config
 
 logger = logging.getLogger(__name__)
 
