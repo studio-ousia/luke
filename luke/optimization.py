@@ -1,3 +1,6 @@
+# This code is based on the Transformers' AdamW
+# https://github.com/huggingface/transformers/blob/6be7cdda66f3f4bd3ba4073274bf73be0843c5f9/src/transformers/optimization.py
+
 from typing import Callable, Dict
 import torch
 from transformers.optimization import AdamW
