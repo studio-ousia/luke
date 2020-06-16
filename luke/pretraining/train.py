@@ -17,7 +17,7 @@ from tqdm import tqdm
 from transformers import get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
 
 from luke.model import LukeConfig
-from luke.optimization import LukeDenseSparseAdam
+from luke.optimization import LukeAdamW
 from luke.pretraining.batch_generator import LukePretrainingBatchGenerator, MultilingualBatchGenerator
 from luke.pretraining.dataset import WikipediaPretrainingDataset, MultilingualPretrainingDataset
 from luke.pretraining.model import LukePretrainingModel
@@ -226,7 +226,7 @@ def run_pretraining(args):
     grad_avg_device = device
     if args.grad_avg_on_cpu:
         grad_avg_device = torch.device("cpu")
-    optimizer = LukeDenseSparseAdam(
+    optimizer = LukeAdamW(
         optimizer_parameters,
         lr=args.learning_rate,
         betas=(args.adam_b1, args.adam_b2),
