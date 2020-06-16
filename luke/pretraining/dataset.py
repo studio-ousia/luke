@@ -203,7 +203,7 @@ class WikipediaPretrainingDataset(object):
         entity_vocab.save(os.path.join(output_dir, entity_vocab_file))
         number_of_items = 0
         tf_file = os.path.join(output_dir, DATASET_FILE)
-        options = tf.io.TFRecordOptions(tf.io.TFRecordCompressionType.GZIP)
+        options = tf.io.TFRecordOptions(tf.compat.v1.io.TFRecordCompressionType.GZIP)
         with TFRecordWriter(tf_file, options=options) as writer:
             with tqdm(total=len(target_titles)) as pbar:
                 initargs = (
