@@ -6,19 +6,19 @@ authors = ["Ikuya Yamada <ikuya@ousia.jp>"]
 
 [tool.poetry.dependencies]
 python = "^3.6.1"
-Click = "^7.1.2"
-comet-ml = "^3.1.10"
-joblib = "^0.15.1"
-marisa-trie = "^0.7.5"
-optuna = "^1.5.0"
-seqeval = "^0.0.12"
+Click = "*"
+joblib = "*"
+marisa-trie = "*"
+numpy = "*"
 tensorflow = "1.15.3"
-torch = "^1.5.0"
-transformers = "^2.11.0"
-tqdm = "^4.46.1"
-ujson = "^3.0.0"
-wikipedia2vec = "^1.0.4"
-numpy = "1.16.4"
+torch = "1.2.0"
+transformers = "2.4.1"
+tqdm = "*"
+ujson = "*"
+wikipedia2vec = "*"
+comet-ml = { version = "*", optional = true }
+optuna = { version = "*", optional = true }
+seqeval = { version = "*", optional = true }
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
