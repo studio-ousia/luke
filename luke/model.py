@@ -9,8 +9,6 @@ from transformers.modeling_roberta import RobertaEmbeddings
 
 logger = logging.getLogger(__name__)
 
-EPS = 1e-7
-
 
 class LukeConfig(BertConfig):
     def __init__(
@@ -24,16 +22,14 @@ class LukeConfig(BertConfig):
 
 
 class EntityEmbeddings(nn.Module):
-    def __init__(self, config: LukeConfig, entity_vocab_size: int = None):
+    def __init__(self, config: LukeConfig):
         super(EntityEmbeddings, self).__init__()
         self.config = config
-        if entity_vocab_size is None:
-            entity_vocab_size = config.entity_vocab_size
 
         if config.entity_emb_size is None:
-            self.entity_embeddings = nn.Embedding(entity_vocab_size, config.hidden_size, padding_idx=0)
+            self.entity_embeddings = nn.Embedding(config.entity_vocab_size, config.hidden_size, padding_idx=0)
         else:
-            self.entity_embeddings = nn.Embedding(entity_vocab_size, config.entity_emb_size, padding_idx=0)
+            self.entity_embeddings = nn.Embedding(config.entity_vocab_size, config.entity_emb_size, padding_idx=0)
             if config.entity_emb_size != config.hidden_size:
                 self.entity_embedding_dense = nn.Linear(config.entity_emb_size, config.hidden_size, bias=False)
 
@@ -57,7 +53,7 @@ class EntityEmbeddings(nn.Module):
         position_embedding_mask = (position_ids != -1).type_as(position_embeddings).unsqueeze(-1)
         position_embeddings = position_embeddings * position_embedding_mask
         position_embeddings = torch.sum(position_embeddings, dim=-2)
-        position_embeddings = position_embeddings / position_embedding_mask.sum(dim=-2).clamp(min=EPS)
+        position_embeddings = position_embeddings / position_embedding_mask.sum(dim=-2).clamp(min=1e-7)
 
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
