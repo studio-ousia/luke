@@ -9,19 +9,6 @@ from wikipedia2vec.dump_db import DumpDB
 from wikipedia2vec.utils.wiki_dump_reader import WikiDumpReader
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"  # filter out INFO messages from Tensordflow
-try:
-    import tensorflow  # noqa: F401
-    import absl.logging
-
-    # https://github.com/tensorflow/tensorflow/issues/27045#issuecomment-519642980
-    logging.getLogger().removeHandler(absl.logging._absl_handler)
-    absl.logging._warn_preinit_stderr = False
-    # https://github.com/tensorflow/tensorflow/issues/27023#issuecomment-501419334
-    from tensorflow.python.util import deprecation
-
-    deprecation._PRINT_DEPRECATION_WARNINGS = False
-except ImportError:
-    pass
 
 import luke.pretraining.dataset  # noqa: E402
 import luke.pretraining.train  # noqa: E402
