@@ -15,13 +15,14 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from transformers import get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
+from transformers import AutoConfig, AutoModel
 
 from luke.model import LukeConfig
 from luke.optimization import LukeAdamW
 from luke.pretraining.batch_generator import LukePretrainingBatchGenerator, MultilingualBatchGenerator
 from luke.pretraining.dataset import WikipediaPretrainingDataset, MultilingualPretrainingDataset
 from luke.pretraining.model import LukePretrainingModel
-from luke.utils.model_utils import ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE, get_pretrained_model, get_config
+from luke.utils.model_utils import ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ def run_pretraining(args):
         dataset = WikipediaPretrainingDataset(args.dataset_dir)
         entity_vocab_file = ENTITY_VOCAB_FILE
 
-    bert_config = get_config(args.bert_model_name)
+    bert_config = AutoConfig.from_pretrained(args.bert_model_name)
 
     num_train_steps_per_epoch = math.ceil(len(dataset) / args.batch_size)
     num_train_steps = math.ceil(len(dataset) / args.batch_size * args.num_epochs)
@@ -256,7 +257,7 @@ def run_pretraining(args):
             )
 
     if args.model_file is None:
-        bert_model = get_pretrained_model(args.bert_model_name)
+        bert_model = AutoModel.from_pretrained(args.bert_model_name)
         bert_state_dict = bert_model.state_dict()
         model.load_bert_weights(bert_state_dict)
 

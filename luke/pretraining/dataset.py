@@ -19,7 +19,8 @@ from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab
 from luke.utils.sentence_tokenizer import SentenceTokenizer
-from luke.utils.model_utils import METADATA_FILE, ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE, get_tokenizer
+from luke.utils.model_utils import METADATA_FILE, ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE
+from luke.utils.word_tokenizer import AutoTokenizer
 
 DATASET_FILE = "dataset.tf"
 
@@ -56,7 +57,7 @@ def build_wikipedia_pretraining_dataset(
     **kwargs
 ):
     dump_db = DumpDB(dump_db_file)
-    tokenizer = get_tokenizer(tokenizer_name)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     sentence_tokenizer = SentenceTokenizer.from_name(sentence_tokenizer)
 
     if not os.path.exists(output_dir):
@@ -101,7 +102,7 @@ class WikipediaPretrainingDataset(object):
     def tokenizer(self):
         tokenizer_class_name = self.metadata.get("tokenizer_class", "")
         if tokenizer_class_name == "XLMRobertaTokenizer":
-            import luke.utils.tokenization_xlm_roberta_debugged as tokenizer_module
+            import luke.utils.word_tokenizer as tokenizer_module
         else:
             import transformers as tokenizer_module
         tokenizer_class = getattr(tokenizer_module, tokenizer_class_name)
