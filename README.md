@@ -8,7 +8,7 @@
 poetry install
 git clone https://github.com/NVIDIA/apex.git
 cd apex
-git checkout 5633f6dbf7952026264e3aba42413f06752b0515
+git checkout c3fad1ad120b23055f6630da0b029c8b626db78f
 pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
 cd ..
 ```
