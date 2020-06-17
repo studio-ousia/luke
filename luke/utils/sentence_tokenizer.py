@@ -97,4 +97,8 @@ class OpenNLPSentenceTokenizer(SentenceTokenizer):
         if not self._initialized:
             self.initialize()
 
+        # replace non-BMP characters with a whitespace
+        # (https://stackoverflow.com/questions/36283818/remove-characters-outside-of-the-bmp-emojis-in-python-3)
+        text = "".join(c if c <= "\uFFFF" else " " for c in text)
+
         return [(span.getStart(), span.getEnd()) for span in self._tokenizer.sentPosDetect(text)]
