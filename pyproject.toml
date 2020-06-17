@@ -34,7 +34,7 @@ icu = ["pyicu"]
 opennlp = ["pyjnius"]
 
 [tool.poetry.scripts]
-luke = 'luke:cli.cli'
+luke = 'luke.cli:cli'
 
 [tool.black]
 line-length = 120
