@@ -1,0 +1,40 @@
+version: 2
+jobs:
+  build_and_test:
+    docker:
+      - image: circleci/python:3.7.7-browsers
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - run: sudo apt-get update
+      - run: sudo apt-get install libicu-dev
+      - restore_cache:
+          keys:
+            - deps-{{ checksum "poetry.lock" }}
+      - run:
+          name: Install Dependencies
+          command: |
+            poetry install
+            poetry install -E icu
+            poetry install -E opennlp
+
+      - save_cache:
+          key: deps-{{ checksum "poetry.lock" }}
+          paths:
+            - /home/circleci/.cache/pypoetry/virtualenvs
+      - run:
+          name: run tests
+          command: |
+            mkdir test-results
+            poetry run pytest --junitxml=test-results/junit.xml
+      - store_test_results:
+          path: test-results
+
+      - store_artifacts:
+          path: test-results
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build_and_test
