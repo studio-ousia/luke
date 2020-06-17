@@ -1,4 +1,5 @@
 from transformers import XLMRobertaTokenizer as OriginalXLMRobertaTokenizer
+from transformers import AutoTokenizer as OriginalAutoTokenizer
 
 
 class XLMRobertaTokenizer(OriginalXLMRobertaTokenizer):
@@ -15,3 +16,17 @@ class XLMRobertaTokenizer(OriginalXLMRobertaTokenizer):
     @property
     def vocab_size(self):
         return len(self.sp_model) + self.fairseq_offset
+
+
+class AutoTokenizer(OriginalAutoTokenizer):
+    """
+        A wrapper class of transformers.AutoTokenizer.
+        This returns our fixed version of XLMRobertaTokenizer in from_pretrained().
+    """
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path, *inputs, **kwargs):
+        if "xlm-roberta" in pretrained_model_name_or_path:
+            return XLMRobertaTokenizer.from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
+        else:
+            return super().from_pretrained(pretrained_model_name_or_path, *inputs, **kwargs)
