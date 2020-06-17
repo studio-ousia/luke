@@ -28,6 +28,7 @@ pytest = "^5.2"
 flake8 = "^3.8.3"
 black = "^19.10b0"
 mypy = "^0.780"
+pre-commit = "^2.5.1"
 
 [tool.poetry.extras]
 examples = ["comet-ml", "optuna", "seqeval"]
