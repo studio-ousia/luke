@@ -17,7 +17,6 @@ jobs:
             poetry install
             poetry install -E icu
             poetry install -E opennlp
-
       - save_cache:
           key: deps-{{ checksum "poetry.lock" }}
           paths:
@@ -29,7 +28,6 @@ jobs:
             poetry run pytest --junitxml=test-results/junit.xml
       - store_test_results:
           path: test-results
-
       - store_artifacts:
           path: test-results
 
