@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from transformers import get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
-from transformers import AutoConfig, AutoModel
+from transformers import AutoConfig, AutoModelForPreTraining
 
 from luke.model import LukeConfig
 from luke.optimization import LukeAdamW
@@ -254,7 +254,7 @@ def run_pretraining(args):
             )
 
     if args.model_file is None:
-        bert_model = AutoModel.from_pretrained(args.bert_model_name)
+        bert_model = AutoModelForPreTraining.from_pretrained(args.bert_model_name)
         bert_state_dict = bert_model.state_dict()
         model.load_bert_weights(bert_state_dict)
 
