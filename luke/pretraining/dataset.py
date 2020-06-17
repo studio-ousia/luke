@@ -282,6 +282,8 @@ class WikipediaPretrainingDataset(object):
 
         def tokenize(text: str, add_prefix_space: bool):
             text = re.sub(r"\s+", " ", text).rstrip()
+            if not text:
+                return []
             if isinstance(_tokenizer, RobertaTokenizer):
                 return _tokenizer.tokenize(text, add_prefix_space=add_prefix_space)
             else:
