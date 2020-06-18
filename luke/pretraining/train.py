@@ -389,7 +389,7 @@ def run_pretraining(args):
             accumulation_count = 0
 
             summary = {}
-            summary["learning_rate"] = max(scheduler.get_lr())
+            summary["learning_rate"] = max(scheduler.get_last_lr())
             summary["loss"] = tr_loss
             tr_loss = 0
 
