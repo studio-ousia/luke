@@ -147,7 +147,9 @@ def run_pretraining(args):
     if args.local_rank not in (-1, 0):
         logging.getLogger().setLevel(logging.WARN)
 
-    logger.info("Starting pretraining with the following arguments: %s", args)
+    logger.info(
+        "Starting pretraining with the following arguments: %s", json.dumps(vars(args), indent=2, sort_keys=True)
+    )
 
     if args.multilingual:
         dataset_dir_list = args.dataset_dir.split(",")
@@ -161,7 +163,6 @@ def run_pretraining(args):
 
     num_train_steps_per_epoch = math.ceil(len(dataset) / args.batch_size)
     num_train_steps = math.ceil(len(dataset) / args.batch_size * args.num_epochs)
-    logger.info("The number of training steps: %d", num_train_steps)
     train_batch_size = int(args.batch_size / args.gradient_accumulation_steps / num_workers)
 
     config = LukeConfig(
