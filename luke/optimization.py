@@ -44,11 +44,11 @@ class LukeAdamW(AdamW):
 
                 # Decay the first and second moment running average coefficient
                 # In-place operations to update the averages at the same time
-                exp_avg.mul_(beta1).add_(1.0 - beta1, grad)
-                exp_avg_sq.mul_(beta2).addcmul_(1.0 - beta2, grad, grad)
+                exp_avg.mul_(beta1).add_(grad, alpha=1.0 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
                 denom = exp_avg_sq.sqrt().add_(group["eps"])
 
-                p.data.addcdiv_(-group["lr"], exp_avg, denom)
+                p.data.addcdiv_(exp_avg, denom, value=-group["lr"])
 
                 state["exp_avg"] = exp_avg.to(self.grad_avg_device)
                 state["exp_avg_sq"] = exp_avg_sq.to(self.grad_avg_device)
@@ -62,7 +62,7 @@ class LukeAdamW(AdamW):
                 # of the weights to the loss with plain (non-momentum) SGD.
                 # Add weight decay at the end (fixed version)
                 if group["weight_decay"] > 0.0:
-                    p.data.add_(-group["lr"] * group["weight_decay"], p.data)
+                    p.data.add_(p.data, alpha=-group["lr"] * group["weight_decay"])
 
         return loss
 
