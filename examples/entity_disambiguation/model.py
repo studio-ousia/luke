@@ -69,4 +69,4 @@ class LukeForEntityDisambiguation(LukeModel):
                                    ignore_index=-1)
             return loss, logits
 
-        return logits,
+        return (logits,)
