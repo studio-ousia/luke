@@ -146,9 +146,9 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
             doc_offset = doc_sent_start - left_context_length
             target_tokens = subwords[doc_offset:doc_sent_end + right_context_length]
 
-            word_ids = tokenizer.convert_tokens_to_ids(target_tokens)
-            word_attention_mask = [1] * len(target_tokens)
-            word_segment_ids = [0] * len(target_tokens)
+            word_ids = tokenizer.convert_tokens_to_ids([tokenizer.cls_token] + target_tokens + [tokenizer.sep_token])
+            word_attention_mask = [1] * (len(target_tokens) + 2)
+            word_segment_ids = [0] * (len(target_tokens) + 2)
 
             entity_start_positions = []
             entity_end_positions = []
@@ -171,13 +171,13 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
                     if entity_end - entity_start > max_mention_length:
                         continue
 
-                    entity_start_positions.append(entity_start)
-                    entity_end_positions.append(entity_end - 1)
+                    entity_start_positions.append(entity_start + 1)
+                    entity_end_positions.append(entity_end)
                     entity_ids.append(1)
                     entity_attention_mask.append(1)
                     entity_segment_ids.append(0)
 
-                    position_ids = list(range(entity_start, entity_end))
+                    position_ids = list(range(entity_start + 1, entity_end + 1))
                     position_ids += [-1] * (max_mention_length - entity_end + entity_start)
                     entity_position_ids.append(position_ids)
 

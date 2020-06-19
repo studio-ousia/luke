@@ -1,6 +1,7 @@
 # This code is based on the code obtained from here:
 # https://github.com/lephong/mulrel-nel/blob/db14942450f72c87a4d46349860e96ef2edf353d/nel/dataset.py
 
+import copy
 import logging
 import math
 import os
@@ -9,6 +10,8 @@ from collections import defaultdict
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+punc_remover = re.compile(r'[\W]+')
 
 
 class EntityDisambiguationDataset(object):
@@ -31,6 +34,10 @@ class EntityDisambiguationDataset(object):
                                     os.path.join(dataset_dir, 'msnbc.conll'), person_names)
         self.wikipedia = load_documents(os.path.join(dataset_dir, 'wned-wikipedia.csv'),
                                         os.path.join(dataset_dir, 'wikipedia.conll'), person_names)
+        self.test_a_ppr = load_ppr_candidates(copy.deepcopy(self.test_a),
+                                              os.path.join(dataset_dir, 'pershina_candidates'))
+        self.test_b_ppr = load_ppr_candidates(copy.deepcopy(self.test_b),
+                                              os.path.join(dataset_dir, 'pershina_candidates'))
 
         valid_titles = None
         if wikipedia_titles_file:
@@ -60,7 +67,7 @@ class EntityDisambiguationDataset(object):
 
     def get_all_datasets(self):
         return self.train, self.test_a, self.test_b, self.ace2004, self.aquaint, self.clueweb, self.msnbc,\
-            self.wikipedia
+            self.wikipedia, self.test_a_ppr, self.test_b_ppr
 
 
 class Document(object):
@@ -149,7 +156,6 @@ def load_documents(csv_path, conll_path, person_names):
     documents = []
 
     # merge with the mention_data
-    punc_remover = re.compile(r'[\W]+')
     for (doc_name, mentions) in mention_data.items():
         # This document is excluded in Le and Titov 2018:
         # https://github.com/lephong/mulrel-nel/blob/db14942450f72c87a4d46349860e96ef2edf353d/nel/dataset.py#L221
@@ -246,6 +252,33 @@ def load_mentions_from_csv_file(path, person_names):
                                                key=lambda c: c.prior_prob, reverse=True)
 
     return mention_data
+
+
+def load_ppr_candidates(documents, dataset_dir):
+    for document in documents:
+        target_file = os.path.join(os.path.join(dataset_dir, re.match(r'^\d*', document.id).group(0)))
+        candidates = []
+        with open(target_file) as f:
+            for line in f:
+                if line.startswith('ENTITY'):
+                    mention_text = line.split('\t')[7][9:]
+                    candidates.append((mention_text, []))
+
+                elif line.startswith('CANDIDATE'):
+                    uri = line.split('\t')[5][4:]
+                    title = uri[29:].replace('_', ' ')
+                    candidates[-1][1].append(title)
+
+        cur = 0
+        for mention in document.mentions:
+            text = punc_remover.sub('', mention.text.lower())
+            while text != punc_remover.sub('', candidates[cur][0].lower()):
+                cur += 1
+
+            mention.candidates = [Candidate(title, -1) for title in candidates[cur][1]]
+            cur += 1
+
+    return documents
 
 
 def convert_documents_to_features(documents, tokenizer, entity_vocab, mode, document_split_mode, max_seq_length,
