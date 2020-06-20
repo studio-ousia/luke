@@ -53,6 +53,11 @@ logger = logging.getLogger(__name__)
 @click.option("--masked-lm-prob", default=0.15)
 @click.option("--masked-entity-prob", default=0.15)
 @click.option("--whole-word-masking/--subword-masking", default=True)
+@click.option("--unmasked-word-prob", default=0.1)
+@click.option("--random-word-prob", default=0.1)
+@click.option("--unmasked-entity-prob", default=0.0)
+@click.option("--random-entity-prob", default=0.0)
+@click.option("--mask-words-in-entity-span", is_flag=True)
 @click.option("--fix-bert-weights", is_flag=True)
 @click.option("--grad-avg-on-cpu/--grad-avg-on-gpu", default=False)
 @click.option("--num-epochs", default=20)
@@ -93,6 +98,14 @@ def resume_pretraining(output_dir: str, **kwargs):
         kwargs["node_rank"] = 0
         kwargs["master_addr"] = "127.0.0.1"
         kwargs["master_port"] = "29502"
+
+    # for backward compatibility
+    if "unmasked_word_prob" not in kwargs:
+        kwargs["unmasked_word_prob"] = 0.1
+        kwargs["random_word_prob"] = 0.1
+        kwargs["unmasked_entity_prob"] = 0.0
+        kwargs["random_entity_prob"] = 0.0
+        kwargs["mask_words_in_entity_span"] = False
 
     with open(os.path.join(output_dir, "metadata.json")) as f:
         args = json.load(f)["arguments"]
@@ -179,31 +192,28 @@ def run_pretraining(args):
 
     global_step = args.global_step
 
+    batch_generator_args = dict(
+        batch_size=train_batch_size,
+        masked_lm_prob=args.masked_lm_prob,
+        masked_entity_prob=args.masked_entity_prob,
+        whole_word_masking=args.whole_word_masking,
+        unmasked_word_prob=args.unmasked_word_prob,
+        random_word_prob=args.random_word_prob,
+        unmasked_entity_prob=args.unmasked_entity_prob,
+        random_entity_prob=args.random_entity_prob,
+        mask_words_in_entity_span=args.mask_words_in_entity_span,
+        num_workers=num_workers,
+        worker_index=worker_index,
+        skip=global_step * args.batch_size,
+    )
+
     if args.multilingual:
         batch_generator = MultilingualBatchGenerator(
-            dataset_dir_list,
-            dataset.data_size_list,
-            args.sampling_smoothing,
-            train_batch_size,
-            args.masked_lm_prob,
-            args.masked_entity_prob,
-            args.whole_word_masking,
-            num_workers=num_workers,
-            worker_index=worker_index,
-            skip=global_step * args.batch_size,
+            dataset_dir_list, dataset.data_size_list, args.sampling_smoothing, **batch_generator_args,
         )
 
     else:
-        batch_generator = LukePretrainingBatchGenerator(
-            args.dataset_dir,
-            train_batch_size,
-            args.masked_lm_prob,
-            args.masked_entity_prob,
-            args.whole_word_masking,
-            num_workers=num_workers,
-            worker_index=worker_index,
-            skip=global_step * args.batch_size,
-        )
+        batch_generator = LukePretrainingBatchGenerator(args.dataset_dir, **batch_generator_args)
 
     logger.info("Model configuration: %s", config)
 
