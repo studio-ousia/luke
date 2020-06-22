@@ -27,6 +27,11 @@ class LukePretrainingBatchGenerator(object):
         masked_lm_prob: float,
         masked_entity_prob: float,
         whole_word_masking: bool,
+        unmasked_word_prob: float,
+        random_word_prob: float,
+        unmasked_entity_prob: float,
+        random_entity_prob: float,
+        mask_words_in_entity_span: bool,
         **dataset_kwargs
     ):
         self._worker_func = functools.partial(
@@ -36,6 +41,11 @@ class LukePretrainingBatchGenerator(object):
             masked_lm_prob=masked_lm_prob,
             masked_entity_prob=masked_entity_prob,
             whole_word_masking=whole_word_masking,
+            unmasked_word_prob=unmasked_word_prob,
+            random_word_prob=random_word_prob,
+            unmasked_entity_prob=unmasked_entity_prob,
+            random_entity_prob=random_entity_prob,
+            mask_words_in_entity_span=mask_words_in_entity_span,
             **dataset_kwargs
         )
 
@@ -67,6 +77,11 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         masked_lm_prob: float,
         masked_entity_prob: float,
         whole_word_masking: bool,
+        unmasked_word_prob: float,
+        random_word_prob: float,
+        unmasked_entity_prob: float,
+        random_entity_prob: float,
+        mask_words_in_entity_span: bool,
         **dataset_kwargs
     ):
         super(LukePretrainingBatchWorker, self).__init__()
@@ -77,6 +92,11 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         self._masked_lm_prob = masked_lm_prob
         self._masked_entity_prob = masked_entity_prob
         self._whole_word_masking = whole_word_masking
+        self._unmasked_word_prob = unmasked_word_prob
+        self._random_word_prob = random_word_prob
+        self._unmasked_entity_prob = unmasked_entity_prob
+        self._random_entity_prob = random_entity_prob
+        self._mask_words_in_entity_span = mask_words_in_entity_span
         self._dataset_kwargs = dataset_kwargs
 
         if "shuffle_buffer_size" not in self._dataset_kwargs:
@@ -99,8 +119,11 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         max_word_len = 1
         max_entity_len = 1
         for item in self._pretraining_dataset.create_iterator(**self._dataset_kwargs):
-            word_feat = self._create_word_features(item["word_ids"])
-            entity_feat = self._create_entity_features(item["entity_ids"], item["entity_position_ids"])
+            entity_feat, masked_entity_positions = self._create_entity_features(
+                item["entity_ids"], item["entity_position_ids"]
+            )
+            word_feat = self._create_word_features(item["word_ids"], masked_entity_positions)
+
             max_word_len = max(max_word_len, item["word_ids"].size + 2)  # 2 for [CLS] and [SEP]
             max_entity_len = max(max_entity_len, item["entity_ids"].size)
             buf.append((word_feat, entity_feat, item["page_id"]))
@@ -115,7 +138,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                 max_word_len = 1
                 max_entity_len = 1
 
-    def _create_word_features(self, word_ids: np.ndarray):
+    def _create_word_features(self, word_ids: np.ndarray, masked_entity_positions: List[List[int]]):
         output_word_ids = np.full(self._max_seq_length, self._pad_id, dtype=np.int)
         output_word_ids[: word_ids.size + 2] = np.concatenate([[self._cls_id], word_ids, [self._sep_id]])
         word_attention_mask = np.zeros(self._max_seq_length, dtype=np.int)
@@ -128,6 +151,25 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         )
 
         if self._masked_lm_prob != 0.0:
+            num_masked_words = 0
+            masked_lm_labels = np.full(self._max_seq_length, -1, dtype=np.int)
+
+            def perform_masking(indices: List[int]):
+                p = random.random()
+                for index in indices:
+                    masked_lm_labels[index] = output_word_ids[index]
+                    if p < (1.0 - self._random_word_prob - self._unmasked_word_prob):
+                        output_word_ids[index] = self._mask_id
+                    elif p < (1.0 - self._unmasked_word_prob):
+                        output_word_ids[index] = random.randint(self._pad_id + 1, self._tokenizer.vocab_size - 1)
+
+            masked_entity_positions_set = frozenset()
+            if self._mask_words_in_entity_span:
+                for indices in masked_entity_positions:
+                    perform_masking(indices)
+                    num_masked_words += len(indices)
+                masked_entity_positions_set = frozenset([p for li in masked_entity_positions for p in li])
+
             num_to_predict = max(1, int(round(word_ids.size * self._masked_lm_prob)))
             candidate_word_indices = []
 
@@ -137,22 +179,19 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                 else:
                     candidate_word_indices.append([i])
 
-            masked_lm_labels = np.full(self._max_seq_length, -1, dtype=np.int)
-            num_masked_words = 0
+            candidate_word_indices = [
+                indices
+                for indices in candidate_word_indices
+                if all(ind not in masked_entity_positions_set for ind in indices)
+            ]
 
             for i in np.random.permutation(len(candidate_word_indices)):
                 indices_to_mask = candidate_word_indices[i]
                 if len(indices_to_mask) > num_to_predict - num_masked_words:
                     continue
 
-                p = random.random()
-                for index in indices_to_mask:
-                    masked_lm_labels[index] = output_word_ids[index]
-                    if p < 0.8:
-                        output_word_ids[index] = self._mask_id
-                    elif p < 0.9:
-                        output_word_ids[index] = random.randint(self._pad_id + 1, self._tokenizer.vocab_size - 1)
-                    num_masked_words += 1
+                perform_masking(indices_to_mask)
+                num_masked_words += len(indices_to_mask)
 
                 if num_masked_words == num_to_predict:
                     break
@@ -186,15 +225,23 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
             entity_segment_ids=np.zeros(self._max_entity_length, dtype=np.int),
         )
 
+        masked_positions = []
         if self._masked_entity_prob != 0.0:
             num_to_predict = max(1, int(round(entity_ids.size * self._masked_entity_prob)))
             masked_entity_labels = np.full(self._max_entity_length, -1, dtype=np.int)
             for index in np.random.permutation(range(entity_ids.size))[:num_to_predict]:
+                p = random.random()
                 masked_entity_labels[index] = entity_ids[index]
-                output_entity_ids[index] = self._entity_mask_id
+                if p < (1.0 - self._random_entity_prob - self._unmasked_entity_prob):
+                    output_entity_ids[index] = self._entity_mask_id
+                elif p < (1.0 - self._unmasked_entity_prob):
+                    output_entity_ids[index] = random.randint(self._entity_mask_id + 1, self._entity_vocab.size - 1)
+
+                masked_positions.append([int(p) for p in entity_position_ids[index] if p != -1])
+
             ret["masked_entity_labels"] = masked_entity_labels
 
-        return ret
+        return ret, masked_positions
 
     def _is_subword(self, token: str):
         if (
@@ -235,12 +282,27 @@ class MultilingualBatchGenerator(LukePretrainingBatchGenerator):
         masked_lm_prob: float,
         masked_entity_prob: float,
         whole_word_masking: bool,
+        unmasked_word_prob: float,
+        random_word_prob: float,
+        unmasked_entity_prob: float,
+        random_entity_prob: float,
+        mask_words_in_entity_span: bool,
         **dataset_kwargs
     ):
 
         self.batch_generator_list = [
             LukePretrainingBatchGenerator(
-                dataset_dir, batch_size, masked_lm_prob, masked_entity_prob, whole_word_masking, **dataset_kwargs
+                dataset_dir,
+                batch_size=batch_size,
+                masked_lm_prob=masked_lm_prob,
+                masked_entity_prob=masked_entity_prob,
+                whole_word_masking=whole_word_masking,
+                unmasked_word_prob=unmasked_word_prob,
+                random_word_prob=random_word_prob,
+                unmasked_entity_prob=unmasked_entity_prob,
+                random_entity_prob=random_entity_prob,
+                mask_words_in_entity_span=mask_words_in_entity_span,
+                **dataset_kwargs
             )
             for dataset_dir in dataset_dir_list
         ]
