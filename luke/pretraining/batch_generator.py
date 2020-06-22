@@ -154,7 +154,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
             num_masked_words = 0
             masked_lm_labels = np.full(self._max_seq_length, -1, dtype=np.int)
 
-            def perform_masking(indices):
+            def perform_masking(indices: List[int]):
                 p = random.random()
                 for index in indices:
                     masked_lm_labels[index] = output_word_ids[index]
