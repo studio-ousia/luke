@@ -14,7 +14,6 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import (
-    AdamW,
     AutoConfig,
     AutoModelForPreTraining,
     get_constant_schedule_with_warmup,
@@ -236,21 +235,14 @@ def run_pretraining(args):
         },
         {"params": [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
-    optimizer_args = dict(
-        params=optimizer_parameters, lr=args.learning_rate, betas=(args.adam_b1, args.adam_b2), eps=args.adam_eps
+
+    optimizer = LukeAdamW(
+        optimizer_parameters,
+        lr=args.learning_rate,
+        betas=(args.adam_b1, args.adam_b2),
+        eps=args.adam_eps,
+        grad_avg_device=torch.device("cpu") if args.grad_avg_on_cpu else device,
     )
-    if args.grad_avg_on_cpu:
-        grad_avg_device = torch.device("cpu")
-        optimizer = LukeAdamW(grad_avg_device=grad_avg_device, **optimizer_args)
-    else:
-        try:
-            from apex.optimizers.fused_adam import FusedAdam
-
-            optimizer = FusedAdam(bias_correction=False, adam_w_mode=True, **optimizer_args)
-
-        except ImportError:
-            logger.warning("Failed to import FusedAdam.")
-            optimizer = AdamW(correct_bias=False, **optimizer_args)
 
     if args.fp16:
         from apex import amp
