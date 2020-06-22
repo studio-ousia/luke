@@ -119,10 +119,10 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         max_word_len = 1
         max_entity_len = 1
         for item in self._pretraining_dataset.create_iterator(**self._dataset_kwargs):
-            entity_feat, masked_word_positions = self._create_entity_features(
+            entity_feat, masked_entity_positions = self._create_entity_features(
                 item["entity_ids"], item["entity_position_ids"]
             )
-            word_feat = self._create_word_features(item["word_ids"], masked_word_positions)
+            word_feat = self._create_word_features(item["word_ids"], masked_entity_positions)
 
             max_word_len = max(max_word_len, item["word_ids"].size + 2)  # 2 for [CLS] and [SEP]
             max_entity_len = max(max_entity_len, item["entity_ids"].size)
@@ -138,7 +138,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                 max_word_len = 1
                 max_entity_len = 1
 
-    def _create_word_features(self, word_ids: np.ndarray, masked_positions: List[List[int]]):
+    def _create_word_features(self, word_ids: np.ndarray, masked_entity_positions: List[List[int]]):
         output_word_ids = np.full(self._max_seq_length, self._pad_id, dtype=np.int)
         output_word_ids[: word_ids.size + 2] = np.concatenate([[self._cls_id], word_ids, [self._sep_id]])
         word_attention_mask = np.zeros(self._max_seq_length, dtype=np.int)
@@ -163,12 +163,12 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                     elif p < (1.0 - self._unmasked_word_prob):
                         output_word_ids[index] = random.randint(self._pad_id + 1, self._tokenizer.vocab_size - 1)
 
-            masked_positions_set = frozenset()
+            masked_entity_positions_set = frozenset()
             if self._mask_words_in_entity_span:
-                for indices in masked_positions:
+                for indices in masked_entity_positions:
                     perform_masking(indices)
                     num_masked_words += len(indices)
-                masked_positions_set = frozenset([p for li in masked_positions for p in li])
+                masked_entity_positions_set = frozenset([p for li in masked_entity_positions for p in li])
 
             num_to_predict = max(1, int(round(word_ids.size * self._masked_lm_prob)))
             candidate_word_indices = []
@@ -180,7 +180,9 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                     candidate_word_indices.append([i])
 
             candidate_word_indices = [
-                indices for indices in candidate_word_indices if all(ind not in masked_positions_set for ind in indices)
+                indices
+                for indices in candidate_word_indices
+                if all(ind not in masked_entity_positions_set for ind in indices)
             ]
 
             for i in np.random.permutation(len(candidate_word_indices)):
@@ -223,7 +225,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
             entity_segment_ids=np.zeros(self._max_entity_length, dtype=np.int),
         )
 
-        masked_word_positions = []
+        masked_positions = []
         if self._masked_entity_prob != 0.0:
             num_to_predict = max(1, int(round(entity_ids.size * self._masked_entity_prob)))
             masked_entity_labels = np.full(self._max_entity_length, -1, dtype=np.int)
@@ -235,11 +237,11 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                 elif p < (1.0 - self._unmasked_entity_prob):
                     output_entity_ids[index] = random.randint(self._entity_mask_id + 1, self._entity_vocab.size - 1)
 
-                masked_word_positions.append([int(p) for p in entity_position_ids[index] if p != -1])
+                masked_positions.append([int(p) for p in entity_position_ids[index] if p != -1])
 
             ret["masked_entity_labels"] = masked_entity_labels
 
-        return ret, masked_word_positions
+        return ret, masked_positions
 
     def _is_subword(self, token: str):
         if (
