@@ -13,14 +13,17 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-
-from transformers import get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
-from transformers import AutoConfig, AutoModelForPreTraining
+from transformers import (
+    AutoConfig,
+    AutoModelForPreTraining,
+    get_constant_schedule_with_warmup,
+    get_linear_schedule_with_warmup,
+)
 
 from luke.model import LukeConfig
 from luke.optimization import LukeAdamW
 from luke.pretraining.batch_generator import LukePretrainingBatchGenerator, MultilingualBatchGenerator
-from luke.pretraining.dataset import WikipediaPretrainingDataset, MultilingualPretrainingDataset
+from luke.pretraining.dataset import MultilingualPretrainingDataset, WikipediaPretrainingDataset
 from luke.pretraining.model import LukePretrainingModel
 from luke.utils.model_utils import ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE
 
@@ -49,6 +52,11 @@ logger = logging.getLogger(__name__)
 @click.option("--masked-lm-prob", default=0.15)
 @click.option("--masked-entity-prob", default=0.15)
 @click.option("--whole-word-masking/--subword-masking", default=True)
+@click.option("--unmasked-word-prob", default=0.1)
+@click.option("--random-word-prob", default=0.1)
+@click.option("--unmasked-entity-prob", default=0.0)
+@click.option("--random-entity-prob", default=0.0)
+@click.option("--mask-words-in-entity-span", is_flag=True)
 @click.option("--fix-bert-weights", is_flag=True)
 @click.option("--grad-avg-on-cpu/--grad-avg-on-gpu", default=False)
 @click.option("--num-epochs", default=20)
@@ -78,7 +86,7 @@ def pretrain(**kwargs):
 @click.argument("output_dir", type=click.Path())
 @click.option("--batch-size", default=None, type=int)
 @click.option("--gradient-accumulation-steps", default=None, type=int)
-@click.option("--grad-avg-on-cpu/--grad-avg-on-gpu", default=False)
+@click.option("--grad-avg-on-cpu", is_flag=True, default=None)
 @click.option("--num-nodes", default=1)
 @click.option("--node-rank", default=0)
 @click.option("--master-addr", default="127.0.0.1")
@@ -92,6 +100,14 @@ def resume_pretraining(output_dir: str, **kwargs):
 
     with open(os.path.join(output_dir, "metadata.json")) as f:
         args = json.load(f)["arguments"]
+
+    # for backward compatibility
+    if "unmasked_word_prob" not in args:
+        args["unmasked_word_prob"] = 0.1
+        args["random_word_prob"] = 0.1
+        args["unmasked_entity_prob"] = 0.0
+        args["random_entity_prob"] = 0.0
+        args["mask_words_in_entity_span"] = False
 
     step_metadata_file = sorted(
         [f for f in os.listdir(output_dir) if f.startswith("metadata_") and f.endswith(".json")]
@@ -175,31 +191,28 @@ def run_pretraining(args):
 
     global_step = args.global_step
 
+    batch_generator_args = dict(
+        batch_size=train_batch_size,
+        masked_lm_prob=args.masked_lm_prob,
+        masked_entity_prob=args.masked_entity_prob,
+        whole_word_masking=args.whole_word_masking,
+        unmasked_word_prob=args.unmasked_word_prob,
+        random_word_prob=args.random_word_prob,
+        unmasked_entity_prob=args.unmasked_entity_prob,
+        random_entity_prob=args.random_entity_prob,
+        mask_words_in_entity_span=args.mask_words_in_entity_span,
+        num_workers=num_workers,
+        worker_index=worker_index,
+        skip=global_step * args.batch_size,
+    )
+
     if args.multilingual:
         batch_generator = MultilingualBatchGenerator(
-            dataset_dir_list,
-            dataset.data_size_list,
-            args.sampling_smoothing,
-            train_batch_size,
-            args.masked_lm_prob,
-            args.masked_entity_prob,
-            args.whole_word_masking,
-            num_workers=num_workers,
-            worker_index=worker_index,
-            skip=global_step * args.batch_size,
+            dataset_dir_list, dataset.data_size_list, args.sampling_smoothing, **batch_generator_args,
         )
 
     else:
-        batch_generator = LukePretrainingBatchGenerator(
-            args.dataset_dir,
-            train_batch_size,
-            args.masked_lm_prob,
-            args.masked_entity_prob,
-            args.whole_word_masking,
-            num_workers=num_workers,
-            worker_index=worker_index,
-            skip=global_step * args.batch_size,
-        )
+        batch_generator = LukePretrainingBatchGenerator(args.dataset_dir, **batch_generator_args)
 
     logger.info("Model configuration: %s", config)
 
@@ -222,15 +235,13 @@ def run_pretraining(args):
         },
         {"params": [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
-    grad_avg_device = device
-    if args.grad_avg_on_cpu:
-        grad_avg_device = torch.device("cpu")
+
     optimizer = LukeAdamW(
         optimizer_parameters,
         lr=args.learning_rate,
         betas=(args.adam_b1, args.adam_b2),
         eps=args.adam_eps,
-        grad_avg_device=grad_avg_device,
+        grad_avg_device=torch.device("cpu") if args.grad_avg_on_cpu else device,
     )
 
     if args.fp16:
