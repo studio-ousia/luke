@@ -86,7 +86,7 @@ def pretrain(**kwargs):
 @click.argument("output_dir", type=click.Path())
 @click.option("--batch-size", default=None, type=int)
 @click.option("--gradient-accumulation-steps", default=None, type=int)
-@click.option("--grad-avg-on-cpu/--grad-avg-on-gpu", default=False)
+@click.option("--grad-avg-on-cpu", is_flag=True, default=None)
 @click.option("--num-nodes", default=1)
 @click.option("--node-rank", default=0)
 @click.option("--master-addr", default="127.0.0.1")
@@ -98,16 +98,16 @@ def resume_pretraining(output_dir: str, **kwargs):
         kwargs["master_addr"] = "127.0.0.1"
         kwargs["master_port"] = "29502"
 
-    # for backward compatibility
-    if "unmasked_word_prob" not in kwargs:
-        kwargs["unmasked_word_prob"] = 0.1
-        kwargs["random_word_prob"] = 0.1
-        kwargs["unmasked_entity_prob"] = 0.0
-        kwargs["random_entity_prob"] = 0.0
-        kwargs["mask_words_in_entity_span"] = False
-
     with open(os.path.join(output_dir, "metadata.json")) as f:
         args = json.load(f)["arguments"]
+
+    # for backward compatibility
+    if "unmasked_word_prob" not in args:
+        args["unmasked_word_prob"] = 0.1
+        args["random_word_prob"] = 0.1
+        args["unmasked_entity_prob"] = 0.0
+        args["random_entity_prob"] = 0.0
+        args["mask_words_in_entity_span"] = False
 
     step_metadata_file = sorted(
         [f for f in os.listdir(output_dir) if f.startswith("metadata_") and f.endswith(".json")]
