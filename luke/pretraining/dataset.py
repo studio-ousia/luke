@@ -17,7 +17,7 @@ from transformers import PreTrainedTokenizer, RobertaTokenizer
 from tqdm import tqdm
 from wikipedia2vec.dump_db import DumpDB
 
-from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab
+from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab, MultilingualEntityVocab, get_language_entity_name
 from luke.utils.sentence_tokenizer import SentenceTokenizer
 from luke.utils.model_utils import METADATA_FILE, ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE
 from luke.utils.word_tokenizer import AutoTokenizer
@@ -69,16 +69,23 @@ def build_wikipedia_pretraining_dataset(
                 "When you set ``multilingual`` True, i.e., use MultilingualLEntityVocab, "
                 "you have to specify ``language`` in the two-letter ISO language code (e.g., 'en'). "
             )
-        entity_vocab = MultilingualEntityVocab(entity_vocab_file, language=language)
-        MultilingualPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
+        entity_vocab = MultilingualEntityVocab(entity_vocab_file)
+        MultilingualPretrainingDataset.build(
+            dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, language, **kwargs
+        )
     else:
         entity_vocab = EntityVocab(entity_vocab_file)
-        WikipediaPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
+        WikipediaPretrainingDataset.build(
+            dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, language, **kwargs
+        )
 
 
 class WikipediaPretrainingDataset(object):
-    def __init__(self, dataset_dir: str):
+    def __init__(self, dataset_dir: str, language: str = None):
         self._dataset_dir = dataset_dir
+
+        self._language = language
+        self._use_multilingual_vocab = language is not None
 
         with open(os.path.join(dataset_dir, METADATA_FILE)) as metadata_file:
             self.metadata = json.load(metadata_file)
@@ -110,14 +117,12 @@ class WikipediaPretrainingDataset(object):
 
     @property
     def entity_vocab(self):
-        entity_vocab_file_path = os.path.join(self._dataset_dir, ENTITY_VOCAB_FILE)
-        if os.path.exists(entity_vocab_file_path):
-            return EntityVocab(entity_vocab_file_path)
-        else:
+        if self._use_multilingual_vocab:
             multilingual_entity_vocab_file_path = os.path.join(self._dataset_dir, MULTILINGUAL_ENTITY_VOCAB_FILE)
-            with open(os.path.join(self._dataset_dir, METADATA_FILE), "r") as f:
-                language = json.load(f)["language"]
-            return MultilingualEntityVocab(multilingual_entity_vocab_file_path, language=language)
+            return MultilingualEntityVocab(multilingual_entity_vocab_file_path)
+        else:
+            entity_vocab_file_path = os.path.join(self._dataset_dir, ENTITY_VOCAB_FILE)
+            return EntityVocab(entity_vocab_file_path)
 
     def create_iterator(
         self,
@@ -168,6 +173,7 @@ class WikipediaPretrainingDataset(object):
         sentence_tokenizer: SentenceTokenizer,
         entity_vocab: EntityVocab,
         output_dir: str,
+        language: str,
         max_seq_length: int,
         max_entity_length: int,
         max_mention_length: int,
@@ -195,10 +201,8 @@ class WikipediaPretrainingDataset(object):
 
         if type(entity_vocab) is EntityVocab:
             entity_vocab_file = ENTITY_VOCAB_FILE
-            language = None
         elif type(entity_vocab) is MultilingualEntityVocab:
             entity_vocab_file = MULTILINGUAL_ENTITY_VOCAB_FILE
-            language = entity_vocab.language
         else:
             raise Exception()
         entity_vocab.save(os.path.join(output_dir, entity_vocab_file))
@@ -218,6 +222,7 @@ class WikipediaPretrainingDataset(object):
                     min_sentence_length,
                     include_sentences_without_entities,
                     include_unk_entities,
+                    language,
                 )
                 with closing(
                     Pool(pool_size, initializer=WikipediaPretrainingDataset._initialize_worker, initargs=initargs)
@@ -257,9 +262,11 @@ class WikipediaPretrainingDataset(object):
         min_sentence_length: int,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
+        language: str,
     ):
         global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length
         global _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
+        global _language
 
         _dump_db = dump_db
         _tokenizer = tokenizer
@@ -271,11 +278,13 @@ class WikipediaPretrainingDataset(object):
         _min_sentence_length = min_sentence_length
         _include_sentences_without_entities = include_sentences_without_entities
         _include_unk_entities = include_unk_entities
+        _language = language
 
     @staticmethod
     def _process_page(page_title: str):
-        if page_title in _entity_vocab:
-            page_id = _entity_vocab[page_title]
+        lang_page_title = get_language_entity_name(language=_language, entity=page_title)
+        if lang_page_title in _entity_vocab:
+            page_id = _entity_vocab[lang_page_title]
         else:
             page_id = -1
 
@@ -306,7 +315,7 @@ class WikipediaPretrainingDataset(object):
                         paragraph_text[: link.start] + " " * (link.end - link.start) + paragraph_text[link.end :]
                     )
                 else:
-                    if link_title in _entity_vocab:
+                    if get_language_entity_name(_language, link_title) in _entity_vocab:
                         paragraph_links.append((link_title, link.start, link.end))
                     elif _include_unk_entities:
                         paragraph_links.append((UNK_TOKEN, link.start, link.end))
@@ -321,7 +330,7 @@ class WikipediaPretrainingDataset(object):
                 for link_title, link_start, link_end in paragraph_links:
                     if not (sent_start <= link_start < sent_end and link_end <= sent_end):
                         continue
-                    entity_id = _entity_vocab[link_title]
+                    entity_id = _entity_vocab[get_language_entity_name(_language, link_title)]
 
                     text = paragraph_text[cur:link_start]
                     if cur == 0 or text.startswith(" ") or paragraph_text[cur - 1] == " ":
@@ -390,7 +399,16 @@ class WikipediaPretrainingDataset(object):
 class MultilingualPretrainingDataset(WikipediaPretrainingDataset):
     def __init__(self, dataset_dir_list: List[str]):
         self.dataset_dir_list = dataset_dir_list
-        self.dataset_list = [WikipediaPretrainingDataset(d) for d in dataset_dir_list]
+
+        language_list = []
+        for dataset_dir in dataset_dir_list:
+            with open(os.path.join(dataset_dir, METADATA_FILE), "r") as f:
+                language = json.load(f)["language"]
+                language_list.append(language)
+
+        self.dataset_list = [
+            WikipediaPretrainingDataset(d, language=lang) for lang, d in zip(language_list, dataset_dir_list)
+        ]
 
         self.data_size_list = [len(dataset) for dataset in self.dataset_list]
         self.total_data_size = sum(self.data_size_list)

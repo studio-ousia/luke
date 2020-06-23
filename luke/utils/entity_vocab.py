@@ -1,4 +1,4 @@
-from typing import List, TextIO
+from typing import List, TextIO, Dict
 import json
 import math
 
@@ -138,17 +138,19 @@ class EntityVocab(object):
 
 
 def get_language_entity_name(language: str, entity: str) -> str:
-    return f"{language}{LANG_ENTITY_SEPARATOR}{entity}"
+    if language is None:
+        return entity
+    else:
+        return f"{language}{LANG_ENTITY_SEPARATOR}{entity}"
 
 
 class MultilingualEntityVocab(EntityVocab):
-    def __init__(self, vocab_file: str, language: str):
+    def __init__(self, vocab_file: str):
         self._vocab_file = vocab_file
-        self.language = language
 
-        self.vocab = {}
-        self.counter = {}
-        self.inv_vocab = {}
+        self.vocab: Dict[str, int] = {}
+        self.counter: Dict[str, int] = {}
+        self.inv_vocab: Dict[int, List[str]] = {}
 
         entities_json = json.load(open(vocab_file, "r"))
         for ent_id, record in enumerate(entities_json):
@@ -156,18 +158,6 @@ class MultilingualEntityVocab(EntityVocab):
                 self.vocab[title] = ent_id
                 self.counter[title] = record["count"]
             self.inv_vocab[ent_id] = record["entities"]
-
-    def __contains__(self, key: str):
-        key = get_language_entity_name(language=self.language, entity=key)
-        return key in self.vocab
-
-    def __getitem__(self, key: str):
-        key = get_language_entity_name(language=self.language, entity=key)
-        return self.vocab[key]
-
-    def get_count_by_title(self, title: str) -> int:
-        title = get_language_entity_name(language=self.language, entity=title)
-        return self.counter.get(title, 0)
 
 
 @click.command()
