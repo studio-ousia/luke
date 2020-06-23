@@ -17,6 +17,12 @@ ENTITY_VOCAB_FILE = "entity_vocab.tsv"
 MULTILINGUAL_ENTITY_VOCAB_FILE = "multilingual_entity_vocab.json"
 
 
+def get_language_from_dataset_dir(dataset_dir: str) -> str:
+    with open(os.path.join(dataset_dir, METADATA_FILE), "r") as f:
+        language = json.load(f)["language"]
+    return language
+
+
 @click.command()
 @click.argument("model_file", type=click.Path())
 @click.argument("out_file", type=click.Path())

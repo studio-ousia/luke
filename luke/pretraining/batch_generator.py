@@ -11,6 +11,8 @@ from transformers.tokenization_roberta import RobertaTokenizer
 
 from luke.pretraining.dataset import WikipediaPretrainingDataset
 from luke.utils.entity_vocab import MASK_TOKEN
+from luke.utils.model_utils import get_language_from_dataset_dir
+from luke.utils.entity_vocab import get_language_entity_name
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ class LukePretrainingBatchGenerator(object):
         unmasked_entity_prob: float,
         random_entity_prob: float,
         mask_words_in_entity_span: bool,
+        use_multilingual_vocab: bool = False,
         **dataset_kwargs
     ):
         self._worker_func = functools.partial(
@@ -46,6 +49,7 @@ class LukePretrainingBatchGenerator(object):
             unmasked_entity_prob=unmasked_entity_prob,
             random_entity_prob=random_entity_prob,
             mask_words_in_entity_span=mask_words_in_entity_span,
+            use_multilingual_vocab=use_multilingual_vocab,
             **dataset_kwargs
         )
 
@@ -73,6 +77,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         self,
         output_queue: multiprocessing.Queue,
         dataset_dir: str,
+        use_multilingual_vocab: bool,
         batch_size: int,
         masked_lm_prob: float,
         masked_entity_prob: float,
@@ -88,6 +93,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
 
         self._output_queue = output_queue
         self._dataset_dir = dataset_dir
+        self._use_multilingual_vocab = use_multilingual_vocab
         self._batch_size = batch_size
         self._masked_lm_prob = masked_lm_prob
         self._masked_entity_prob = masked_entity_prob
@@ -103,7 +109,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
             self._dataset_kwargs["shuffle_buffer_size"] = batch_size * 1000
 
     def run(self):
-        self._pretraining_dataset = WikipediaPretrainingDataset(self._dataset_dir)
+        self._pretraining_dataset = WikipediaPretrainingDataset(self._dataset_dir, self._use_multilingual_vocab)
         self._tokenizer = self._pretraining_dataset.tokenizer
         self._entity_vocab = self._pretraining_dataset.entity_vocab
         self._max_seq_length = self._pretraining_dataset.max_seq_length
@@ -113,7 +119,9 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         self._sep_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.sep_token)
         self._mask_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.mask_token)
         self._pad_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.pad_token)
-        self._entity_mask_id = self._pretraining_dataset.entity_vocab[MASK_TOKEN]
+
+        language = get_language_from_dataset_dir(self._dataset_dir)
+        self._entity_mask_id = self._pretraining_dataset.entity_vocab[get_language_entity_name(language, MASK_TOKEN)]
 
         buf = []
         max_word_len = 1
@@ -302,6 +310,7 @@ class MultilingualBatchGenerator(LukePretrainingBatchGenerator):
                 unmasked_entity_prob=unmasked_entity_prob,
                 random_entity_prob=random_entity_prob,
                 mask_words_in_entity_span=mask_words_in_entity_span,
+                use_multilingual_vocab=True,
                 **dataset_kwargs
             )
             for dataset_dir in dataset_dir_list

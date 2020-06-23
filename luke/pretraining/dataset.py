@@ -81,11 +81,10 @@ def build_wikipedia_pretraining_dataset(
 
 
 class WikipediaPretrainingDataset(object):
-    def __init__(self, dataset_dir: str, language: str = None):
+    def __init__(self, dataset_dir: str, use_multilingual_vocab: bool = False):
         self._dataset_dir = dataset_dir
 
-        self._language = language
-        self._use_multilingual_vocab = language is not None
+        self._use_multilingual_vocab = use_multilingual_vocab
 
         with open(os.path.join(dataset_dir, METADATA_FILE)) as metadata_file:
             self.metadata = json.load(metadata_file)
@@ -399,16 +398,7 @@ class WikipediaPretrainingDataset(object):
 class MultilingualPretrainingDataset(WikipediaPretrainingDataset):
     def __init__(self, dataset_dir_list: List[str]):
         self.dataset_dir_list = dataset_dir_list
-
-        language_list = []
-        for dataset_dir in dataset_dir_list:
-            with open(os.path.join(dataset_dir, METADATA_FILE), "r") as f:
-                language = json.load(f)["language"]
-                language_list.append(language)
-
-        self.dataset_list = [
-            WikipediaPretrainingDataset(d, language=lang) for lang, d in zip(language_list, dataset_dir_list)
-        ]
+        self.dataset_list = [WikipediaPretrainingDataset(d, use_multilingual_vocab=True) for d in dataset_dir_list]
 
         self.data_size_list = [len(dataset) for dataset in self.dataset_list]
         self.total_data_size = sum(self.data_size_list)
