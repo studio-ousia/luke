@@ -133,8 +133,6 @@ class Trainer(object):
                             and global_step % self.args.save_steps == 0
                         ):
                             output_dir = os.path.join(self.args.output_dir, "checkpoint-{}".format(global_step))
-                            if not os.path.exists(output_dir):
-                                os.makedirs(output_dir)
 
                             if hasattr(model, "module"):
                                 torch.save(model.module.state_dict(), os.path.join(output_dir, WEIGHTS_NAME))
