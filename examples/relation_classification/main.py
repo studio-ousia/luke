@@ -72,13 +72,13 @@ def run(common_args, **task_args):
         best_dev_f1 = [-1]
         best_weights = [None]
 
-        def step_callback(model, global_step, tqdm_ins):
+        def step_callback(model, global_step):
             if global_step % num_train_steps_per_epoch == 0 and args.local_rank in (0, -1):
                 epoch = int(global_step / num_train_steps_per_epoch - 1)
                 dev_results = evaluate(args, model, fold="dev")
                 args.experiment.log_metrics({f"dev_{k}_epoch{epoch}": v for k, v in dev_results.items()}, epoch=epoch)
                 results.update({f"dev_{k}_epoch{epoch}": v for k, v in dev_results.items()})
-                tqdm_ins.write("dev: " + str(dev_results))
+                tqdm.write("dev: " + str(dev_results))
 
                 if dev_results["f1"] > best_dev_f1[0]:
                     if hasattr(model, "module"):
