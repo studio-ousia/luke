@@ -137,9 +137,6 @@ def run(common_args, **task_args):
             model.load_state_dict(torch.load(os.path.join(checkpoint_dir, WEIGHTS_NAME), map_location="cpu"))
             model.to(args.device)
 
-            # if torch.cuda.device_count() > 1:
-            #     model = torch.nn.DataParallel(model)
-
             result = evaluate(args, model, prefix=global_step)
             result = {k + "_" + str(global_step) if global_step else k: v for k, v in result.items()}
             results.update(result)
