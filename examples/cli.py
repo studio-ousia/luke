@@ -14,7 +14,6 @@ import torch
 from luke.utils.model_utils import ModelArchive
 
 from .utils.experiment_logger import commet_logger_args, CometLogger, NullLogger
-from .utils.mention_db import MentionDB
 
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 
@@ -40,7 +39,6 @@ logger = logging.getLogger(__name__)
 @click.option("--master-port", default=29500)
 @click.option("--local-rank", "--local_rank", default=-1)
 @click.option("--model-file", type=click.Path(exists=True))
-@click.option("--mention-db-file", type=click.Path(exists=True))
 @commet_logger_args
 @click.pass_context
 def cli(ctx, **kwargs):
@@ -111,11 +109,6 @@ def cli(ctx, **kwargs):
             ctx.obj["model_weights"] = model_archive.state_dict
 
             experiment_logger.log_parameter("model_file_name", os.path.basename(args.model_file))
-
-        if args.mention_db_file:
-            ctx.obj["mention_db"] = MentionDB(args.mention_db_file)
-        else:
-            ctx.obj["mention_db"] = None
 
 
 from .entity_disambiguation.main import cli as entity_disambiguation_cli
