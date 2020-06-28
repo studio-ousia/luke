@@ -21,11 +21,28 @@ class LukeForNamedEntityRecognition(LukeWordEntityAttentionModel):
 
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_start_positions, entity_end_positions,
-                entity_ids, entity_position_ids, entity_segment_ids, entity_attention_mask, labels=None):
+    def forward(
+        self,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_start_positions,
+        entity_end_positions,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+        labels=None,
+    ):
         encoder_outputs = super(LukeForNamedEntityRecognition, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids, entity_segment_ids,
-            entity_attention_mask)
+            word_ids,
+            word_segment_ids,
+            word_attention_mask,
+            entity_ids,
+            entity_position_ids,
+            entity_segment_ids,
+            entity_attention_mask,
+        )
 
         word_hidden_states, entity_hidden_states = encoder_outputs[:2]
         hidden_size = word_hidden_states.size()[-1]

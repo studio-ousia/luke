@@ -11,10 +11,11 @@ from luke.model import LukeModel
 
 
 def word_entity_model_args(func):
-    @click.option('--word-entity-query', is_flag=True)
+    @click.option("--word-entity-query", is_flag=True)
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
+
     return wrapper
 
 
@@ -24,8 +25,16 @@ class LukeWordEntityAttentionModel(LukeModel):
         self.encoder = WordEntityEncoder(args)
         self.args = args
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                entity_segment_ids, entity_attention_mask):
+    def forward(
+        self,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+    ):
         word_embeddings = self.embeddings(word_ids, word_segment_ids)
         entity_embeddings = self.entity_embeddings(entity_ids, entity_position_ids, entity_segment_ids)
         attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
@@ -36,18 +45,21 @@ class LukeWordEntityAttentionModel(LukeModel):
         new_state_dict = state_dict.copy()
 
         for num in range(self.args.model_config.num_hidden_layers):
-            for attr_name in ('weight', 'bias'):
-                if f'encoder.layer.{num}.attention.self.w2e_query.{attr_name}' not in state_dict:
-                    new_state_dict[f'encoder.layer.{num}.attention.self.w2e_query.{attr_name}'] =\
-                        state_dict[f'encoder.layer.{num}.attention.self.query.{attr_name}']
-                if f'encoder.layer.{num}.attention.self.e2w_query.{attr_name}' not in state_dict:
-                    new_state_dict[f'encoder.layer.{num}.attention.self.e2w_query.{attr_name}'] =\
-                        state_dict[f'encoder.layer.{num}.attention.self.query.{attr_name}']
-                if f'encoder.layer.{num}.attention.self.e2e_query.{attr_name}' not in state_dict:
-                    new_state_dict[f'encoder.layer.{num}.attention.self.e2e_query.{attr_name}'] =\
-                        state_dict[f'encoder.layer.{num}.attention.self.query.{attr_name}']
+            for attr_name in ("weight", "bias"):
+                if f"encoder.layer.{num}.attention.self.w2e_query.{attr_name}" not in state_dict:
+                    new_state_dict[f"encoder.layer.{num}.attention.self.w2e_query.{attr_name}"] = state_dict[
+                        f"encoder.layer.{num}.attention.self.query.{attr_name}"
+                    ]
+                if f"encoder.layer.{num}.attention.self.e2w_query.{attr_name}" not in state_dict:
+                    new_state_dict[f"encoder.layer.{num}.attention.self.e2w_query.{attr_name}"] = state_dict[
+                        f"encoder.layer.{num}.attention.self.query.{attr_name}"
+                    ]
+                if f"encoder.layer.{num}.attention.self.e2e_query.{attr_name}" not in state_dict:
+                    new_state_dict[f"encoder.layer.{num}.attention.self.e2e_query.{attr_name}"] = state_dict[
+                        f"encoder.layer.{num}.attention.self.query.{attr_name}"
+                    ]
 
-        kwargs['strict'] = False
+        kwargs["strict"] = False
         super(LukeWordEntityAttentionModel, self).load_state_dict(new_state_dict, *args, **kwargs)
 
 
@@ -86,7 +98,8 @@ class WordEntitySelfAttention(nn.Module):
             e2e_query_layer = self.transpose_for_scores(self.e2e_query(entity_hidden_states))
         else:
             query_layer = self.transpose_for_scores(
-                self.query(torch.cat([word_hidden_states, entity_hidden_states], dim=1)))
+                self.query(torch.cat([word_hidden_states, entity_hidden_states], dim=1))
+            )
 
         key_layer = self.transpose_for_scores(self.key(torch.cat([word_hidden_states, entity_hidden_states], dim=1)))
 
@@ -114,8 +127,9 @@ class WordEntitySelfAttention(nn.Module):
         attention_probs = F.softmax(attention_scores, dim=-1)
         attention_probs = self.dropout(attention_probs)
 
-        value_layer = self.transpose_for_scores(self.value(
-            torch.cat([word_hidden_states, entity_hidden_states], dim=1)))
+        value_layer = self.transpose_for_scores(
+            self.value(torch.cat([word_hidden_states, entity_hidden_states], dim=1))
+        )
         context_layer = torch.matmul(attention_probs, value_layer)
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
@@ -136,7 +150,7 @@ class WordEntityAttention(nn.Module):
         hidden_states = torch.cat([word_hidden_states, entity_hidden_states], dim=1)
         self_output = torch.cat([word_self_output, entity_self_output], dim=1)
         output = self.output(self_output, hidden_states)
-        return output[:, :word_hidden_states.size(1), :], output[:, word_hidden_states.size(1):, :]
+        return output[:, : word_hidden_states.size(1), :], output[:, word_hidden_states.size(1) :, :]
 
 
 class WordEntityLayer(nn.Module):
@@ -149,13 +163,14 @@ class WordEntityLayer(nn.Module):
         self.output = BertOutput(args.model_config)
 
     def forward(self, word_hidden_states, entity_hidden_states, attention_mask):
-        word_attention_output, entity_attention_output = self.attention(word_hidden_states, entity_hidden_states,
-                                                                        attention_mask)
+        word_attention_output, entity_attention_output = self.attention(
+            word_hidden_states, entity_hidden_states, attention_mask
+        )
         attention_output = torch.cat([word_attention_output, entity_attention_output], dim=1)
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
 
-        return layer_output[:, :word_hidden_states.size(1), :], layer_output[:, word_hidden_states.size(1):, :]
+        return layer_output[:, : word_hidden_states.size(1), :], layer_output[:, word_hidden_states.size(1) :, :]
 
 
 class WordEntityEncoder(nn.Module):
@@ -165,6 +180,7 @@ class WordEntityEncoder(nn.Module):
 
     def forward(self, word_hidden_states, entity_hidden_states, attention_mask):
         for layer_module in self.layer:
-            word_hidden_states, entity_hidden_states = layer_module(word_hidden_states, entity_hidden_states,
-                                                                    attention_mask)
+            word_hidden_states, entity_hidden_states = layer_module(
+                word_hidden_states, entity_hidden_states, attention_mask
+            )
         return word_hidden_states, entity_hidden_states
