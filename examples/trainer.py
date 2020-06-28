@@ -121,7 +121,7 @@ class Trainer(object):
                         global_step += 1
 
                         if self.step_callback is not None:
-                            self.step_callback(model, global_step, tqdm)
+                            self.step_callback(model, global_step)
 
                         if (
                             self.args.local_rank in (-1, 0)
