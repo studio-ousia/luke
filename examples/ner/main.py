@@ -14,7 +14,6 @@ from transformers import WEIGHTS_NAME
 
 from luke.utils.entity_vocab import MASK_TOKEN
 
-from ..word_entity_model import word_entity_model_args
 from ..utils import set_seed
 from ..utils.trainer import Trainer, trainer_args
 from .model import LukeForNamedEntityRecognition
@@ -43,7 +42,6 @@ def cli():
 @click.option("--train-on-dev-set", is_flag=True)
 @click.option("--seed", default=15)
 @trainer_args
-@word_entity_model_args
 @click.pass_obj
 def run(common_args, **task_args):
     common_args.update(task_args)

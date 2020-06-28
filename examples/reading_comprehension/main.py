@@ -16,7 +16,6 @@ from wikipedia2vec.dump_db import DumpDB
 
 from ..utils import set_seed
 from ..utils.mention_db import MentionDB
-from ..word_entity_model import word_entity_model_args
 from ..utils.trainer import Trainer, trainer_args
 from .model import LukeForReadingComprehension
 from .utils.dataset import SquadV1Processor, SquadV2Processor
@@ -79,7 +78,6 @@ def generate_redirect_file(dump_db_file, out_file, compress):
 @click.option("--no-entity", is_flag=True, default=False)
 @click.option("--eval-all-checkpoints/--no-eval-checkpoints", default=False)
 @click.option("--seed", default=14)
-@word_entity_model_args
 @trainer_args
 @click.pass_obj
 def run(common_args, **task_args):

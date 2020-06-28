@@ -13,7 +13,6 @@ from transformers import WEIGHTS_NAME
 
 from luke.utils.entity_vocab import MASK_TOKEN
 
-from ..word_entity_model import word_entity_model_args
 from ..utils import set_seed
 from ..utils.trainer import Trainer, trainer_args
 from .model import LukeForEntitySpanQA
@@ -46,7 +45,6 @@ def cli():
 @click.option("--eval-batch-size", default=32)
 @click.option("--seed", default=4)
 @trainer_args
-@word_entity_model_args
 @click.pass_obj
 def run(common_args, **task_args):
     task_args.update(common_args)

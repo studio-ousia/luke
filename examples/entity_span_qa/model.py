@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..word_entity_model import LukeWordEntityAttentionModel
+from luke.model import LukeEntityAwareAttentionModel
 
 
-class LukeForEntitySpanQA(LukeWordEntityAttentionModel):
+class LukeForEntitySpanQA(LukeEntityAwareAttentionModel):
     def __init__(self, args):
-        super(LukeForEntitySpanQA, self).__init__(args)
+        super(LukeForEntitySpanQA, self).__init__(args.model_config)
         self.args = args
 
         self.dropout = nn.Dropout(args.model_config.hidden_dropout_prob)

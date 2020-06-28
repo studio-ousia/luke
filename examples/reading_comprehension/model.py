@@ -1,12 +1,12 @@
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss
 
-from ..word_entity_model import LukeWordEntityAttentionModel
+from luke.model import LukeEntityAwareAttentionModel
 
 
-class LukeForReadingComprehension(LukeWordEntityAttentionModel):
+class LukeForReadingComprehension(LukeEntityAwareAttentionModel):
     def __init__(self, args):
-        super(LukeForReadingComprehension, self).__init__(args)
+        super(LukeForReadingComprehension, self).__init__(args.model_config)
 
         self.qa_outputs = nn.Linear(self.config.hidden_size, 2)
         self.apply(self.init_weights)
