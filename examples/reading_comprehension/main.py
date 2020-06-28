@@ -16,6 +16,7 @@ from wikipedia2vec.dump_db import DumpDB
 
 from ..trainer import Trainer, trainer_args
 from ..utils import set_seed
+from ..utils.mention_db import MentionDB
 from ..word_entity_model import word_entity_model_args
 from .model import LukeForReadingComprehension
 from .utils.dataset import SquadV1Processor, SquadV2Processor
@@ -35,13 +36,14 @@ def cli():
 
 @cli.command()
 @click.argument("dump_db_file", type=click.Path(exists=True))
+@click.argument("mention_db_file", type=click.Path(exists=True))
 @click.argument("out_file", type=click.Path())
 @click.option("--pool-size", default=multiprocessing.cpu_count())
 @click.option("--chunk-size", default=100)
 @click.pass_obj
-def build_wiki_link_db(common_args, dump_db_file, **kwargs):
+def build_wiki_link_db(common_args, dump_db_file, mention_db_file, **kwargs):
     dump_db = DumpDB(dump_db_file)
-    mention_db = common_args["mention_db"]
+    mention_db = MentionDB(mention_db_file)
     WikiLinkDB.build(dump_db, mention_db, **kwargs)
 
 
