@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..word_entity_model import LukeWordEntityAttentionModel
+from luke.model import LukeEntityAwareAttentionModel
 
 
-class LukeForRelationClassification(LukeWordEntityAttentionModel):
+class LukeForRelationClassification(LukeEntityAwareAttentionModel):
     def __init__(self, args, num_labels):
-        super(LukeForRelationClassification, self).__init__(args)
+        super(LukeForRelationClassification, self).__init__(args.model_config)
 
         self.args = args
 

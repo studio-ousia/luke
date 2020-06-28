@@ -1,12 +1,12 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..word_entity_model import LukeWordEntityAttentionModel
+from luke.model import LukeEntityAwareAttentionModel
 
 
-class LukeForEntityTyping(LukeWordEntityAttentionModel):
+class LukeForEntityTyping(LukeEntityAwareAttentionModel):
     def __init__(self, args, num_labels):
-        super(LukeForEntityTyping, self).__init__(args)
+        super(LukeForEntityTyping, self).__init__(args.model_config)
 
         self.num_labels = num_labels
         self.dropout = nn.Dropout(args.model_config.hidden_dropout_prob)

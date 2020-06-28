@@ -13,7 +13,6 @@ from transformers import WEIGHTS_NAME
 from luke.utils.entity_vocab import MASK_TOKEN
 
 from ..utils import set_seed
-from ..word_entity_model import word_entity_model_args
 from ..utils.trainer import Trainer, trainer_args
 from .model import LukeForRelationClassification
 from .utils import HEAD_TOKEN, TAIL_TOKEN, convert_examples_to_features, DatasetProcessor
@@ -34,7 +33,6 @@ def cli():
 @click.option("--do-eval/--no-eval", default=True)
 @click.option("--eval-batch-size", default=128)
 @click.option("--seed", default=42)
-@word_entity_model_args
 @trainer_args
 @click.pass_obj
 def run(common_args, **task_args):

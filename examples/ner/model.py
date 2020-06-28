@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss
 
-from ..word_entity_model import LukeWordEntityAttentionModel
+from luke.model import LukeEntityAwareAttentionModel
 
 
-class LukeForNamedEntityRecognition(LukeWordEntityAttentionModel):
+class LukeForNamedEntityRecognition(LukeEntityAwareAttentionModel):
     def __init__(self, args, num_labels):
-        super(LukeForNamedEntityRecognition, self).__init__(args)
+        super(LukeForNamedEntityRecognition, self).__init__(args.model_config)
         self.args = args
         self.num_labels = num_labels
 
