@@ -1,5 +1,4 @@
 import click
-import comet_ml
 import functools
 
 
@@ -37,6 +36,8 @@ class NullLogger:
 
 class CometLogger:
     def __init__(self, args):
+        import comet_ml
+
         comet_args = dict(
             project_name=args.comet_project_name,
             auto_metric_logging=args.comet_auto_metric_logging,
