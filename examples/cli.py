@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import random
@@ -11,11 +10,8 @@ logging.getLogger("transformers").setLevel(logging.WARNING)
 
 import click
 import torch
-from transformers import AutoTokenizer
 
-from luke.model import LukeConfig
-from luke.utils.entity_vocab import EntityVocab
-from luke.utils.model_utils import ENTITY_VOCAB_FILE, METADATA_FILE
+from luke.utils.model_utils import ModelArchive
 
 from .utils.experiment_logger import commet_logger_args, CometLogger, NullLogger
 from .utils.mention_db import MentionDB
@@ -43,8 +39,7 @@ logger = logging.getLogger(__name__)
 @click.option("--experiment-logger", "--logger", type=click.Choice(["comet"]))
 @click.option("--master-port", default=29500)
 @click.option("--local-rank", "--local_rank", default=-1)
-@click.option("--model-dir", type=click.Path(exists=True))
-@click.option("--weights-file", type=click.Path(exists=True))
+@click.option("--model-file", type=click.Path(exists=True))
 @click.option("--mention-db-file", type=click.Path(exists=True))
 @commet_logger_args
 @click.pass_context
@@ -106,29 +101,16 @@ def cli(ctx, **kwargs):
         experiment_logger.log_parameters({p.name: getattr(args, p.name) for p in cli.params})
         ctx.obj["experiment"] = experiment_logger
 
-        if args.model_dir or args.weights_file:
-            if not args.model_dir:
-                args.model_dir = os.path.dirname(args.weights_file)
-            ctx.obj["model_dir"] = args.model_dir
+        if args.model_file:
+            model_archive = ModelArchive.load(args.model_file)
+            ctx.obj["tokenizer"] = model_archive.tokenizer
+            ctx.obj["entity_vocab"] = model_archive.entity_vocab
+            ctx.obj["bert_model_name"] = model_archive.bert_model_name
+            ctx.obj["model_config"] = model_archive.config
+            ctx.obj["max_mention_length"] = model_archive.max_mention_length
+            ctx.obj["model_weights"] = model_archive.state_dict
 
-            json_file = os.path.join(args.model_dir, METADATA_FILE)
-            with open(json_file) as f:
-                model_data = json.load(f)
-
-            # for backward compatibility
-            if "entity_emb_size" not in model_data["model_config"]:
-                model_data["model_config"]["entity_emb_size"] = model_data["model_config"]["hidden_size"]
-
-            ctx.obj["tokenizer"] = AutoTokenizer.from_pretrained(model_data["model_config"]["bert_model_name"])
-            ctx.obj["entity_vocab"] = EntityVocab(os.path.join(args.model_dir, ENTITY_VOCAB_FILE))
-            ctx.obj["bert_model_name"] = model_data["model_config"]["bert_model_name"]
-            ctx.obj["model_config"] = LukeConfig(**model_data["model_config"])
-            ctx.obj["max_mention_length"] = model_data["max_mention_length"]
-
-        if args.weights_file:
-            ctx.obj["weights_file"] = args.weights_file
-            ctx.obj["model_weights"] = torch.load(args.weights_file, map_location="cpu")
-            ctx.obj["experiment"].log_parameter("weights_file_name", os.path.basename(args.weights_file))
+            experiment_logger.log_parameter("model_file_name", os.path.basename(args.model_file))
 
         if args.mention_db_file:
             ctx.obj["mention_db"] = MentionDB(args.mention_db_file)
