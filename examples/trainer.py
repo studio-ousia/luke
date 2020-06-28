@@ -71,7 +71,6 @@ class Trainer(object):
         epoch = 0
         global_step = 0
         tr_loss = 0.0
-        batch_loss = 0.0
 
         num_workers = torch.cuda.device_count()
 
@@ -104,7 +103,6 @@ class Trainer(object):
                             loss.backward()
 
                     tr_loss += loss.item()
-                    batch_loss += loss.item()
                     if (step + 1) % self.args.gradient_accumulation_steps == 0:
                         if self.args.max_grad_norm != 0.0:
                             if self.args.fp16:
@@ -115,8 +113,6 @@ class Trainer(object):
                         self.optimizer.step()
                         self.scheduler.step()
                         model.zero_grad()
-
-                        batch_loss = 0.0
 
                         pbar.set_description(
                             "epoch: %d loss: %.7f lr: %.7f" % (epoch, loss.item(), max(self.scheduler.get_last_lr()))
