@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--output-dir", default="exp_" + "".join(random.choice(string.ascii_letters) for m in range(8)), type=click.Path()
 )
-@click.option("--verbose", is_flag=True)
 @click.option("--num-gpus", default=1)
 @click.option("--experiment-logger", "--logger", type=click.Choice(["comet"]))
 @click.option("--master-port", default=29500)
@@ -72,8 +71,6 @@ def cli(ctx, **kwargs):
     else:
         if args.local_rank not in (-1, 0):
             logging.basicConfig(format=LOG_FORMAT, level=logging.WARNING)
-        elif args.verbose:
-            logging.basicConfig(format=LOG_FORMAT, level=logging.DEBUG)
         else:
             logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
 
