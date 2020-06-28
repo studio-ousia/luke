@@ -19,6 +19,7 @@ def trainer_args(func):
     @click.option("--adam-b1", default=0.9)
     @click.option("--adam-b2", default=0.98)
     @click.option("--adam-eps", default=1e-6)
+    @click.option("--adam-correct-bias", is_flag=True)
     @click.option("--warmup-proportion", default=0.06)
     @click.option("--gradient-accumulation-steps", default=1)
     @click.option("--fp16", is_flag=True)
@@ -168,7 +169,7 @@ class Trainer(object):
             lr=self.args.learning_rate,
             eps=self.args.adam_eps,
             betas=(self.args.adam_b1, self.args.adam_b2),
-            correct_bias=False,
+            correct_bias=self.args.adam_correct_bias,
         )
 
     def _create_scheduler(self, optimizer):
