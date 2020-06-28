@@ -15,8 +15,8 @@ from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import MASK_TOKEN, PAD_TOKEN
 
-from ..trainer import Trainer, trainer_args
 from ..utils import set_seed
+from ..utils.trainer import Trainer, trainer_args
 from .model import LukeForEntityDisambiguation
 from .utils import EntityDisambiguationDataset, convert_documents_to_features
 

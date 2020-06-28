@@ -114,9 +114,7 @@ class Trainer(object):
                         self.scheduler.step()
                         model.zero_grad()
 
-                        pbar.set_description(
-                            "epoch: %d loss: %.7f lr: %.7f" % (epoch, loss.item(), max(self.scheduler.get_last_lr()))
-                        )
+                        pbar.set_description("epoch: %d loss: %.7f" % (epoch, loss.item()))
                         pbar.update()
                         global_step += 1
 

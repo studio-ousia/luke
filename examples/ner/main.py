@@ -15,8 +15,8 @@ from transformers import WEIGHTS_NAME
 from luke.utils.entity_vocab import MASK_TOKEN
 
 from ..word_entity_model import word_entity_model_args
-from ..trainer import Trainer, trainer_args
 from ..utils import set_seed
+from ..utils.trainer import Trainer, trainer_args
 from .model import LukeForNamedEntityRecognition
 from .utils import CoNLLProcessor, convert_examples_to_features
 

@@ -13,7 +13,7 @@ from luke.utils.entity_vocab import MASK_TOKEN
 
 from ..utils import set_seed
 from ..word_entity_model import word_entity_model_args
-from ..trainer import Trainer, trainer_args
+from ..utils.trainer import Trainer, trainer_args
 from .model import LukeForEntityTyping
 from .utils import ENTITY_TOKEN, convert_examples_to_features, DatasetProcessor
 

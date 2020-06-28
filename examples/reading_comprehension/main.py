@@ -14,10 +14,10 @@ from tqdm import tqdm
 from transformers import WEIGHTS_NAME, BertTokenizer
 from wikipedia2vec.dump_db import DumpDB
 
-from ..trainer import Trainer, trainer_args
 from ..utils import set_seed
 from ..utils.mention_db import MentionDB
 from ..word_entity_model import word_entity_model_args
+from ..utils.trainer import Trainer, trainer_args
 from .model import LukeForReadingComprehension
 from .utils.dataset import SquadV1Processor, SquadV2Processor
 from .utils.feature import convert_examples_to_features
