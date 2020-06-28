@@ -83,8 +83,6 @@ def run(common_args, **task_args):
     if args.do_eval:
         model = LukeForNamedEntityRecognition(args, len(processor.get_labels()))
         model.load_state_dict(torch.load(os.path.join(args.output_dir, WEIGHTS_NAME), map_location="cpu"))
-        if torch.cuda.device_count() > 1:
-            model = torch.nn.DataParallel(model)
         model.to(args.device)
 
         dev_output_file = os.path.join(args.output_dir, "dev_predictions.txt")

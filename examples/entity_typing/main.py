@@ -105,8 +105,6 @@ def run(common_args, **task_args):
     if args.do_eval:
         model = LukeForEntityTyping(args, num_labels)
         model.load_state_dict(torch.load(os.path.join(args.output_dir, WEIGHTS_NAME), map_location="cpu"))
-        if torch.cuda.device_count() > 1:
-            model = torch.nn.DataParallel(model)
         model.to(args.device)
 
         for eval_set in ("dev", "test"):
