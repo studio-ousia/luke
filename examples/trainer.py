@@ -118,7 +118,7 @@ class Trainer(object):
                         batch_loss = 0.0
 
                         pbar.set_description(
-                            "epoch: %d loss: %.7f lr: %.7f" % (epoch, loss.item(), max(self.scheduler.get_lr()))
+                            "epoch: %d loss: %.7f lr: %.7f" % (epoch, loss.item(), max(self.scheduler.get_last_lr()))
                         )
                         pbar.update()
                         global_step += 1
