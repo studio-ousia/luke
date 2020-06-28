@@ -14,11 +14,26 @@ class LukeForEntityTyping(LukeWordEntityAttentionModel):
 
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                entity_segment_ids, entity_attention_mask, labels=None):
+    def forward(
+        self,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+        labels=None,
+    ):
         encoder_outputs = super(LukeForEntityTyping, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids, entity_segment_ids,
-            entity_attention_mask)
+            word_ids,
+            word_segment_ids,
+            word_attention_mask,
+            entity_ids,
+            entity_position_ids,
+            entity_segment_ids,
+            entity_attention_mask,
+        )
 
         feature_vector = encoder_outputs[1][:, 0, :]
         feature_vector = self.dropout(feature_vector)

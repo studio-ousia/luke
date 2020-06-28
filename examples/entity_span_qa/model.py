@@ -15,11 +15,26 @@ class LukeForEntitySpanQA(LukeWordEntityAttentionModel):
 
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                entity_segment_ids, entity_attention_mask, labels=None):
+    def forward(
+        self,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+        labels=None,
+    ):
         encoder_outputs = super(LukeForEntitySpanQA, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids, entity_segment_ids,
-            entity_attention_mask)
+            word_ids,
+            word_segment_ids,
+            word_attention_mask,
+            entity_ids,
+            entity_position_ids,
+            entity_segment_ids,
+            entity_attention_mask,
+        )
 
         entity_hidden_states = encoder_outputs[1]
         doc_entity_emb = entity_hidden_states[:, 1:, :]

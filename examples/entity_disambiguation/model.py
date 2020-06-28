@@ -21,8 +21,9 @@ class EntityEmbeddings(nn.Module):
 
     def forward(self, entity_ids, position_ids, token_type_ids):
         entity_embeddings = self.entity_embeddings(entity_ids)
-        entity_embeddings.masked_scatter_((entity_ids == 1).unsqueeze(-1),
-                                          self.mask_embedding.expand_as(entity_embeddings))
+        entity_embeddings.masked_scatter_(
+            (entity_ids == 1).unsqueeze(-1), self.mask_embedding.expand_as(entity_embeddings)
+        )
 
         position_embeddings = self.position_embeddings(position_ids.clamp(min=0))
         position_embedding_mask = (position_ids != -1).type_as(position_embeddings).unsqueeze(-1)
@@ -49,11 +50,27 @@ class LukeForEntityDisambiguation(LukeModel):
 
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                entity_segment_ids, entity_attention_mask, entity_candidate_ids=None, entity_labels=None):
+    def forward(
+        self,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+        entity_candidate_ids=None,
+        entity_labels=None,
+    ):
         encoder_output = super(LukeForEntityDisambiguation, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids, entity_segment_ids,
-            entity_attention_mask)
+            word_ids,
+            word_segment_ids,
+            word_attention_mask,
+            entity_ids,
+            entity_position_ids,
+            entity_segment_ids,
+            entity_attention_mask,
+        )
         logits = self.entity_predictions(encoder_output[1]).view(-1, self.config.entity_vocab_size)
 
         if entity_candidate_ids is not None:
@@ -65,8 +82,9 @@ class LukeForEntityDisambiguation(LukeModel):
         logits = logits.view(entity_ids.size(0), -1, self.config.entity_vocab_size)
 
         if entity_labels is not None:
-            loss = F.cross_entropy(logits.view(entity_labels.view(-1).size(0), -1), entity_labels.view(-1),
-                                   ignore_index=-1)
+            loss = F.cross_entropy(
+                logits.view(entity_labels.view(-1).size(0), -1), entity_labels.view(-1), ignore_index=-1
+            )
             return loss, logits
 
         return (logits,)
