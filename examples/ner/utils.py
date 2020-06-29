@@ -45,18 +45,18 @@ class InputFeatures(object):
 
 class CoNLLProcessor(object):
     def get_train_examples(self, data_dir):
-        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, "eng.train")), "train"))
+        return list(self._create_examples(self._read_data(os.path.join(data_dir, "eng.train")), "train"))
 
     def get_dev_examples(self, data_dir):
-        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, "eng.testa")), "dev"))
+        return list(self._create_examples(self._read_data(os.path.join(data_dir, "eng.testa")), "dev"))
 
     def get_test_examples(self, data_dir):
-        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, "eng.testb")), "test"))
+        return list(self._create_examples(self._read_data(os.path.join(data_dir, "eng.testb")), "test"))
 
     def get_labels(self):
         return ["NIL", "MISC", "PER", "ORG", "LOC"]
 
-    def _read_tsv(self, input_file):
+    def _read_data(self, input_file):
         data = []
         words = []
         labels = []
@@ -109,12 +109,12 @@ def convert_examples_to_features(
 
     for example_index, example in enumerate(examples):
         tokens = [tokenize_word(w) for w in example.words]
-        subwords = [w for l in tokens for w in l]
+        subwords = [w for li in tokens for w in li]
 
-        subword2token = list(itertools.chain(*[[i] * len(l) for i, l in enumerate(tokens)]))
-        token2subword = [0] + list(itertools.accumulate(len(l) for l in tokens))
+        subword2token = list(itertools.chain(*[[i] * len(li) for i, li in enumerate(tokens)]))
+        token2subword = [0] + list(itertools.accumulate(len(li) for li in tokens))
         subword_start_positions = frozenset(token2subword)
-        subword_sentence_boundaries = [sum(len(l) for l in tokens[:p]) for p in example.sentence_boundaries]
+        subword_sentence_boundaries = [sum(len(li) for li in tokens[:p]) for p in example.sentence_boundaries]
 
         entity_labels = {}
         start = None
