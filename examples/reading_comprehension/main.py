@@ -73,7 +73,6 @@ def generate_redirect_file(dump_db_file, out_file, compress):
 @click.option("--train-batch-size", default=2)
 @click.option("--do-eval/--no-eval", default=True)
 @click.option("--eval-batch-size", default=128)
-@click.option("--create-cache", is_flag=True)
 @click.option("--num-train-epochs", default=2)
 @click.option("--no-entity", is_flag=True, default=False)
 @click.option("--eval-all-checkpoints/--no-eval-checkpoints", default=False)
@@ -91,11 +90,6 @@ def run(common_args, **task_args):
     args.wiki_link_db = WikiLinkDB(args.wiki_link_db_file)
     args.model_redirect_mappings = joblib.load(args.model_redirects_file)
     args.link_redirect_mappings = joblib.load(args.link_redirects_file)
-
-    if args.create_cache:
-        load_and_cache_examples(args, evaluate=False)
-        load_and_cache_examples(args, evaluate=True)
-        return
 
     if args.do_train:
         model = LukeForReadingComprehension(args)
@@ -141,7 +135,7 @@ def run(common_args, **task_args):
             result = {k + "_" + str(global_step) if global_step else k: v for k, v in result.items()}
             results.update(result)
 
-    print(results)
+    logger.info("Results: %s", json.dumps(results, indent=2, sort_keys=True))
     args.experiment.log_metrics(results)
     with open(os.path.join(args.output_dir, "results.json"), "w") as f:
         json.dump(results, f)
