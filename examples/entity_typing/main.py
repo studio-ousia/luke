@@ -53,7 +53,7 @@ def run(common_args, **task_args):
     args.model_config.entity_vocab_size = 2
     args.model_weights["entity_embeddings.entity_embeddings.weight"] = torch.cat([entity_emb[:1], mask_emb])
 
-    train_dataloader, _, features = load_and_cache_examples(args, fold="train")
+    train_dataloader, _, features, _ = load_and_cache_examples(args, fold="train")
     num_labels = len(features[0].labels)
 
     results = {}
@@ -108,9 +108,10 @@ def run(common_args, **task_args):
         model.to(args.device)
 
         for eval_set in ("dev", "test"):
-            results.update({f"{eval_set}_{k}": v for k, v in evaluate(args, model, fold=eval_set).items()})
+            output_file = os.path.join(args.output_dir, f"{eval_set}_predictions.jsonl")
+            results.update({f"{eval_set}_{k}": v for k, v in evaluate(args, model, eval_set, output_file).items()})
 
-    print(results)
+    logger.info("Results: %s", json.dumps(results, indent=2, sort_keys=True))
     args.experiment.log_metrics(results)
     with open(os.path.join(args.output_dir, "results.json"), "w") as f:
         json.dump(results, f)
@@ -118,8 +119,8 @@ def run(common_args, **task_args):
     return results
 
 
-def evaluate(args, model, fold="dev"):
-    dataloader, _, _ = load_and_cache_examples(args, fold=fold)
+def evaluate(args, model, fold="dev", output_file=None):
+    dataloader, _, _, label_list = load_and_cache_examples(args, fold=fold)
     model.eval()
 
     all_logits = []
@@ -140,6 +141,15 @@ def evaluate(args, model, fold="dev"):
     for logits, labels in zip(all_logits, all_labels):
         all_predicted_indexes.append([i for i, v in enumerate(logits) if v > 0])
         all_label_indexes.append([i for i, v in enumerate(labels) if v > 0])
+
+    if output_file:
+        with open(output_file, "w") as f:
+            for predicted_indexes, label_indexes in zip(all_predicted_indexes, all_label_indexes):
+                data = dict(
+                    predictions=[label_list[ind] for ind in predicted_indexes],
+                    labels=[label_list[ind] for ind in label_indexes],
+                )
+                f.write(json.dumps(data) + "\n")
 
     num_predicted_labels = 0
     num_gold_labels = 0
@@ -221,4 +231,4 @@ def load_and_cache_examples(args, fold="train"):
             sampler = DistributedSampler(features)
         dataloader = DataLoader(features, sampler=sampler, batch_size=args.train_batch_size, collate_fn=collate_fn)
 
-    return dataloader, examples, features
+    return dataloader, examples, features, label_list
