@@ -56,7 +56,7 @@ class EntityDisambiguationDataset(object):
         valid_titles = None
         if wikipedia_titles_file:
             with open(wikipedia_titles_file) as f:
-                valid_titles = frozenset([l.rstrip() for l in f])
+                valid_titles = frozenset([t.rstrip() for t in f])
 
         redirects = {}
         if wikipedia_redirects_file:
@@ -159,7 +159,7 @@ class InputFeatures(object):
 
 def load_person_names(input_file):
     with open(input_file) as f:
-        return [l.strip() for l in f]
+        return [t.strip() for t in f]
 
 
 def load_documents(csv_path, conll_path, person_names):
