@@ -4,7 +4,7 @@ import os
 from tqdm import tqdm
 from transformers.tokenization_roberta import RobertaTokenizer
 
-ENTITY_TOKEN = '[ENTITY]'
+ENTITY_TOKEN = "[ENTITY]"
 
 
 class InputExample(object):
@@ -16,8 +16,17 @@ class InputExample(object):
 
 
 class InputFeatures(object):
-    def __init__(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                 entity_segment_ids, entity_attention_mask, labels):
+    def __init__(
+        self,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+        labels,
+    ):
         self.word_ids = word_ids
         self.word_segment_ids = word_segment_ids
         self.word_attention_mask = word_attention_mask
@@ -47,23 +56,25 @@ class DatasetProcessor(object):
     def _create_examples(self, data_dir, set_type):
         with open(os.path.join(data_dir, set_type + ".json"), "r") as f:
             data = json.load(f)
-        return [InputExample(i, item['sent'], (item['start'], item['end']), item['labels'])
-                for i, item in enumerate(data)]
+        return [
+            InputExample(i, item["sent"], (item["start"], item["end"]), item["labels"]) for i, item in enumerate(data)
+        ]
 
 
 def convert_examples_to_features(examples, label_list, tokenizer, max_mention_length):
     label_map = {label: i for i, label in enumerate(label_list)}
 
     conv_tables = (
-        ('-LRB-', '('),
-        ('-LCB-', '('),
-        ('-LSB-', '('),
-        ('-RRB-', ')'),
-        ('-RCB-', ')'),
-        ('-RSB-', ')'),
+        ("-LRB-", "("),
+        ("-LCB-", "("),
+        ("-LSB-", "("),
+        ("-RRB-", ")"),
+        ("-RCB-", ")"),
+        ("-RSB-", ")"),
     )
     features = []
     for example in tqdm(examples):
+
         def preprocess_and_tokenize(text, start, end=None):
             target_text = text[start:end]
             for a, b in conv_tables:
@@ -101,15 +112,17 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_mention_le
         for label in example.labels:
             labels[label_map[label]] = 1
 
-        features.append(InputFeatures(
-            word_ids=word_ids,
-            word_segment_ids=word_segment_ids,
-            word_attention_mask=word_attention_mask,
-            entity_ids=entity_ids,
-            entity_position_ids=entity_position_ids,
-            entity_segment_ids=entity_segment_ids,
-            entity_attention_mask=entity_attention_mask,
-            labels=labels,
-        ))
+        features.append(
+            InputFeatures(
+                word_ids=word_ids,
+                word_segment_ids=word_segment_ids,
+                word_attention_mask=word_attention_mask,
+                entity_ids=entity_ids,
+                entity_position_ids=entity_position_ids,
+                entity_segment_ids=entity_segment_ids,
+                entity_attention_mask=entity_attention_mask,
+                labels=labels,
+            )
+        )
 
     return features

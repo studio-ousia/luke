@@ -10,26 +10,26 @@ from tqdm import tqdm
 from transformers.tokenization_bert import BasicTokenizer
 from wikipedia2vec.dump_db import DumpDB
 
-SEP_CHAR = '\u2581'
-REP_CHAR = '_'
+SEP_CHAR = "\u2581"
+REP_CHAR = "_"
 
 logger = logging.getLogger(__name__)
 
 
-@click.group(name='mention-db')
+@click.group(name="mention-db")
 def cli():
     pass
 
 
 @cli.command()
-@click.argument('dump_db_file', type=click.Path(exists=True))
-@click.argument('out_file', type=click.Path())
-@click.option('--min-link-prob', default=0.01)
-@click.option('--max-candidate-size', default=100)
-@click.option('--min-link-count', default=1)
-@click.option('--max-mention-length', default=20)
-@click.option('--pool-size', default=multiprocessing.cpu_count())
-@click.option('--chunk-size', default=100)
+@click.argument("dump_db_file", type=click.Path(exists=True))
+@click.argument("out_file", type=click.Path())
+@click.option("--min-link-prob", default=0.01)
+@click.option("--max-candidate-size", default=100)
+@click.option("--min-link-count", default=1)
+@click.option("--max-mention-length", default=20)
+@click.option("--pool-size", default=multiprocessing.cpu_count())
+@click.option("--chunk-size", default=100)
 def build_from_wikipedia(dump_db_file, **kwargs):
     dump_db = DumpDB(dump_db_file)
     tokenizer = BasicTokenizer(do_lower_case=False)
@@ -38,11 +38,11 @@ def build_from_wikipedia(dump_db_file, **kwargs):
 
 
 @cli.command()
-@click.argument('p_e_m_file', type=click.Path(exists=True))
-@click.argument('dump_db_file', type=click.Path(exists=True))
-@click.argument('wiki_mention_db_file', type=click.Path(exists=True))
-@click.argument('out_file', type=click.Path())
-@click.option('--max-mention-length', default=20)
+@click.argument("p_e_m_file", type=click.Path(exists=True))
+@click.argument("dump_db_file", type=click.Path(exists=True))
+@click.argument("wiki_mention_db_file", type=click.Path(exists=True))
+@click.argument("out_file", type=click.Path())
+@click.option("--max-mention-length", default=20)
 def build_from_p_e_m_file(p_e_m_file, dump_db_file, wiki_mention_db_file, **kwargs):
     dump_db = DumpDB(dump_db_file)
     tokenizer = BasicTokenizer(do_lower_case=False)
@@ -52,7 +52,7 @@ def build_from_p_e_m_file(p_e_m_file, dump_db_file, wiki_mention_db_file, **kwar
 
 
 class Mention(object):
-    __slots__ = ('title', 'text', 'start', 'end', 'link_count', 'total_link_count', 'doc_count')
+    __slots__ = ("title", "text", "start", "end", "link_count", "total_link_count", "doc_count")
 
     def __init__(self, title, text, start, end, link_count, total_link_count, doc_count):
         self.title = title
@@ -82,11 +82,11 @@ class Mention(object):
             return 0.0
 
     def __repr__(self):
-        return f'<Mention {self.text} -> {self.title}>'
+        return f"<Mention {self.text} -> {self.title}>"
 
 
 class BertLowercaseNormalizer(object):
-    def __init__(self, never_lowercase=('[UNK]', '[SEP]', '[PAD]', '[CLS]', '[MASK]')):
+    def __init__(self, never_lowercase=("[UNK]", "[SEP]", "[PAD]", "[CLS]", "[MASK]")):
         self._tokenizer = BasicTokenizer()
         self._never_lowercase = frozenset(never_lowercase)
 
@@ -106,12 +106,12 @@ class MentionDB(object):
         self.mention_db_file = mention_db_file
 
         data = joblib.load(mention_db_file)
-        self._title_trie = data['title_trie']
-        self._mention_trie = data['mention_trie']
-        self._data_trie = data['data_trie']
-        self._tokenizer = data['tokenizer']
-        self._normalizer = data['normalizer']
-        self._max_mention_length = data['max_mention_length']
+        self._title_trie = data["title_trie"]
+        self._mention_trie = data["mention_trie"]
+        self._data_trie = data["data_trie"]
+        self._tokenizer = data["tokenizer"]
+        self._normalizer = data["normalizer"]
+        self._max_mention_length = data["max_mention_length"]
 
     def __reduce__(self):
         return (self.__class__, (self.mention_db_file,))
@@ -124,46 +124,65 @@ class MentionDB(object):
         tokens = [self._normalizer.normalize(t.replace(SEP_CHAR, REP_CHAR)) for t in tokens]
         name = SEP_CHAR.join(tokens)
         try:
-            return [Mention(self._title_trie.restore_key(args[0]), name.replace(SEP_CHAR, ' '), None, None, *args[1:])
-                    for args in self._data_trie[name]]
+            return [
+                Mention(self._title_trie.restore_key(args[0]), name.replace(SEP_CHAR, " "), None, None, *args[1:])
+                for args in self._data_trie[name]
+            ]
         except KeyError:
             return []
 
     def save(self, out_file):
-        joblib.dump(dict(title_trie=self._title_trie,
-                         mention_trie=self._mention_trie,
-                         data_trie=self._data_trie,
-                         tokenizer=self._tokenizer,
-                         normalizer=self._normalizer,
-                         max_mention_length=self._max_mention_length), out_file)
+        joblib.dump(
+            dict(
+                title_trie=self._title_trie,
+                mention_trie=self._mention_trie,
+                data_trie=self._data_trie,
+                tokenizer=self._tokenizer,
+                normalizer=self._normalizer,
+                max_mention_length=self._max_mention_length,
+            ),
+            out_file,
+        )
 
     @staticmethod
-    def build_from_wikipedia(dump_db, tokenizer, normalizer, out_file, min_link_prob, max_candidate_size,
-                             min_link_count, max_mention_length, pool_size, chunk_size):
-        logger.info('Iteration 1/2: Extracting all entity names...')
+    def build_from_wikipedia(
+        dump_db,
+        tokenizer,
+        normalizer,
+        out_file,
+        min_link_prob,
+        max_candidate_size,
+        min_link_count,
+        max_mention_length,
+        pool_size,
+        chunk_size,
+    ):
+        logger.info("Iteration 1/2: Extracting all entity names...")
 
         name_dict = defaultdict(Counter)
         with tqdm(total=dump_db.page_size(), mininterval=0.5) as pbar:
             initargs = (dump_db, tokenizer, normalizer, max_mention_length)
             with closing(Pool(pool_size, initializer=MentionDB._initialize_worker, initargs=initargs)) as pool:
-                for ret in pool.imap_unordered(MentionDB._extract_name_entity_pairs, dump_db.titles(),
-                                               chunksize=chunk_size):
+                for ret in pool.imap_unordered(
+                    MentionDB._extract_name_entity_pairs, dump_db.titles(), chunksize=chunk_size
+                ):
                     for (name, title) in ret:
                         name_dict[name][title] += 1
                     pbar.update()
 
-        logger.info('Iteration 2/2: Counting occurrences of entity names...')
+        logger.info("Iteration 2/2: Counting occurrences of entity names...")
 
         with tqdm(total=dump_db.page_size(), mininterval=0.5) as pbar:
             name_doc_counter = Counter()
             initargs = (dump_db, tokenizer, normalizer, max_mention_length, marisa_trie.Trie(name_dict.keys()))
             with closing(Pool(pool_size, initializer=MentionDB._initialize_worker, initargs=initargs)) as pool:
-                for names in pool.imap_unordered(MentionDB._extract_name_occurrences, dump_db.titles(),
-                                                 chunksize=chunk_size):
+                for names in pool.imap_unordered(
+                    MentionDB._extract_name_occurrences, dump_db.titles(), chunksize=chunk_size
+                ):
                     name_doc_counter.update(names)
                     pbar.update()
 
-        logger.info('Building DB...')
+        logger.info("Building DB...")
 
         titles = frozenset([title for entity_counter in name_dict.values() for title in entity_counter.keys()])
         title_trie = marisa_trie.Trie(titles)
@@ -185,33 +204,39 @@ class MentionDB(object):
                         continue
                     yield (name, (title_trie[title], link_count, total_link_count, doc_count))
 
-        data_trie = marisa_trie.RecordTrie('<IIII', item_generator())
+        data_trie = marisa_trie.RecordTrie("<IIII", item_generator())
         mention_trie = marisa_trie.Trie(data_trie.keys())
 
-        joblib.dump(dict(title_trie=title_trie,
-                         mention_trie=mention_trie,
-                         data_trie=data_trie,
-                         tokenizer=tokenizer,
-                         normalizer=normalizer,
-                         max_mention_length=max_mention_length), out_file)
+        joblib.dump(
+            dict(
+                title_trie=title_trie,
+                mention_trie=mention_trie,
+                data_trie=data_trie,
+                tokenizer=tokenizer,
+                normalizer=normalizer,
+                max_mention_length=max_mention_length,
+            ),
+            out_file,
+        )
 
     @staticmethod
-    def build_from_p_e_m_file(p_e_m_file, dump_db, wiki_mention_db, tokenizer, normalizer, out_file,
-                              max_mention_length):
+    def build_from_p_e_m_file(
+        p_e_m_file, dump_db, wiki_mention_db, tokenizer, normalizer, out_file, max_mention_length
+    ):
         with open(p_e_m_file) as f:
             lines = f.readlines()
 
         name_dict = defaultdict(Counter)
 
         for line in tqdm(lines):
-            (text, total_count, *data) = line.rstrip().split('\t')
+            (text, total_count, *data) = line.rstrip().split("\t")
             total_count = int(total_count)
             text = text.replace(SEP_CHAR, REP_CHAR)
             tokens = tuple(normalizer.normalize(t) for t in tokenizer.tokenize(text))
             if len(tokens) <= max_mention_length:
                 for entry in data:
-                    (_, prob, *title_parts) = entry.split(',')
-                    title = ','.join(title_parts).replace('_', ' ')
+                    (_, prob, *title_parts) = entry.split(",")
+                    title = ",".join(title_parts).replace("_", " ")
                     title = dump_db.resolve_redirect(title)
                     count = int(float(prob) * total_count)
                     name_dict[tokens][title] += count
@@ -233,15 +258,20 @@ class MentionDB(object):
                 for (title, link_count) in entity_counter.most_common():
                     yield (name, (title_trie[title], link_count, total_link_count, doc_count))
 
-        data_trie = marisa_trie.RecordTrie('<IIII', item_generator())
+        data_trie = marisa_trie.RecordTrie("<IIII", item_generator())
         mention_trie = marisa_trie.Trie(data_trie.keys())
 
-        joblib.dump(dict(title_trie=title_trie,
-                         mention_trie=mention_trie,
-                         data_trie=data_trie,
-                         tokenizer=tokenizer,
-                         normalizer=normalizer,
-                         max_mention_length=max_mention_length), out_file)
+        joblib.dump(
+            dict(
+                title_trie=title_trie,
+                mention_trie=mention_trie,
+                data_trie=data_trie,
+                tokenizer=tokenizer,
+                normalizer=normalizer,
+                max_mention_length=max_mention_length,
+            ),
+            out_file,
+        )
 
     @staticmethod
     def _initialize_worker(dump_db, tokenizer, normalizer, max_mention_length, name_trie=None):
@@ -271,7 +301,7 @@ class MentionDB(object):
             text = paragraph.text.replace(SEP_CHAR, REP_CHAR)
             tokens = [_normalizer.normalize(t) for t in _tokenizer.tokenize(text)]
             for n in range(len(tokens)):
-                target_text = SEP_CHAR.join(tokens[n:n + _max_mention_length])
+                target_text = SEP_CHAR.join(tokens[n : n + _max_mention_length])
                 for name in _name_trie.prefixes(target_text):
                     if len(target_text) == len(name) or target_text[len(name)] == SEP_CHAR:
                         ret.append(name)

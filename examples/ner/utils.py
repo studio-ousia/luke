@@ -14,9 +14,21 @@ class InputExample(object):
 
 
 class InputFeatures(object):
-    def __init__(self, example_index, word_ids, word_segment_ids, word_attention_mask, entity_start_positions,
-                 entity_end_positions, entity_ids, entity_position_ids, entity_segment_ids, entity_attention_mask,
-                 original_entity_spans, labels):
+    def __init__(
+        self,
+        example_index,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_start_positions,
+        entity_end_positions,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+        original_entity_spans,
+        labels,
+    ):
         self.example_index = example_index
         self.word_ids = word_ids
         self.word_segment_ids = word_segment_ids
@@ -33,16 +45,16 @@ class InputFeatures(object):
 
 class CoNLLProcessor(object):
     def get_train_examples(self, data_dir):
-        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, 'eng.train')), 'train'))
+        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, "eng.train")), "train"))
 
     def get_dev_examples(self, data_dir):
-        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, 'eng.testa')), 'dev'))
+        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, "eng.testa")), "dev"))
 
     def get_test_examples(self, data_dir):
-        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, 'eng.testb')), 'test'))
+        return list(self._create_examples(self._read_tsv(os.path.join(data_dir, "eng.testb")), "test"))
 
     def get_labels(self):
-        return ['NIL', 'MISC', 'PER', 'ORG', 'LOC']
+        return ["NIL", "MISC", "PER", "ORG", "LOC"]
 
     def _read_tsv(self, input_file):
         data = []
@@ -52,7 +64,7 @@ class CoNLLProcessor(object):
         with open(input_file) as f:
             for line in f:
                 line = line.rstrip()
-                if line.startswith('-DOCSTART'):
+                if line.startswith("-DOCSTART"):
                     if words:
                         data.append((words, labels, sentence_boundaries))
                         assert sentence_boundaries[0] == 0
@@ -66,7 +78,7 @@ class CoNLLProcessor(object):
                     if not sentence_boundaries or len(words) != sentence_boundaries[-1]:
                         sentence_boundaries.append(len(words))
                 else:
-                    parts = line.split(' ')
+                    parts = line.split(" ")
                     words.append(parts[0])
                     labels.append(parts[-1])
 
@@ -76,18 +88,22 @@ class CoNLLProcessor(object):
         return data
 
     def _create_examples(self, data, fold):
-        return [InputExample(f'{fold}-{i}', *args) for i, args in enumerate(data)]
+        return [InputExample(f"{fold}-{i}", *args) for i, args in enumerate(data)]
 
 
-def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length, max_entity_length,
-                                 max_mention_length):
+def convert_examples_to_features(
+    examples, label_list, tokenizer, max_seq_length, max_entity_length, max_mention_length
+):
     max_num_subwords = max_seq_length - 2
     label_map = {label: i for i, label in enumerate(label_list)}
     features = []
 
     def tokenize_word(text):
-        if isinstance(tokenizer, RobertaTokenizer) and (text[0] != "'") and\
-            (len(text) != 1 or not is_punctuation(text)):
+        if (
+            isinstance(tokenizer, RobertaTokenizer)
+            and (text[0] != "'")
+            and (len(text) != 1 or not is_punctuation(text))
+        ):
             return tokenizer.tokenize(text, add_prefix_space=True)
         return tokenizer.tokenize(text)
 
@@ -104,19 +120,19 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
         start = None
         cur_type = None
         for n, label in enumerate(example.labels):
-            if label == 'O' or n in example.sentence_boundaries:
+            if label == "O" or n in example.sentence_boundaries:
                 if start is not None:
                     entity_labels[(token2subword[start], token2subword[n])] = label_map[cur_type]
                     start = None
                     cur_type = None
 
-            if label.startswith('B'):
+            if label.startswith("B"):
                 if start is not None:
                     entity_labels[(token2subword[start], token2subword[n])] = label_map[cur_type]
                 start = n
                 cur_type = label[2:]
 
-            elif label.startswith('I'):
+            elif label.startswith("I"):
                 if start is None:
                     start = n
                     cur_type = label[2:]
@@ -129,7 +145,7 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
             entity_labels[(token2subword[start], len(subwords))] = label_map[cur_type]
 
         for n in range(len(subword_sentence_boundaries) - 1):
-            doc_sent_start, doc_sent_end = subword_sentence_boundaries[n:n + 2]
+            doc_sent_start, doc_sent_end = subword_sentence_boundaries[n : n + 2]
 
             left_length = doc_sent_start
             right_length = len(subwords) - doc_sent_end
@@ -144,7 +160,7 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
                 left_context_length = min(left_length, max_num_subwords - right_context_length - sentence_length)
 
             doc_offset = doc_sent_start - left_context_length
-            target_tokens = subwords[doc_offset:doc_sent_end + right_context_length]
+            target_tokens = subwords[doc_offset : doc_sent_end + right_context_length]
 
             word_ids = tokenizer.convert_tokens_to_ids([tokenizer.cls_token] + target_tokens + [tokenizer.sep_token])
             word_attention_mask = [1] * (len(target_tokens) + 2)
@@ -181,8 +197,9 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
                     position_ids += [-1] * (max_mention_length - entity_end + entity_start)
                     entity_position_ids.append(position_ids)
 
-                    original_entity_spans.append((subword2token[doc_entity_start],
-                                                  subword2token[doc_entity_end - 1] + 1))
+                    original_entity_spans.append(
+                        (subword2token[doc_entity_start], subword2token[doc_entity_end - 1] + 1)
+                    )
 
                     labels.append(entity_labels.get((doc_entity_start, doc_entity_end), 0))
                     entity_labels.pop((doc_entity_start, doc_entity_end), None)
@@ -202,18 +219,22 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_seq_length
                 entity_size = math.ceil(len(entity_ids) / split_size)
                 start = i * entity_size
                 end = start + entity_size
-                features.append(InputFeatures(example_index=example_index,
-                                              word_ids=word_ids,
-                                              word_attention_mask=word_attention_mask,
-                                              word_segment_ids=word_segment_ids,
-                                              entity_start_positions=entity_start_positions[start:end],
-                                              entity_end_positions=entity_end_positions[start:end],
-                                              entity_ids=entity_ids[start:end],
-                                              entity_position_ids=entity_position_ids[start:end],
-                                              entity_segment_ids=entity_segment_ids[start:end],
-                                              entity_attention_mask=entity_attention_mask[start:end],
-                                              original_entity_spans=original_entity_spans[start:end],
-                                              labels=labels[start:end]))
+                features.append(
+                    InputFeatures(
+                        example_index=example_index,
+                        word_ids=word_ids,
+                        word_attention_mask=word_attention_mask,
+                        word_segment_ids=word_segment_ids,
+                        entity_start_positions=entity_start_positions[start:end],
+                        entity_end_positions=entity_end_positions[start:end],
+                        entity_ids=entity_ids[start:end],
+                        entity_position_ids=entity_position_ids[start:end],
+                        entity_segment_ids=entity_segment_ids[start:end],
+                        entity_attention_mask=entity_attention_mask[start:end],
+                        original_entity_spans=original_entity_spans[start:end],
+                        labels=labels[start:end],
+                    )
+                )
 
         assert not entity_labels
 
@@ -224,7 +245,7 @@ def is_punctuation(char):
     # obtained from:
     # https://github.com/huggingface/transformers/blob/5f25a5f367497278bf19c9994569db43f96d5278/transformers/tokenization_bert.py#L489
     cp = ord(char)
-    if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or(cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
+    if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
         return True
     cat = unicodedata.category(char)
     if cat.startswith("P"):

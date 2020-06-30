@@ -13,9 +13,25 @@ logger = logging.getLogger(__name__)
 
 
 class InputFeatures(object):
-    def __init__(self, unique_id, example_index, doc_span_index, tokens, mentions, token_to_orig_map,
-                 token_is_max_context, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                 entity_segment_ids, entity_attention_mask, start_positions, end_positions):
+    def __init__(
+        self,
+        unique_id,
+        example_index,
+        doc_span_index,
+        tokens,
+        mentions,
+        token_to_orig_map,
+        token_is_max_context,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+        start_positions,
+        end_positions,
+    ):
         self.unique_id = unique_id
         self.example_index = example_index
         self.doc_span_index = doc_span_index
@@ -35,12 +51,34 @@ class InputFeatures(object):
 
 
 def convert_examples_to_features(
-        examples, tokenizer, entity_vocab, wiki_link_db, model_redirect_mappings, link_redirect_mappings,
-        max_seq_length, max_mention_length, doc_stride, max_query_length, min_mention_link_prob, segment_b_id,
-        add_extra_sep_token, is_training, pool_size=multiprocessing.cpu_count(), chunk_size=30):
+    examples,
+    tokenizer,
+    entity_vocab,
+    wiki_link_db,
+    model_redirect_mappings,
+    link_redirect_mappings,
+    max_seq_length,
+    max_mention_length,
+    doc_stride,
+    max_query_length,
+    min_mention_link_prob,
+    segment_b_id,
+    add_extra_sep_token,
+    is_training,
+    pool_size=multiprocessing.cpu_count(),
+    chunk_size=30,
+):
     passage_encoder = PassageEncoder(
-        tokenizer, entity_vocab, wiki_link_db, model_redirect_mappings, link_redirect_mappings, max_mention_length,
-        min_mention_link_prob, add_extra_sep_token, segment_b_id)
+        tokenizer,
+        entity_vocab,
+        wiki_link_db,
+        model_redirect_mappings,
+        link_redirect_mappings,
+        max_mention_length,
+        min_mention_link_prob,
+        add_extra_sep_token,
+        segment_b_id,
+    )
 
     worker_params = Namespace(
         tokenizer=tokenizer,
@@ -65,8 +103,18 @@ def convert_examples_to_features(
 
 
 class PassageEncoder(object):
-    def __init__(self, tokenizer, entity_vocab, wiki_link_db, model_redirect_mappings, link_redirect_mappings,
-                 max_mention_length, min_mention_link_prob, add_extra_sep_token, segment_b_id):
+    def __init__(
+        self,
+        tokenizer,
+        entity_vocab,
+        wiki_link_db,
+        model_redirect_mappings,
+        link_redirect_mappings,
+        max_mention_length,
+        min_mention_link_prob,
+        add_extra_sep_token,
+        segment_b_id,
+    ):
         self._tokenizer = tokenizer
         self._entity_vocab = entity_vocab
         self._wiki_link_db = wiki_link_db
@@ -109,7 +157,7 @@ class PassageEncoder(object):
 
         except KeyError:
             mention_candidates = {}
-            logger.warning('Not found in the Dump DB: %s', title)
+            logger.warning("Not found in the Dump DB: %s", title)
 
         mentions_a = self._detect_mentions(tokens_a, mention_candidates)
         mentions_b = self._detect_mentions(tokens_b, mention_candidates)
@@ -131,10 +179,11 @@ class PassageEncoder(object):
             if self._add_extra_sep_token:
                 offset_b += 1
 
-            for i, (offset, (entity_id, start, end)) in enumerate(chain(zip(repeat(offset_a), mentions_a),
-                                                                        zip(repeat(offset_b), mentions_b))):
+            for i, (offset, (entity_id, start, end)) in enumerate(
+                chain(zip(repeat(offset_a), mentions_a), zip(repeat(offset_b), mentions_b))
+            ):
                 entity_ids[i] = entity_id
-                entity_position_ids[i][:end - start] = range(start + offset, end + offset)
+                entity_position_ids[i][: end - start] = range(start + offset, end + offset)
 
             if len(all_mentions) == 1:
                 entity_ids.append(0)
@@ -181,9 +230,9 @@ class PassageEncoder(object):
     def _is_subword(self, token):
         if isinstance(self._tokenizer, RobertaTokenizer):
             token = self._tokenizer.convert_tokens_to_string(token)
-            if not token.startswith(' ') and not self._is_punctuation(token[0]):
+            if not token.startswith(" ") and not self._is_punctuation(token[0]):
                 return True
-        elif token.startswith('##'):
+        elif token.startswith("##"):
             return True
 
         return False
@@ -193,7 +242,7 @@ class PassageEncoder(object):
         # obtained from:
         # https://github.com/huggingface/transformers/blob/5f25a5f367497278bf19c9994569db43f96d5278/transformers/tokenization_bert.py#L489
         cp = ord(char)
-        if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or(cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
+        if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
             return True
         cat = unicodedata.category(char)
         if cat.startswith("P"):
@@ -202,7 +251,7 @@ class PassageEncoder(object):
 
     @staticmethod
     def _normalize_mention(text):
-        return ' '.join(text.lower().split(' ')).strip()
+        return " ".join(text.lower().split(" ")).strip()
 
 
 params = None
@@ -220,7 +269,7 @@ def _process_example(args):
 
     query_tokens = _tokenize(example.question_text)
     if len(query_tokens) > params.max_query_length:
-        query_tokens = query_tokens[0:params.max_query_length]
+        query_tokens = query_tokens[0 : params.max_query_length]
 
     tok_to_orig_index = []
     orig_to_tok_index = []
@@ -271,8 +320,8 @@ def _process_example(args):
         if params.add_extra_sep_token:
             answer_offset += 1
 
-        for i in range(doc_span['length']):
-            split_token_index = doc_span['start'] + i
+        for i in range(doc_span["length"]):
+            split_token_index = doc_span["start"] + i
             token_to_orig_map[answer_offset + i] = tok_to_orig_index[split_token_index]
 
             is_max_context = _check_is_max_context(doc_spans, doc_span_index, split_token_index)
@@ -287,8 +336,8 @@ def _process_example(args):
                 start_positions = [0]
                 end_positions = [0]
             else:
-                doc_start = doc_span['start']
-                doc_end = doc_span['start'] + doc_span['length'] - 1
+                doc_start = doc_span["start"]
+                doc_end = doc_span["start"] + doc_span["length"] - 1
                 for tok_start, tok_end in zip(tok_start_positions, tok_end_positions):
                     if not (tok_start >= doc_start and tok_end <= doc_end):
                         continue
@@ -302,16 +351,18 @@ def _process_example(args):
                     start_positions = [0]
                     end_positions = [0]
 
-        features.append(InputFeatures(
-            unique_id=None,
-            example_index=example_index,
-            doc_span_index=doc_span_index,
-            token_to_orig_map=token_to_orig_map,
-            token_is_max_context=token_is_max_context,
-            start_positions=start_positions,
-            end_positions=end_positions,
-            **params.passage_encoder.encode(example.title, query_tokens, answer_tokens)
-        ))
+        features.append(
+            InputFeatures(
+                unique_id=None,
+                example_index=example_index,
+                doc_span_index=doc_span_index,
+                token_to_orig_map=token_to_orig_map,
+                token_is_max_context=token_is_max_context,
+                start_positions=start_positions,
+                end_positions=end_positions,
+                **params.passage_encoder.encode(example.title, query_tokens, answer_tokens)
+            )
+        )
 
     return features
 
@@ -332,7 +383,7 @@ def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer, orig_ans
 
     for new_start in range(input_start, input_end + 1):
         for new_end in range(input_end, new_start - 1, -1):
-            text_span = tokenizer.convert_tokens_to_string(doc_tokens[new_start:(new_end + 1)]).strip()
+            text_span = tokenizer.convert_tokens_to_string(doc_tokens[new_start : (new_end + 1)]).strip()
             if text_span == tok_answer_text:
                 return new_start, new_end
 
@@ -347,14 +398,14 @@ def _check_is_max_context(doc_spans, cur_span_index, position):
     best_score = None
     best_span_index = None
     for span_index, doc_span in enumerate(doc_spans):
-        end = doc_span['start'] + doc_span['length'] - 1
-        if position < doc_span['start']:
+        end = doc_span["start"] + doc_span["length"] - 1
+        if position < doc_span["start"]:
             continue
         if position > end:
             continue
-        num_left_context = position - doc_span['start']
+        num_left_context = position - doc_span["start"]
         num_right_context = end - position
-        score = min(num_left_context, num_right_context) + 0.01 * doc_span['length']
+        score = min(num_left_context, num_right_context) + 0.01 * doc_span["length"]
         if best_score is None or score > best_score:
             best_score = score
             best_span_index = span_index

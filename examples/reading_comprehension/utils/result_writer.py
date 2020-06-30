@@ -16,11 +16,23 @@ class Result(object):
         self.end_logits = end_logits
 
 
-def write_predictions(all_examples, all_features, all_results, n_best_size, max_answer_length, do_lower_case,
-                      output_prediction_file, output_nbest_file, output_null_log_odds_file, verbose_logging,
-                      version_2_with_negative, null_score_diff_threshold, tokenizer):
-    logger.info('Writing predictions to: %s', output_prediction_file)
-    logger.info('Writing nbest to: %s', output_nbest_file)
+def write_predictions(
+    all_examples,
+    all_features,
+    all_results,
+    n_best_size,
+    max_answer_length,
+    do_lower_case,
+    output_prediction_file,
+    output_nbest_file,
+    output_null_log_odds_file,
+    verbose_logging,
+    version_2_with_negative,
+    null_score_diff_threshold,
+    tokenizer,
+):
+    logger.info("Writing predictions to: %s", output_prediction_file)
+    logger.info("Writing nbest to: %s", output_nbest_file)
 
     example_index_to_features = collections.defaultdict(list)
     for feature in all_features:
@@ -31,7 +43,8 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
         unique_id_to_result[result.unique_id] = result
 
     _PrelimPrediction = collections.namedtuple(
-        "PrelimPrediction", ["feature_index", "start_index", "end_index", "start_logit", "end_logit"])
+        "PrelimPrediction", ["feature_index", "start_index", "end_index", "start_logit", "end_logit"]
+    )
 
     all_predictions = collections.OrderedDict()
     all_nbest_json = collections.OrderedDict()
@@ -84,7 +97,9 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
                             start_index=start_index,
                             end_index=end_index,
                             start_logit=result.start_logits[start_index],
-                            end_logit=result.end_logits[end_index]))
+                            end_logit=result.end_logits[end_index],
+                        )
+                    )
         if version_2_with_negative:
             prelim_predictions.append(
                 _PrelimPrediction(
@@ -92,7 +107,9 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
                     start_index=0,
                     end_index=0,
                     start_logit=null_start_logit,
-                    end_logit=null_end_logit))
+                    end_logit=null_end_logit,
+                )
+            )
         prelim_predictions = sorted(prelim_predictions, key=lambda x: (x.start_logit + x.end_logit), reverse=True)
 
         _NbestPrediction = collections.namedtuple("NbestPrediction", ["text", "start_logit", "end_logit"])
@@ -104,7 +121,7 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
                 break
             feature = features[pred.feature_index]
             if pred.start_index > 0:  # this is a non-null prediction
-                tok_tokens = feature.tokens[pred.start_index:(pred.end_index + 1)]
+                tok_tokens = feature.tokens[pred.start_index : (pred.end_index + 1)]
                 tok_text = tokenizer.convert_tokens_to_string(tok_tokens)
                 if isinstance(tokenizer, RobertaTokenizer):
                     final_text = tokenizer.convert_tokens_to_string(tok_tokens).strip()
@@ -112,7 +129,7 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
                 else:
                     orig_doc_start = feature.token_to_orig_map[pred.start_index]
                     orig_doc_end = feature.token_to_orig_map[pred.end_index]
-                    orig_tokens = example.doc_tokens[orig_doc_start:(orig_doc_end + 1)]
+                    orig_tokens = example.doc_tokens[orig_doc_start : (orig_doc_end + 1)]
 
                     tok_text = tok_text.strip()
                     tok_text = " ".join(tok_text.split())
@@ -171,7 +188,7 @@ def write_predictions(all_examples, all_features, all_results, n_best_size, max_
             all_predictions[example.qas_id] = nbest_json[0]["text"]
         else:
             # predict "" iff the null score - the score of best non-null > threshold
-            score_diff = score_null - best_non_null_entry.start_logit -  best_non_null_entry.end_logit
+            score_diff = score_null - best_non_null_entry.start_logit - best_non_null_entry.end_logit
             scores_diff_json[example.qas_id] = score_diff
             if score_diff > null_score_diff_threshold:
                 all_predictions[example.qas_id] = ""
@@ -255,7 +272,7 @@ def get_final_text(pred_text, orig_text, do_lower_case, verbose_logging=False):
             logger.info("Couldn't map end position")
         return orig_text
 
-    return orig_text[orig_start_position:(orig_end_position + 1)]
+    return orig_text[orig_start_position : (orig_end_position + 1)]
 
 
 def _get_best_indexes(logits, n_best_size):
