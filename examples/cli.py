@@ -67,7 +67,6 @@ def cli(ctx, **kwargs):
                 raise subprocess.CalledProcessError(returncode=process.returncode, cmd=cmd)
 
         sys.exit(0)
-
     else:
         if args.local_rank not in (-1, 0):
             logging.basicConfig(format=LOG_FORMAT, level=logging.WARNING)
@@ -81,7 +80,9 @@ def cli(ctx, **kwargs):
         # NOTE: ctx.obj is documented here: http://click.palletsprojects.com/en/7.x/api/#click.Context.obj
         ctx.obj = dict(local_rank=args.local_rank, output_dir=args.output_dir)
 
-        if args.local_rank == -1:
+        if args.num_gpus == 0:
+            ctx.obj["device"] = torch.device("cpu")
+        elif args.local_rank == -1:
             ctx.obj["device"] = torch.device("cuda")
         else:
             torch.cuda.set_device(args.local_rank)
@@ -129,6 +130,9 @@ cli.add_command(mention_db_cli)
 from .entity_span_qa.main import cli as entity_span_qa_cli
 
 cli.add_command(entity_span_qa_cli)
+from .document_classification.main import cli as document_classification_cli
+
+cli.add_command(document_classification_cli)
 
 
 if __name__ == "__main__":
