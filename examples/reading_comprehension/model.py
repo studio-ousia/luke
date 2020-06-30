@@ -1,23 +1,39 @@
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss
 
-from ..word_entity_model import LukeWordEntityAttentionModel
+from luke.model import LukeEntityAwareAttentionModel
 
 
-class LukeForReadingComprehension(LukeWordEntityAttentionModel):
+class LukeForReadingComprehension(LukeEntityAwareAttentionModel):
     def __init__(self, args):
-        super(LukeForReadingComprehension, self).__init__(args)
+        super(LukeForReadingComprehension, self).__init__(args.model_config)
 
         self.qa_outputs = nn.Linear(self.config.hidden_size, 2)
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                entity_segment_ids, entity_attention_mask, start_positions=None, end_positions=None):
+    def forward(
+        self,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+        start_positions=None,
+        end_positions=None,
+    ):
         encoder_outputs = super(LukeForReadingComprehension, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids, entity_segment_ids,
-            entity_attention_mask)
+            word_ids,
+            word_segment_ids,
+            word_attention_mask,
+            entity_ids,
+            entity_position_ids,
+            entity_segment_ids,
+            entity_attention_mask,
+        )
 
-        word_hidden_states = encoder_outputs[0][:, :word_ids.size(1), :]
+        word_hidden_states = encoder_outputs[0][:, : word_ids.size(1), :]
         logits = self.qa_outputs(word_hidden_states)
         start_logits, end_logits = logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1)

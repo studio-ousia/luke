@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..word_entity_model import LukeWordEntityAttentionModel
+from luke.model import LukeEntityAwareAttentionModel
 
 
-class LukeForEntitySpanQA(LukeWordEntityAttentionModel):
+class LukeForEntitySpanQA(LukeEntityAwareAttentionModel):
     def __init__(self, args):
-        super(LukeForEntitySpanQA, self).__init__(args)
+        super(LukeForEntitySpanQA, self).__init__(args.model_config)
         self.args = args
 
         self.dropout = nn.Dropout(args.model_config.hidden_dropout_prob)
@@ -15,11 +15,26 @@ class LukeForEntitySpanQA(LukeWordEntityAttentionModel):
 
         self.apply(self.init_weights)
 
-    def forward(self, word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids,
-                entity_segment_ids, entity_attention_mask, labels=None):
+    def forward(
+        self,
+        word_ids,
+        word_segment_ids,
+        word_attention_mask,
+        entity_ids,
+        entity_position_ids,
+        entity_segment_ids,
+        entity_attention_mask,
+        labels=None,
+    ):
         encoder_outputs = super(LukeForEntitySpanQA, self).forward(
-            word_ids, word_segment_ids, word_attention_mask, entity_ids, entity_position_ids, entity_segment_ids,
-            entity_attention_mask)
+            word_ids,
+            word_segment_ids,
+            word_attention_mask,
+            entity_ids,
+            entity_position_ids,
+            entity_segment_ids,
+            entity_attention_mask,
+        )
 
         entity_hidden_states = encoder_outputs[1]
         doc_entity_emb = entity_hidden_states[:, 1:, :]
