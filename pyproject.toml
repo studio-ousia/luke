@@ -10,17 +10,17 @@ Click = "*"
 joblib = "*"
 marisa-trie = "*"
 numpy = "*"
-sentencepiece = "0.1.91"
-tensorflow = "1.15.3"
-torch = "1.5.0"
-transformers = "2.11.0"
+sentencepiece = "*"
+tensorflow = "*"
+torch = "*"
+transformers = "*"
 tqdm = "*"
 ujson = "*"
 wikipedia2vec = "*"
 comet-ml = { version = "*", optional = true }
 seqeval = { version = "*", optional = true }
-pyjnius = {version = "1.3.0", optional = true}
-pyicu = {version = "^2.5", optional = true}
+pyjnius = {version = "*", optional = true}
+pyicu = {version = "*", optional = true}
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
