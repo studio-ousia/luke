@@ -109,9 +109,10 @@ def run(common_args, **task_args):
         model.to(args.device)
 
         for eval_set in ("dev", "test"):
-            results.update({f"{eval_set}_{k}": v for k, v in evaluate(args, model, fold=eval_set).items()})
+            output_file = os.path.join(args.output_dir, f"{eval_set}_predictions.txt")
+            results.update({f"{eval_set}_{k}": v for k, v in evaluate(args, model, eval_set, output_file).items()})
 
-    print(results)
+    logger.info("Results: %s", json.dumps(results, indent=2, sort_keys=True))
     args.experiment.log_metrics(results)
     with open(os.path.join(args.output_dir, "results.json"), "w") as f:
         json.dump(results, f)
@@ -119,8 +120,8 @@ def run(common_args, **task_args):
     return results
 
 
-def evaluate(args, model, fold="dev"):
-    dataloader, _, _, _ = load_and_cache_examples(args, fold=fold)
+def evaluate(args, model, fold="dev", output_file=None):
+    dataloader, _, _, label_list = load_and_cache_examples(args, fold=fold)
     predictions = []
     labels = []
 
@@ -132,6 +133,11 @@ def evaluate(args, model, fold="dev"):
 
         predictions.extend(logits.detach().cpu().numpy().argmax(axis=1))
         labels.extend(batch["label"].to("cpu").tolist())
+
+    if output_file:
+        with open(output_file, "w") as f:
+            for prediction in predictions:
+                f.write(label_list[prediction] + "\n")
 
     num_predicted_labels = 0
     num_gold_labels = 0

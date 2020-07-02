@@ -90,7 +90,7 @@ def run(common_args, **task_args):
         results.update({f"dev_{k}": v for k, v in evaluate(args, model, "dev", dev_output_file).items()})
         results.update({f"test_{k}": v for k, v in evaluate(args, model, "test", test_output_file).items()})
 
-    print(results)
+    logger.info("Results: %s", json.dumps(results, indent=2, sort_keys=True))
     args.experiment.log_metrics(results)
     with open(os.path.join(args.output_dir, "results.json"), "w") as f:
         json.dump(results, f)

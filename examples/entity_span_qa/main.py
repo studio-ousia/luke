@@ -124,9 +124,9 @@ def run(common_args, **task_args):
         model.to(args.device)
 
         output_file = os.path.join(args.output_dir, "predictions.json")
-        results.update({f"dev_{k}": v for k, v in evaluate(args, model, fold="dev", out_file=output_file).items()})
+        results.update({f"dev_{k}": v for k, v in evaluate(args, model, fold="dev", output_file=output_file).items()})
 
-    print(results)
+    logger.info("Results: %s", json.dumps(results, indent=2, sort_keys=True))
     args.experiment.log_metrics(results)
     with open(os.path.join(args.output_dir, "results.json"), "w") as f:
         json.dump(results, f)
@@ -134,7 +134,7 @@ def run(common_args, **task_args):
     return results
 
 
-def evaluate(args, model, fold="dev", out_file=None):
+def evaluate(args, model, fold="dev", output_file=None):
     dataloader, examples, features, processor = load_and_cache_examples(args, fold)
     doc_predictions = defaultdict(list)
     for batch in tqdm(dataloader, desc="Eval"):
@@ -151,8 +151,8 @@ def evaluate(args, model, fold="dev", out_file=None):
             doc_predictions[example_id].append((max_logit, entity))
 
     predictions = {k: sorted(v, key=lambda o: o[0])[-1][1]["text"] for k, v in doc_predictions.items()}
-    if out_file:
-        with open(out_file, "w") as f:
+    if output_file:
+        with open(output_file, "w") as f:
             json.dump(predictions, f)
 
     with open(os.path.join(args.data_dir, processor.dev_file)) as f:
