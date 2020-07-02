@@ -72,7 +72,7 @@ def generate_redirect_file(dump_db_file, out_file, compress):
 @click.option("--do-train/--no-train", default=True)
 @click.option("--train-batch-size", default=2)
 @click.option("--do-eval/--no-eval", default=True)
-@click.option("--eval-batch-size", default=128)
+@click.option("--eval-batch-size", default=32)
 @click.option("--num-train-epochs", default=2)
 @click.option("--no-entity", is_flag=True, default=False)
 @click.option("--eval-all-checkpoints/--no-eval-checkpoints", default=False)
