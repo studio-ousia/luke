@@ -6,7 +6,7 @@ def commet_logger_args(func):
     @functools.wraps(func)
     @click.option("--comet-project-name")
     @click.option("--comet-offline", is_flag=True)
-    @click.option("--comet-offline-dir", type=click.Path(exists=True), default="comet_experiments")
+    @click.option("--comet-offline-dir", type=click.Path(exists=True), default=".")
     @click.option("--comet-auto-metric-logging", is_flag=True)
     @click.option("--comet-auto-output-logging", is_flag=True)
     @click.option("--comet-log-code", is_flag=True)
