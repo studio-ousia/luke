@@ -39,7 +39,7 @@ def cli():
 )
 @click.option("--do-train/--no-train", default=False)
 @click.option("--do-eval/--no-eval", default=True)
-@click.option("--num-train-epochs", default=2)
+@click.option("--num-train-epochs", default=10)
 @click.option("--train-batch-size", default=2)
 @click.option("--max-seq-length", default=512)
 @click.option("--max-candidate-length", default=30)
