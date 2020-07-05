@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 import tarfile
 import tempfile
 from typing import Dict
@@ -13,14 +14,26 @@ from .word_tokenizer import AutoTokenizer
 
 MODEL_FILE = "pytorch_model.bin"
 METADATA_FILE = "metadata.json"
-ENTITY_VOCAB_FILE = "entity_vocab.tsv"
-MULTILINGUAL_ENTITY_VOCAB_FILE = "multilingual_entity_vocab.json"
+TSV_ENTITY_VOCAB_FILE = "entity_vocab.tsv"
+ENTITY_VOCAB_FILE = "entity_vocab.json"
 
 
 def get_language_from_dataset_dir(dataset_dir: str) -> str:
     with open(os.path.join(dataset_dir, METADATA_FILE), "r") as f:
         language = json.load(f)["language"]
     return language
+
+
+def get_vocab_file_path(directory: str) -> str:
+    default_entity_vocab_file_path = os.path.join(directory, ENTITY_VOCAB_FILE)
+    tsv_entity_vocab_file_path = os.path.join(directory, TSV_ENTITY_VOCAB_FILE)
+
+    if os.path.exists(tsv_entity_vocab_file_path):
+        return tsv_entity_vocab_file_path
+    elif os.path.exists(default_entity_vocab_file_path):
+        return default_entity_vocab_file_path
+    else:
+        raise FileNotFoundError(f"{directory} does not contain any vocab files.")
 
 
 @click.command()
@@ -41,13 +54,8 @@ def create_model_archive(model_file: str, out_file: str, compress: str):
     with tarfile.open(out_file, mode="w:" + compress) as archive_file:
         archive_file.add(model_file, arcname=MODEL_FILE)
 
-        entity_vocab_file_path = os.path.join(model_dir, ENTITY_VOCAB_FILE)
-        if os.path.exists(entity_vocab_file_path):
-            archive_file.add(entity_vocab_file_path, arcname=ENTITY_VOCAB_FILE)
-        else:
-            archive_file.add(
-                os.path.join(model_dir, MULTILINGUAL_ENTITY_VOCAB_FILE), arcname=MULTILINGUAL_ENTITY_VOCAB_FILE
-            )
+        vocab_file_path = get_vocab_file_path(model_dir)
+        archive_file.add(vocab_file_path, arcname=Path(vocab_file_path).name)
 
         with tempfile.NamedTemporaryFile(mode="w") as metadata_file:
             json.dump(model_data, metadata_file, indent=2)
@@ -103,6 +111,6 @@ class ModelArchive(object):
         state_dict = torch.load(os.path.join(path, model_file), map_location="cpu")
         with open(os.path.join(path, METADATA_FILE)) as metadata_file:
             metadata = json.load(metadata_file)
-        entity_vocab = EntityVocab(os.path.join(path, ENTITY_VOCAB_FILE))
+        entity_vocab = EntityVocab(os.path.join(path, TSV_ENTITY_VOCAB_FILE))
 
         return ModelArchive(state_dict, metadata, entity_vocab)
