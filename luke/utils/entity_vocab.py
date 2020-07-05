@@ -87,6 +87,12 @@ class EntityVocab(object):
     def __len__(self):
         return len(self.inv_vocab)
 
+    def __contains__(self, item: str):
+        return self.contains(item, language=None)
+
+    def __getitem__(self, key: str):
+        return self.get_id(key, language=None)
+
     def __iter__(self):
         return iter(self.vocab)
 
