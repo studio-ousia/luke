@@ -18,7 +18,7 @@ from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab
 from luke.utils.sentence_tokenizer import SentenceTokenizer
-from luke.utils.model_utils import METADATA_FILE, ENTITY_VOCAB_FILE, get_vocab_file_path
+from luke.utils.model_utils import METADATA_FILE, ENTITY_VOCAB_FILE, get_entity_vocab_file_path
 from luke.utils.word_tokenizer import AutoTokenizer
 
 DATASET_FILE = "dataset.tf"
@@ -79,6 +79,10 @@ class WikipediaPretrainingDataset(object):
         return self.metadata["max_mention_length"]
 
     @property
+    def language(self):
+        return self.metadata.get("language", None)
+
+    @property
     def tokenizer(self):
         tokenizer_class_name = self.metadata.get("tokenizer_class", "")
         if tokenizer_class_name == "XLMRobertaTokenizer":
@@ -90,7 +94,7 @@ class WikipediaPretrainingDataset(object):
 
     @property
     def entity_vocab(self):
-        vocab_file_path = get_vocab_file_path(self._dataset_dir)
+        vocab_file_path = get_entity_vocab_file_path(self._dataset_dir)
         return EntityVocab(vocab_file_path)
 
     def create_iterator(

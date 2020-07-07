@@ -11,7 +11,6 @@ from transformers.tokenization_roberta import RobertaTokenizer
 
 from luke.pretraining.dataset import WikipediaPretrainingDataset
 from luke.utils.entity_vocab import MASK_TOKEN
-from luke.utils.model_utils import get_language_from_dataset_dir
 
 logger = logging.getLogger(__name__)
 
@@ -115,8 +114,9 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         self._mask_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.mask_token)
         self._pad_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.pad_token)
 
-        language = get_language_from_dataset_dir(self._dataset_dir)
-        self._entity_mask_id = self._pretraining_dataset.entity_vocab.get_id(MASK_TOKEN, language)
+        self._entity_mask_id = self._pretraining_dataset.entity_vocab.get_id(
+            MASK_TOKEN, self._pretraining_dataset.language
+        )
 
         buf = []
         max_word_len = 1
