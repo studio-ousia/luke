@@ -18,13 +18,7 @@ TSV_ENTITY_VOCAB_FILE = "entity_vocab.tsv"
 ENTITY_VOCAB_FILE = "entity_vocab.json"
 
 
-def get_language_from_dataset_dir(dataset_dir: str) -> str:
-    with open(os.path.join(dataset_dir, METADATA_FILE), "r") as f:
-        language = json.load(f)["language"]
-    return language
-
-
-def get_vocab_file_path(directory: str) -> str:
+def get_entity_vocab_file_path(directory: str) -> str:
     default_entity_vocab_file_path = os.path.join(directory, ENTITY_VOCAB_FILE)
     tsv_entity_vocab_file_path = os.path.join(directory, TSV_ENTITY_VOCAB_FILE)
 
@@ -33,7 +27,7 @@ def get_vocab_file_path(directory: str) -> str:
     elif os.path.exists(default_entity_vocab_file_path):
         return default_entity_vocab_file_path
     else:
-        raise FileNotFoundError(f"{directory} does not contain any vocab files.")
+        raise FileNotFoundError(f"{directory} does not contain any entity vocab files.")
 
 
 @click.command()
@@ -54,7 +48,7 @@ def create_model_archive(model_file: str, out_file: str, compress: str):
     with tarfile.open(out_file, mode="w:" + compress) as archive_file:
         archive_file.add(model_file, arcname=MODEL_FILE)
 
-        vocab_file_path = get_vocab_file_path(model_dir)
+        vocab_file_path = get_entity_vocab_file_path(model_dir)
         archive_file.add(vocab_file_path, arcname=Path(vocab_file_path).name)
 
         with tempfile.NamedTemporaryFile(mode="w") as metadata_file:
@@ -111,6 +105,6 @@ class ModelArchive(object):
         state_dict = torch.load(os.path.join(path, model_file), map_location="cpu")
         with open(os.path.join(path, METADATA_FILE)) as metadata_file:
             metadata = json.load(metadata_file)
-        entity_vocab = EntityVocab(os.path.join(path, TSV_ENTITY_VOCAB_FILE))
+        entity_vocab = get_entity_vocab_file_path(path)
 
         return ModelArchive(state_dict, metadata, entity_vocab)
