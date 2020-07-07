@@ -180,9 +180,10 @@ class LukeModel(nn.Module):
     def _compute_extended_attention_mask(
         self, word_attention_mask: torch.LongTensor, entity_attention_mask: torch.LongTensor
     ):
+        attention_mask = word_attention_mask
         if entity_attention_mask is not None:
-            word_attention_mask = torch.cat([word_attention_mask, entity_attention_mask], dim=1)
-        extended_attention_mask = word_attention_mask.unsqueeze(1).unsqueeze(2)
+            attention_mask = torch.cat([attention_mask, entity_attention_mask], dim=1)
+        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 

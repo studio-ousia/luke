@@ -36,16 +36,6 @@ def build_entity_vocab(dump_db_file: str, white_list: List[TextIO], **kwargs):
     EntityVocab.build(dump_db, white_list=white_list, **kwargs)
 
 
-def is_tsv_vocab_file(vocab_file: str) -> bool:
-    with open(vocab_file, "r") as f:
-        line = f.readline().strip()
-        # Does the first line look like this?: "[PAD]	0"
-        if "\t" in line and len(line.split("\t")) == 2:
-            return True
-        else:
-            return False
-
-
 class EntityVocab(object):
     def __init__(self, vocab_file: str):
         self._vocab_file = vocab_file
@@ -54,7 +44,7 @@ class EntityVocab(object):
         self.counter: Dict[Entity, int] = {}
         self.inv_vocab: Dict[int, List[Entity]] = defaultdict(list)
 
-        if is_tsv_vocab_file(vocab_file):
+        if vocab_file.endswith(".tsv"):
             self._parse_tsv_vocab_file(vocab_file)
         else:
             self._parse_json_vocab_file(vocab_file)
@@ -105,11 +95,14 @@ class EntityVocab(object):
         except KeyError:
             return default
 
-    def get_title_by_id(self, id_: int) -> str:
-        return self.inv_vocab[id_]
+    def get_title_by_id(self, id_: int, language: str = None) -> str:
+        for entity in self.inv_vocab[id_]:
+            if entity.language == language:
+                return entity.title
 
-    def get_count_by_title(self, title: str) -> int:
-        return self.counter.get(title, 0)
+    def get_count_by_title(self, title: str, language: str = None) -> int:
+        entity = Entity(title, language)
+        return self.counter.get(entity, 0)
 
     def save(self, out_file: str):
         with open(self._vocab_file, "r") as src:
