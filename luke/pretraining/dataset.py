@@ -33,7 +33,6 @@ _max_mention_length = _min_sentence_length = _include_sentences_without_entities
 @click.argument("tokenizer_name")
 @click.argument("entity_vocab_file", type=click.Path(exists=True))
 @click.argument("output_dir", type=click.Path(file_okay=False))
-@click.option("--language", default=None)
 @click.option("--sentence-tokenizer", default="en")
 @click.option("--max-seq-length", default=512)
 @click.option("--max-entity-length", default=128)
@@ -45,13 +44,7 @@ _max_mention_length = _min_sentence_length = _include_sentences_without_entities
 @click.option("--chunk-size", default=100)
 @click.option("--max-num-documents", default=None, type=int)
 def build_wikipedia_pretraining_dataset(
-    dump_db_file: str,
-    tokenizer_name: str,
-    entity_vocab_file: str,
-    output_dir: str,
-    language: str,
-    sentence_tokenizer: str,
-    **kwargs
+    dump_db_file: str, tokenizer_name: str, entity_vocab_file: str, output_dir: str, sentence_tokenizer: str, **kwargs
 ):
     dump_db = DumpDB(dump_db_file)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
@@ -61,9 +54,7 @@ def build_wikipedia_pretraining_dataset(
         os.makedirs(output_dir)
 
     entity_vocab = EntityVocab(entity_vocab_file)
-    WikipediaPretrainingDataset.build(
-        dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, language, **kwargs
-    )
+    WikipediaPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
 
 
 class WikipediaPretrainingDataset(object):
@@ -151,7 +142,6 @@ class WikipediaPretrainingDataset(object):
         sentence_tokenizer: SentenceTokenizer,
         entity_vocab: EntityVocab,
         output_dir: str,
-        language: str,
         max_seq_length: int,
         max_entity_length: int,
         max_mention_length: int,
@@ -194,7 +184,6 @@ class WikipediaPretrainingDataset(object):
                     min_sentence_length,
                     include_sentences_without_entities,
                     include_unk_entities,
-                    language,
                 )
                 with closing(
                     Pool(pool_size, initializer=WikipediaPretrainingDataset._initialize_worker, initargs=initargs)
@@ -216,7 +205,7 @@ class WikipediaPretrainingDataset(object):
                     max_mention_length=max_mention_length,
                     min_sentence_length=min_sentence_length,
                     tokenizer_class=tokenizer.__class__.__name__,
-                    language=language,
+                    language=dump_db.language,
                 ),
                 metadata_file,
                 indent=2,
@@ -234,7 +223,6 @@ class WikipediaPretrainingDataset(object):
         min_sentence_length: int,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
-        language: str,
     ):
         global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length
         global _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
@@ -250,7 +238,7 @@ class WikipediaPretrainingDataset(object):
         _min_sentence_length = min_sentence_length
         _include_sentences_without_entities = include_sentences_without_entities
         _include_unk_entities = include_unk_entities
-        _language = language
+        _language = dump_db.language
 
     @staticmethod
     def _process_page(page_title: str):
