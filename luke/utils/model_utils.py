@@ -15,7 +15,7 @@ from .word_tokenizer import AutoTokenizer
 MODEL_FILE = "pytorch_model.bin"
 METADATA_FILE = "metadata.json"
 TSV_ENTITY_VOCAB_FILE = "entity_vocab.tsv"
-ENTITY_VOCAB_FILE = "entity_vocab.json"
+ENTITY_VOCAB_FILE = "entity_vocab.jsonl"
 
 
 def get_entity_vocab_file_path(directory: str) -> str:

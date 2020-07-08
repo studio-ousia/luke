@@ -17,6 +17,8 @@ PAD_TOKEN = "[PAD]"
 UNK_TOKEN = "[UNK]"
 MASK_TOKEN = "[MASK]"
 
+SPECIAL_TOKENS = {PAD_TOKEN, UNK_TOKEN, MASK_TOKEN}
+
 Entity = namedtuple("Entity", ["title", "language"])
 
 _dump_db = None  # global variable used in multiprocessing workers
@@ -47,7 +49,7 @@ class EntityVocab(object):
         if vocab_file.endswith(".tsv"):
             self._parse_tsv_vocab_file(vocab_file)
         else:
-            self._parse_json_vocab_file(vocab_file)
+            self._parse_jsonl_vocab_file(vocab_file)
 
     def _parse_tsv_vocab_file(self, vocab_file: str):
         with open(vocab_file, "r") as f:
@@ -58,14 +60,16 @@ class EntityVocab(object):
                 self.counter[entity] = int(count)
                 self.inv_vocab[index] = [entity]
 
-    def _parse_json_vocab_file(self, vocab_file: str):
-        entities_json = json.load(open(vocab_file, "r"))
-        for ent_id, record in enumerate(entities_json):
-            for title, language in record["entities"]:
+    def _parse_jsonl_vocab_file(self, vocab_file: str):
+        with open(vocab_file, "r") as f:
+            entities_json = [json.loads(line) for line in f]
+
+        for item in entities_json:
+            for title, language in item["entities"]:
                 entity = Entity(title, language)
-                self.vocab[entity] = ent_id
-                self.counter[entity] = record["count"]
-                self.inv_vocab[ent_id].append(entity)
+                self.vocab[entity] = item["id"]
+                self.counter[entity] = item["count"]
+                self.inv_vocab[item["id"]].append(entity)
 
     @property
     def size(self) -> int:
@@ -105,9 +109,12 @@ class EntityVocab(object):
         return self.counter.get(entity, 0)
 
     def save(self, out_file: str):
-        with open(self._vocab_file, "r") as src:
-            with open(out_file, "w") as dst:
-                dst.write(src.read())
+        with open(out_file, "w") as f:
+            for ent_id, entities in self.inv_vocab.items():
+                count = self.counter[entities[0]]
+                item = {"id": ent_id, "entities": [(e.title, e.language) for e in entities], "count": count}
+                json.dump(item, f)
+                f.write("\n")
 
     @staticmethod
     def build(
@@ -196,7 +203,7 @@ def build_multilingual_entity_vocab(
                 # e.g., "fr:Apple" -> IT corporation, "en:Apple" -> fruit
                 entity = Entity(title, lang)
                 multilingual_entities = {entity}
-                if title not in {PAD_TOKEN, UNK_TOKEN, MASK_TOKEN}:
+                if title not in SPECIAL_TOKENS:
                     aligned_entities = {Entity(t, ln) for t, ln in db.query(title, lang)}
                 else:
                     # for special tokens, we don't need to ask inter_wiki_db to get aligned entities
@@ -219,9 +226,13 @@ def build_multilingual_entity_vocab(
                 vocab[entity] = ent_id
                 inv_vocab[ent_id].add((entity.title, entity.language))  # Convert Entity to Tuple for json.dump
                 count_dict[ent_id] += count
-    json_dicts = [{"entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]} for ent_id in range(new_id)]
+    json_dicts = [
+        {"id": ent_id, "entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]} for ent_id in range(new_id)
+    ]
     json_dicts.sort(key=lambda x: -x["count"] if x["count"] != 0 else -math.inf)
     json_dicts = json_dicts[:vocab_size]
 
     with open(out_file, "w") as f:
-        json.dump(json_dicts, f, indent=4)
+        for item in json_dicts:
+            json.dump(item, f)
+            f.write("\n")
