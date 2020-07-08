@@ -105,6 +105,6 @@ class ModelArchive(object):
         state_dict = torch.load(os.path.join(path, model_file), map_location="cpu")
         with open(os.path.join(path, METADATA_FILE)) as metadata_file:
             metadata = json.load(metadata_file)
-        entity_vocab = get_entity_vocab_file_path(path)
+        entity_vocab = EntityVocab(get_entity_vocab_file_path(path))
 
         return ModelArchive(state_dict, metadata, entity_vocab)
