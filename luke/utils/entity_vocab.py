@@ -226,13 +226,11 @@ def build_multilingual_entity_vocab(
                 vocab[entity] = ent_id
                 inv_vocab[ent_id].add((entity.title, entity.language))  # Convert Entity to Tuple for json.dump
                 count_dict[ent_id] += count
-    json_dicts = [
-        {"id": ent_id, "entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]} for ent_id in range(new_id)
-    ]
+    json_dicts = [{"entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]} for ent_id in range(new_id)]
     json_dicts.sort(key=lambda x: -x["count"] if x["count"] != 0 else -math.inf)
     json_dicts = json_dicts[:vocab_size]
 
     with open(out_file, "w") as f:
-        for item in json_dicts:
-            json.dump(item, f)
+        for ent_id, item in enumerate(json_dicts):
+            json.dump({"id": ent_id, **item}, f)
             f.write("\n")
