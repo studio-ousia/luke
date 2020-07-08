@@ -130,10 +130,6 @@ cli.add_command(mention_db_cli)
 from .entity_span_qa.main import cli as entity_span_qa_cli
 
 cli.add_command(entity_span_qa_cli)
-from .document_classification.main import cli as document_classification_cli
-
-cli.add_command(document_classification_cli)
-
 
 if __name__ == "__main__":
     cli()
