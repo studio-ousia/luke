@@ -1,5 +1,6 @@
 import os
 import pytest
+import tempfile
 
 from luke.utils.entity_vocab import EntityVocab
 
@@ -8,7 +9,7 @@ ENTITY_VOCAB_FIXTURE_FILE = os.path.join(
 )
 
 MULTILINGUAL_ENTITY_VOCAB_FIXTURE_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "../fixtures/en_ja_multilingual_vocab_test.json"
+    os.path.dirname(os.path.abspath(__file__)), "../fixtures/en_ja_multilingual_vocab_test.jsonl"
 )
 
 
@@ -42,3 +43,19 @@ def test_multilingual_entity_vocab(multilingual_entity_vocab):
     assert multilingual_entity_vocab.get_id("フジテレビジョン", "ja") == 3
     assert multilingual_entity_vocab.get_title_by_id(3, "ja") == "フジテレビジョン"
     assert multilingual_entity_vocab.get_count_by_title("フジテレビジョン", "ja") == 142
+
+
+def test_save_and_load(multilingual_entity_vocab):
+    with tempfile.NamedTemporaryFile() as f:
+        multilingual_entity_vocab.save(f.name)
+        entity_vocab2 = EntityVocab(f.name)
+
+        assert len(multilingual_entity_vocab) == len(entity_vocab2)
+
+        # check if the two vocabs are identical after save and load
+        for ent_id in range(len(multilingual_entity_vocab)):
+            entities1 = multilingual_entity_vocab.inv_vocab[ent_id]
+            entities2 = entity_vocab2.inv_vocab[ent_id]
+            assert set(entities1) == set(entities2)
+            assert multilingual_entity_vocab.counter[entities1[0]] == entity_vocab2.counter[entities2[0]]
+            assert multilingual_entity_vocab.vocab[entities1[0]] == entity_vocab2.vocab[entities2[0]]
