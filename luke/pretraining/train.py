@@ -23,9 +23,9 @@ from transformers import (
 from luke.model import LukeConfig
 from luke.optimization import LukeAdamW
 from luke.pretraining.batch_generator import LukePretrainingBatchGenerator, MultilingualBatchGenerator
-from luke.pretraining.dataset import MultilingualPretrainingDataset, WikipediaPretrainingDataset
+from luke.pretraining.dataset import WikipediaPretrainingDataset
 from luke.pretraining.model import LukePretrainingModel
-from luke.utils.model_utils import ENTITY_VOCAB_FILE, MULTILINGUAL_ENTITY_VOCAB_FILE
+from luke.utils.model_utils import ENTITY_VOCAB_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -169,20 +169,20 @@ def run_pretraining(args):
 
     if args.multilingual:
         dataset_dir_list = args.dataset_dir.split(",")
-        dataset = MultilingualPretrainingDataset(dataset_dir_list)
-        entity_vocab_file = MULTILINGUAL_ENTITY_VOCAB_FILE
+        dataset_list = [WikipediaPretrainingDataset(d) for d in dataset_dir_list]
     else:
-        dataset = WikipediaPretrainingDataset(args.dataset_dir)
-        entity_vocab_file = ENTITY_VOCAB_FILE
+        dataset_list = [WikipediaPretrainingDataset(args.dataset_dir)]
 
     bert_config = AutoConfig.from_pretrained(args.bert_model_name)
 
-    num_train_steps_per_epoch = math.ceil(len(dataset) / args.batch_size)
-    num_train_steps = math.ceil(len(dataset) / args.batch_size * args.num_epochs)
+    dataset_size = sum([len(d) for d in dataset_list])
+    num_train_steps_per_epoch = math.ceil(dataset_size / args.batch_size)
+    num_train_steps = math.ceil(dataset_size / args.batch_size * args.num_epochs)
     train_batch_size = int(args.batch_size / args.gradient_accumulation_steps / num_workers)
 
+    entity_vocab = dataset_list[0].entity_vocab
     config = LukeConfig(
-        entity_vocab_size=dataset.entity_vocab.size,
+        entity_vocab_size=entity_vocab.size,
         bert_model_name=args.bert_model_name,
         entity_emb_size=args.entity_emb_size,
         **bert_config.to_dict(),
@@ -207,8 +207,9 @@ def run_pretraining(args):
     )
 
     if args.multilingual:
+        data_size_list = [len(d) for d in dataset_list]
         batch_generator = MultilingualBatchGenerator(
-            dataset_dir_list, dataset.data_size_list, args.sampling_smoothing, **batch_generator_args,
+            dataset_dir_list, data_size_list, args.sampling_smoothing, **batch_generator_args,
         )
 
     else:
@@ -304,12 +305,12 @@ def run_pretraining(args):
     model.train()
 
     if args.local_rank == -1 or worker_index == 0:
-        dataset.entity_vocab.save(os.path.join(args.output_dir, entity_vocab_file))
+        entity_vocab.save(os.path.join(args.output_dir, ENTITY_VOCAB_FILE))
         metadata = dict(
             model_config=config.to_dict(),
-            max_seq_length=dataset.max_seq_length,
-            max_entity_length=dataset.max_entity_length,
-            max_mention_length=dataset.max_mention_length,
+            max_seq_length=dataset_list[0].max_seq_length,
+            max_entity_length=dataset_list[0].max_entity_length,
+            max_mention_length=dataset_list[0].max_mention_length,
             arguments=vars(args),
         )
         with open(os.path.join(args.output_dir, "metadata.json"), "w") as metadata_file:

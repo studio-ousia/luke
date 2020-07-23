@@ -113,7 +113,10 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         self._sep_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.sep_token)
         self._mask_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.mask_token)
         self._pad_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.pad_token)
-        self._entity_mask_id = self._pretraining_dataset.entity_vocab[MASK_TOKEN]
+
+        self._entity_mask_id = self._pretraining_dataset.entity_vocab.get_id(
+            MASK_TOKEN, self._pretraining_dataset.language
+        )
 
         buf = []
         max_word_len = 1

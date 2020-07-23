@@ -1,0 +1,6 @@
+{"id": 0, "entities": [["[PAD]", "en"], ["[PAD]", "ja"]], "count": 0}
+{"id": 1, "entities": [["[UNK]", "ja"], ["[UNK]", "en"]], "count": 0}
+{"id": 2, "entities": [["[MASK]", "ja"], ["[MASK]", "en"]], "count": 0}
+{"id": 3, "entities": [["フジテレビジョン", "ja"]], "count": 142}
+{"id": 4, "entities": [["レティクル東京座", "ja"]], "count": 63}
+{"id": 5, "entities": [["2020年のJリーグ", "ja"]], "count": 54}
