@@ -1,3 +1,4 @@
+from typing import Optional
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
@@ -64,8 +65,8 @@ class LukePretrainingModel(LukeModel):
         entity_position_ids: torch.LongTensor,
         entity_segment_ids: torch.LongTensor,
         entity_attention_mask: torch.LongTensor,
-        masked_entity_labels: torch.LongTensor = None,
-        masked_lm_labels: torch.LongTensor = None,
+        masked_entity_labels: Optional[torch.LongTensor] = None,
+        masked_lm_labels: Optional[torch.LongTensor] = None,
         **kwargs
     ):
         model_dtype = next(self.parameters()).dtype  # for fp16 compatibility

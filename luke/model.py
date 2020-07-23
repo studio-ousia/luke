@@ -95,26 +95,30 @@ class LukeModel(nn.Module):
         word_ids: torch.LongTensor,
         word_segment_ids: torch.LongTensor,
         word_attention_mask: torch.LongTensor,
-        entity_ids: torch.LongTensor,
-        entity_position_ids: torch.LongTensor,
-        entity_segment_ids: torch.LongTensor,
-        entity_attention_mask: torch.LongTensor,
+        entity_ids: torch.LongTensor = None,
+        entity_position_ids: torch.LongTensor = None,
+        entity_segment_ids: torch.LongTensor = None,
+        entity_attention_mask: torch.LongTensor = None,
     ):
         word_seq_size = word_ids.size(1)
-        extended_attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
 
-        word_embedding_output = self.embeddings(word_ids, word_segment_ids)
-        entity_embedding_output = self.entity_embeddings(entity_ids, entity_position_ids, entity_segment_ids)
-        embedding_output = torch.cat([word_embedding_output, entity_embedding_output], dim=1)
-        encoder_outputs = self.encoder(
-            embedding_output, extended_attention_mask, [None] * self.config.num_hidden_layers
-        )
+        embedding_output = self.embeddings(word_ids, word_segment_ids)
+
+        attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
+        if entity_ids is not None:
+            entity_embedding_output = self.entity_embeddings(entity_ids, entity_position_ids, entity_segment_ids)
+            embedding_output = torch.cat([embedding_output, entity_embedding_output], dim=1)
+
+        encoder_outputs = self.encoder(embedding_output, attention_mask, [None] * self.config.num_hidden_layers)
         sequence_output = encoder_outputs[0]
         word_sequence_output = sequence_output[:, :word_seq_size, :]
-        entity_sequence_output = sequence_output[:, word_seq_size:, :]
         pooled_output = self.pooler(sequence_output)
 
-        return (word_sequence_output, entity_sequence_output, pooled_output,) + encoder_outputs[1:]
+        if entity_ids is not None:
+            entity_sequence_output = sequence_output[:, word_seq_size:, :]
+            return (word_sequence_output, entity_sequence_output, pooled_output,) + encoder_outputs[1:]
+        else:
+            return (word_sequence_output, pooled_output,) + encoder_outputs[1:]
 
     def init_weights(self, module: nn.Module):
         if isinstance(module, nn.Linear):
@@ -176,7 +180,9 @@ class LukeModel(nn.Module):
     def _compute_extended_attention_mask(
         self, word_attention_mask: torch.LongTensor, entity_attention_mask: torch.LongTensor
     ):
-        attention_mask = torch.cat([word_attention_mask, entity_attention_mask], dim=1)
+        attention_mask = word_attention_mask
+        if entity_attention_mask is not None:
+            attention_mask = torch.cat([attention_mask, entity_attention_mask], dim=1)
         extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
