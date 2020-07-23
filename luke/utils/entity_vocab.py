@@ -2,7 +2,6 @@ from typing import List, TextIO, Dict
 import json
 import math
 from pathlib import Path
-import warnings
 
 import multiprocessing
 from collections import Counter, OrderedDict, defaultdict, namedtuple
@@ -29,21 +28,15 @@ _dump_db = None  # global variable used in multiprocessing workers
 @click.command()
 @click.argument("dump_db_file", type=click.Path())
 @click.argument("out_file", type=click.Path())
-@click.option("--language", type=str)
 @click.option("--vocab-size", default=1000000)
 @click.option("-w", "--white-list", type=click.File(), multiple=True)
 @click.option("--white-list-only", is_flag=True)
 @click.option("--pool-size", default=multiprocessing.cpu_count())
 @click.option("--chunk-size", default=100)
-def build_entity_vocab(dump_db_file: str, white_list: List[TextIO], language: str, **kwargs):
-    if language is None:
-        warnings.warn(
-            "It is not recommended to build an entity vocab without specifying the language. "
-            "Please specify language like ``--language en``"
-        )
+def build_entity_vocab(dump_db_file: str, white_list: List[TextIO], **kwargs):
     dump_db = DumpDB(dump_db_file)
     white_list = [line.rstrip() for f in white_list for line in f]
-    EntityVocab.build(dump_db, white_list=white_list, language=language, **kwargs)
+    EntityVocab.build(dump_db, white_list=white_list, language=dump_db.language, **kwargs)
 
 
 class EntityVocab(object):
