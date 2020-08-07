@@ -15,10 +15,10 @@ from wikipedia2vec.dump_db import DumpDB
 
 from luke.utils.entity_vocab import MASK_TOKEN, PAD_TOKEN
 
-from ..trainer import Trainer, trainer_args
+from ..utils.trainer import Trainer, trainer_args
 from .model import LukeForEntityDisambiguation
 
-from examples.utils.mention_db import MentionDB, BertLowercaseNormalizer
+from ..utils.mention_db import MentionDB, BertLowercaseNormalizer
 from transformers.tokenization_bert import BasicTokenizer
 from .utils import EntityLinkingDataset, convert_documents_to_features
 
