@@ -8,8 +8,8 @@ import re
 from collections import defaultdict
 import numpy as np
 
-from examples.utils.mention_db import MentionDB
-from examples.utils.mention_db import BertLowercaseNormalizer
+from ..utils.mention_db import MentionDB
+from ..utils.mention_db import BertLowercaseNormalizer
 
 logger = logging.getLogger(__name__)
 
