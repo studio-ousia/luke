@@ -77,7 +77,7 @@ class LukeForEntityDisambiguation(LukeModel):
             entity_candidate_ids = entity_candidate_ids.view(-1, entity_candidate_ids.size(-1))
             entity_candidate_mask = logits.new_zeros(logits.size(), dtype=torch.bool)
             entity_candidate_mask.scatter_(dim=1, index=entity_candidate_ids, src=(entity_candidate_ids != 0))
-            logits = logits.masked_fill(~entity_candidate_mask, -1e32)
+            logits = logits.masked_fill(~entity_candidate_mask, -65504.0)
 
         logits = logits.view(entity_ids.size(0), -1, self.config.entity_vocab_size)
 
