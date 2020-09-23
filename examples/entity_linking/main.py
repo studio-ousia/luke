@@ -82,22 +82,43 @@ def run(common_args, **task_args):
     for n, title in enumerate(sorted(entity_titles), 2): # [NO_E]も入る
         entity_vocab[title] = n
 
+    assert '[NO_E]' in entity_titles
+    
     model_config = args.model_config
-    model_config.entity_vocab_size = len(entity_vocab)
+    model_config.entity_vocab_size = len(entity_vocab) # これを orig_emb[title] or orig_emb[UNK] or new_ones
     logger.info('Model configuration: %s', model_config)
 
     model_weights = args.model_weights
     orig_entity_vocab = args.entity_vocab
-    orig_entity_emb = model_weights['entity_embeddings.entity_embeddings.weight']
-    if orig_entity_emb.size(0) != len(entity_vocab):  # detect whether the model is the fine-tuned one
-        entity_emb = orig_entity_emb.new_zeros((len(entity_titles) + 2, model_config.hidden_size))
+    orig_entity_emb = model_weights['entity_embeddings.entity_embeddings.weight'] # 事前学習済みのエンティティ埋め込み (Ve ~= 1M)
+
+    if orig_entity_emb.size(0) != len(entity_vocab):
         orig_entity_bias = model_weights['entity_predictions.bias']
+
+        assert '[UNK]' in orig_entity_vocab
+
+        entity_emb = orig_entity_emb.new_zeros((len(entity_titles) + 2, model_config.hidden_size)) # ここにslot filling していく
         entity_bias = orig_entity_bias.new_zeros(len(entity_titles) + 2)
-        for title, index in entity_vocab.items():
+
+        num_unk_entity = 0
+        num_valid_entity = 0
+        for title, index in entity_vocab.items(): # entity_titles が valid title or UNK or NO_E に場合分けして slot filling 
             if title in orig_entity_vocab:
-                orig_index = orig_entity_vocab[title]
-                entity_emb[index] = orig_entity_emb[orig_index]
-                entity_bias[index] = orig_entity_bias[orig_index]
+                num_valid_entity += 1
+                entity_emb[index] = orig_entity_emb[orig_entity_vocab[title]]
+                entity_bias[index] = orig_entity_bias[orig_entity_vocab[title]]
+            elif title == '[NO_E]': # 1 で初期化
+                entity_emb[index] = orig_entity_emb.new_ones(model_config.hidden_size)
+                entity_bias[index] = orig_entity_bias.new_ones(1)
+                logger.info('Successfully Initialized for [NO_E]')
+            else:
+                num_unk_entity += 1
+                entity_emb[index] = orig_entity_emb[orig_entity_vocab['[UNK]']]
+                entity_bias[index] = orig_entity_bias[orig_entity_vocab['[UNK]']]
+
+        logger.info('# of valid entities: %d', num_valid_entity)
+        logger.info('# of unknown entities: %d', num_unk_entity)
+
         model_weights['entity_embeddings.entity_embeddings.weight'] = entity_emb
         model_weights['entity_embeddings.mask_embedding'] = entity_emb[1].view(1, -1)
         model_weights['entity_predictions.decoder.weight'] = entity_emb
@@ -137,51 +158,25 @@ def run(common_args, **task_args):
     # train -> test_b
     if args.do_train:
         logger.info('*****Training*****')
-
         logger.info('Converting Documents to Features')
         train_data = convert_documents_to_features(
             dataset.test_b, args.tokenizer, entity_vocab, 'train', args.max_seq_length,
             args.max_candidate_length, args.max_mention_length, args.max_entity_length)
-                
         train_dataloader = DataLoader(train_data, batch_size=args.train_batch_size, collate_fn=collate_fn, shuffle=True)
-
         logger.info('Fix entity embeddings during training: %s', args.fix_entity_emb)
         if args.fix_entity_emb:
             model.entity_embeddings.entity_embeddings.weight.requires_grad = False
-
         logger.info('Fix entity bias during training: %s', args.fix_entity_bias)
         if args.fix_entity_bias:
             model.entity_predictions.bias.requires_grad = False
-
         num_train_steps = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
-
         trainer = EntityLinkingTrainer(args, model, train_dataloader, num_train_steps)
         trainer.train()
-        '''
-        if args.output_dir:
-            logger.info('Saving model to %s', args.output_dir)
-            model.cpu() # for memory problems           
-            torch.save(model.state_dict(), os.path.join(args.output_dir, WEIGHTS_NAME))
-            torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
-        '''            
-
+            
     results = {}
     torch.cuda.empty_cache()
 
     if args.do_eval:
-        '''
-        if args.output_dir:
-
-            model = None
-
-            logger.info('Re-Building Model')
-            model = LukeForEntityDisambiguation(model_config)
-            check_point = torch.load(os.path.join(args.output_dir, WEIGHTS_NAME))
-            logger.info('Being on device')
-            model.to(args.device)
-            logger.info('Loading State Dict')
-            model.load_state_dict(check_point, strict=False)
-        '''
         model.eval()
 
         for dataset_name in args.test_set:
