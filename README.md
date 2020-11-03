@@ -69,37 +69,43 @@ git checkout c3fad1ad120b23055f6630da0b029c8b626db78f
 pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
 ```
 
-The commands required to reproduce results are provided as follows.
+The commands required to reproduce the experimental results are provided as
+follows.
 
 **Entity Typing on Open Entity Dataset:**
 
 ```bash
-python -m examples.cli --model-file=luke_large_500k.tar.gz --data-dir=<DATA_DIR> --output-dir=<OUTPUT_DIR> entity-typing run --fp16 --seed=12 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=3
+python -m examples.cli --model-file=luke_large_500k.tar.gz --data-dir=<DATA_DIR> --output-dir=<OUTPUT_DIR> entity-typing run --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=3
 ```
 
 **Relation Classification on TACRED Dataset:**
 
 ```bash
-python -m examples.cli --model-file=luke_large_500k.tar --data-dir=<DATA_DIR> --output-dir=experiments/tacred relation-classification run --fp16 --seed=42 --train-batch-size=4 --gradient-accumulation-steps=8 --learning-rate=1e-5 --num-train-epochs=5
+python -m examples.cli --model-file=luke_large_500k.tar.gz --data-dir=<DATA_DIR> --output-dir=<OUTPUT_DIR> relation-classification run --fp16 --train-batch-size=4 --gradient-accumulation-steps=8 --learning-rate=1e-5 --num-train-epochs=5
 ```
 
 **Named Entity Recognition on CoNLL-2003 Dataset:**
 
 ```bash
-python -m examples.cli --model-file=luke_large_500k.tar --data-dir=<DATA_DIR> --output-dir=experiments/ner ner run --fp16 --seed=35 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=5
+python -m examples.cli --model-file=luke_large_500k.tar.gz --data-dir=<DATA_DIR> --output-dir=<OUTPUT_DIR> ner run --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=5
 ```
 
 **Cloze-style Question Answering on ReCoRD Dataset:**
 
 ```bash
-python -m examples.cli --model-file=luke_large_500k.tar --num-gpus=8 --data-dir=<DATA_DIR> --output-dir=experiments/record entity-span-qa run --fp16 --seed=4 --train-batch-size=1 --gradient-accumulation-steps=4 --learning-rate=1e-5 --num-train-epochs=2
+python -m examples.cli --num-gpus=8 --model-file=luke_large_500k.tar.gz --data-dir=<DATA_DIR>  --output-dir=<OUTPUT_DIR> entity-span-qa run --fp16 --train-batch-size=1 --gradient-accumulation-steps=4 --learning-rate=1e-5 --num-train-epochs=2
 ```
 
 **Extractive Question Answering on SQuAD 1.1 Dataset:**
 
 ```bash
-python -m examples.cli --num-gpus=8 --model-file=luke_large_500k.tar --data-dir=<DATA_DIR> --output-dir=experiments/squad_v1 reading-comprehension run --no-negative --fp16 --seed=14 --train-batch-size=2 --gradient-accumulation-steps=3 --learning-rate=15e-6 --num-train-epochs=2
+python -m examples.cli --num-gpus=8 --model-file=luke_large_500k.tar.gz --data-dir=<DATA_DIR> --output-dir=<OUTPUT_DIR> reading-comprehension run --wiki-link-db-file=enwiki_20160305.pkl --model-redirects-file=enwiki_20181220_redirects.pkl --link-redirects-file=enwiki_20160305_redirects.pkl --no-negative --fp16 --train-batch-size=2 --gradient-accumulation-steps=3 --learning-rate=15e-6 --num-train-epochs=2
 ```
+
+Wikipedia data files specified in this command (i.e., `enwiki_20160305.pkl`,
+`enwiki_20181220_redirects.pkl`, and `enwiki_20160305_redirects.pkl`) can be
+downloaded from
+[this link](https://drive.google.com/file/d/129tDJ3ev6IdbJiKOmO6GTgNANunhO_vt/view?usp=sharing).
 
 ## Citation
 

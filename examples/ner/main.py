@@ -40,7 +40,7 @@ def cli():
 @click.option("--do-eval/--no-eval", default=True)
 @click.option("--eval-batch-size", default=32)
 @click.option("--train-on-dev-set", is_flag=True)
-@click.option("--seed", default=15)
+@click.option("--seed", default=35)
 @trainer_args
 @click.pass_obj
 def run(common_args, **task_args):
