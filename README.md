@@ -108,7 +108,8 @@ downloaded from
 
 ## Citation
 
-If you use LUKE in your work, please cite the following paper:
+If you use LUKE in your work, please cite the
+[original paper](https://arxiv.org/abs/2010.01057):
 
 ```
 @inproceedings{yamada2020luke,
