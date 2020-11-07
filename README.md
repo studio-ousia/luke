@@ -73,11 +73,21 @@ The commands that reproduce the experimental results are provided as follows.
 
 **Entity Typing on Open Entity Dataset:**
 
+The Open Entity dataset used in our experiments can be downloaded from
+[here](https://github.com/thunlp/ERNIE). It consists of training, development,
+and test sets, where each set contains 1,998 examples with labels of nine
+general entity types.
+
 ```bash
 python -m examples.cli --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> entity-typing run --data-dir=<DATA_DIR> --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=3
 ```
 
 **Relation Classification on TACRED Dataset:**
+
+The TACRED dataset can be obtained from the
+[official website](https://nlp.stanford.edu/projects/tacred/). It contains
+68,124 training examples, 22,631 development examples, and 15,509 test examples
+with labels of their relation types.
 
 ```bash
 python -m examples.cli --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> relation-classification run --data-dir=<DATA_DIR> --fp16 --train-batch-size=4 --gradient-accumulation-steps=8 --learning-rate=1e-5 --num-train-epochs=5
@@ -85,11 +95,21 @@ python -m examples.cli --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_
 
 **Named Entity Recognition on CoNLL-2003 Dataset:**
 
+The CoNLL-2003 dataset can be downloaded from
+[its website](https://www.clips.uantwerpen.be/conll2003/ner/). It comprises
+training, development, and test sets, containing 14,987, 3,466, and 3,684
+sentences, respectively.
+
 ```bash
-python -m examples.cli --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> ner run --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=5
+python -m examples.cli --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> ner run --data-dir=<DATA_DIR> --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=5
 ```
 
 **Cloze-style Question Answering on ReCoRD Dataset:**
+
+The ReCoRD dataset can be obtained from
+[its website](https://sheng-z.github.io/ReCoRD-explorer/). It consists of
+100,730 training, 10,000 development, and 10,000 test questions created based on
+80,121 unique news articles.
 
 ```bash
 python -m examples.cli --num-gpus=8 --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> entity-span-qa run --data-dir=<DATA_DIR> --fp16 --train-batch-size=1 --gradient-accumulation-steps=4 --learning-rate=1e-5 --num-train-epochs=2
@@ -97,14 +117,19 @@ python -m examples.cli --num-gpus=8 --model-file=luke_large_500k.tar.gz --output
 
 **Extractive Question Answering on SQuAD 1.1 Dataset:**
 
+The SQuAD 1.1 dataset can be downloaded from
+[its website](https://rajpurkar.github.io/SQuAD-explorer/). It contains 87,599
+training, 10,570 development, and 9,533 test questions created based on 536
+Wikipedia articles.
+
+Wikipedia data files specified in the following command (i.e.,
+`enwiki_20160305.pkl`, `enwiki_20181220_redirects.pkl`, and
+`enwiki_20160305_redirects.pkl`) can be downloaded from
+[this link](https://drive.google.com/file/d/129tDJ3ev6IdbJiKOmO6GTgNANunhO_vt/view?usp=sharing).
+
 ```bash
 python -m examples.cli --num-gpus=8 --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> reading-comprehension run --data-dir=<DATA_DIR> --wiki-link-db-file=enwiki_20160305.pkl --model-redirects-file=enwiki_20181220_redirects.pkl --link-redirects-file=enwiki_20160305_redirects.pkl --fp16 --no-negative --train-batch-size=2 --gradient-accumulation-steps=3 --learning-rate=15e-6 --num-train-epochs=2
 ```
-
-Wikipedia data files specified in this command (i.e., `enwiki_20160305.pkl`,
-`enwiki_20181220_redirects.pkl`, and `enwiki_20160305_redirects.pkl`) can be
-downloaded from
-[this link](https://drive.google.com/file/d/129tDJ3ev6IdbJiKOmO6GTgNANunhO_vt/view?usp=sharing).
 
 ## Citation
 
