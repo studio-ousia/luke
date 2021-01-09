@@ -42,8 +42,11 @@ These numbers are reported in
 LUKE can be installed using [Poetry](https://python-poetry.org/):
 
 ```bash
-poetry install
+$ poetry install
 ```
+
+The virtual environment automatically created by Poetry can be activated by
+`poetry shell`.
 
 ## Released Models
 
@@ -63,72 +66,187 @@ server with a single or eight NVidia V100 GPUs. We used
 APEX library which can be installed as follows:
 
 ```bash
-git clone https://github.com/NVIDIA/apex.git
-cd apex
-git checkout c3fad1ad120b23055f6630da0b029c8b626db78f
-pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
+$ git clone https://github.com/NVIDIA/apex.git
+$ cd apex
+$ git checkout c3fad1ad120b23055f6630da0b029c8b626db78f
+$ pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
 ```
 
-The commands that reproduce the experimental results are provided as follows.
+The APEX library is not needed if you do not use `--fp16` option or reproduce
+the results based on the trained checkpoint files.
 
-**Entity Typing on Open Entity Dataset:**
+The commands that reproduce the experimental results are provided as follows:
 
-The Open Entity dataset used in our experiments can be downloaded from
-[here](https://github.com/thunlp/ERNIE). It consists of training, development,
-and test sets, where each set contains 1,998 examples with labels of nine
-general entity types.
+### Entity Typing on Open Entity Dataset
+
+**Dataset:** [Link](https://github.com/thunlp/ERNIE)\
+**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10F6tzx0oPG4g-PeB0O1dqpuYtfiHblZU/view?usp=sharing)
+
+**Using the checkpoint file:**
 
 ```bash
-python -m examples.cli --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> entity-typing run --data-dir=<DATA_DIR> --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=3
+$ python -m examples.cli \
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    entity-typing run \
+    --data-dir=<DATA_DIR> \
+    --checkpoint-file=<CHECKPOINT_FILE> \
+    --no-train
 ```
 
-**Relation Classification on TACRED Dataset:**
-
-The TACRED dataset can be obtained from the
-[official website](https://nlp.stanford.edu/projects/tacred/). It contains
-68,124 training examples, 22,631 development examples, and 15,509 test examples
-with labels of their relation types.
+**Training the model from scratch:**
 
 ```bash
-python -m examples.cli --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> relation-classification run --data-dir=<DATA_DIR> --fp16 --train-batch-size=4 --gradient-accumulation-steps=8 --learning-rate=1e-5 --num-train-epochs=5
+$ python -m examples.cli \
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    entity-typing run \
+    --data-dir=<DATA_DIR> \
+    --train-batch-size=2 \
+    --gradient-accumulation-steps=2 \
+    --learning-rate=1e-5 \
+    --num-train-epochs=3 \
+    --fp16
 ```
 
-**Named Entity Recognition on CoNLL-2003 Dataset:**
+### Relation Classification on TACRED Dataset
 
-The CoNLL-2003 dataset can be downloaded from
-[its website](https://www.clips.uantwerpen.be/conll2003/ner/). It comprises
-training, development, and test sets, containing 14,987, 3,466, and 3,684
-sentences, respectively.
+**Dataset:** [Link](https://nlp.stanford.edu/projects/tacred/)\
+**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10XSaQRtQHn13VB_6KALObvok6hdXw7yp/view?usp=sharing)
+
+**Using the checkpoint file:**
 
 ```bash
-python -m examples.cli --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> ner run --data-dir=<DATA_DIR> --fp16 --train-batch-size=2 --gradient-accumulation-steps=2 --learning-rate=1e-5 --num-train-epochs=5
+$ python -m examples.cli \
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    relation-classification run \
+    --data-dir=<DATA_DIR> \
+    --checkpoint-file=<CHECKPOINT_FILE> \
+    --no-train
 ```
 
-**Cloze-style Question Answering on ReCoRD Dataset:**
-
-The ReCoRD dataset can be obtained from
-[its website](https://sheng-z.github.io/ReCoRD-explorer/). It consists of
-100,730 training, 10,000 development, and 10,000 test questions created based on
-80,121 unique news articles.
+**Training the model from scratch:**
 
 ```bash
-python -m examples.cli --num-gpus=8 --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> entity-span-qa run --data-dir=<DATA_DIR> --fp16 --train-batch-size=1 --gradient-accumulation-steps=4 --learning-rate=1e-5 --num-train-epochs=2
+$ python -m examples.cli \
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    relation-classification run \
+    --data-dir=<DATA_DIR> \
+    --train-batch-size=4 \
+    --gradient-accumulation-steps=8 \
+    --learning-rate=1e-5 \
+    --num-train-epochs=5 \
+    --fp16
 ```
 
-**Extractive Question Answering on SQuAD 1.1 Dataset:**
+### Named Entity Recognition on CoNLL-2003 Dataset
 
-The SQuAD 1.1 dataset can be downloaded from
-[its website](https://rajpurkar.github.io/SQuAD-explorer/). It contains 87,599
-training, 10,570 development, and 9,533 test questions created based on 536
-Wikipedia articles.
+**Dataset:** [Link](https://www.clips.uantwerpen.be/conll2003/ner/)\
+**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10VFEHXMiJGQvD62QbHa8C8XYSeAIt_CP/view?usp=sharing)
 
-Wikipedia data files specified in the following command (i.e.,
-`enwiki_20160305.pkl`, `enwiki_20181220_redirects.pkl`, and
-`enwiki_20160305_redirects.pkl`) can be downloaded from
-[this link](https://drive.google.com/file/d/129tDJ3ev6IdbJiKOmO6GTgNANunhO_vt/view?usp=sharing).
+**Using the checkpoint file:**
 
 ```bash
-python -m examples.cli --num-gpus=8 --model-file=luke_large_500k.tar.gz --output-dir=<OUTPUT_DIR> reading-comprehension run --data-dir=<DATA_DIR> --wiki-link-db-file=enwiki_20160305.pkl --model-redirects-file=enwiki_20181220_redirects.pkl --link-redirects-file=enwiki_20160305_redirects.pkl --fp16 --no-negative --train-batch-size=2 --gradient-accumulation-steps=3 --learning-rate=15e-6 --num-train-epochs=2
+$ python -m examples.cli \
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    ner run \
+    --data-dir=<DATA_DIR> \
+    --checkpoint-file=<CHECKPOINT_FILE> \
+    --no-train
+```
+
+**Training the model from scratch:**
+
+```bash
+$ python -m examples.cli\
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    ner run \
+    --data-dir=<DATA_DIR> \
+    --train-batch-size=2 \
+    --gradient-accumulation-steps=2 \
+    --learning-rate=1e-5 \
+    --num-train-epochs=5 \
+    --fp16
+```
+
+### Cloze-style Question Answering on ReCoRD Dataset
+
+**Dataset:** [Link](https://sheng-z.github.io/ReCoRD-explorer/)\
+**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10LuPIQi-HslZs_BgHxSnitGe2tw_anZp/view?usp=sharing)
+
+**Using the checkpoint file:**
+
+```bash
+$ python -m examples.cli \
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    entity-span-qa run \
+    --data-dir=<DATA_DIR> \
+    --checkpoint-file=<CHECKPOINT_FILE> \
+    --no-train
+```
+
+**Training the model from scratch:**
+
+```bash
+$ python -m examples.cli \
+    --num-gpus=8 \
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    entity-span-qa run \
+    --data-dir=<DATA_DIR> \
+    --train-batch-size=1 \
+    --gradient-accumulation-steps=4 \
+    --learning-rate=1e-5 \
+    --num-train-epochs=2 \
+    --fp16
+```
+
+### Extractive Question Answering on SQuAD 1.1 Dataset
+
+**Dataset:** [Link](https://rajpurkar.github.io/SQuAD-explorer/)\
+**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/1097QicHAVnroVVw54niPXoY-iylGNi0K/view?usp=sharing)\
+**Wikipedia data files (compressed):**
+[Link](https://drive.google.com/file/d/129tDJ3ev6IdbJiKOmO6GTgNANunhO_vt/view?usp=sharing)
+
+**Using the checkpoint file:**
+
+```bash
+$ python -m examples.cli \
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    reading-comprehension run \
+    --data-dir=<DATA_DIR> \
+    --checkpoint-file=<CHECKPOINT_FILE> \
+    --no-negative \
+    --wiki-link-db-file=enwiki_20160305.pkl \
+    --model-redirects-file=enwiki_20181220_redirects.pkl \
+    --link-redirects-file=enwiki_20160305_redirects.pkl \
+    --no-train
+```
+
+**Training the model from scratch:**
+
+```bash
+$ python -m examples.cli \
+    --num-gpus=8 \
+    --model-file=luke_large_500k.tar.gz \
+    --output-dir=<OUTPUT_DIR> \
+    reading-comprehension run \
+    --data-dir=<DATA_DIR> \
+    --no-negative \
+    --wiki-link-db-file=enwiki_20160305.pkl \
+    --model-redirects-file=enwiki_20181220_redirects.pkl \
+    --link-redirects-file=enwiki_20160305_redirects.pkl \
+    --train-batch-size=2 \
+    --gradient-accumulation-steps=3 \
+    --learning-rate=15e-6 \
+    --num-train-epochs=2 \
+    --fp16
 ```
 
 ## Citation
