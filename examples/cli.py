@@ -109,9 +109,6 @@ def cli(ctx, **kwargs):
             experiment_logger.log_parameter("model_file_name", os.path.basename(args.model_file))
 
 
-from .entity_disambiguation.main import cli as entity_disambiguation_cli
-
-cli.add_command(entity_disambiguation_cli)
 from .entity_typing.main import cli as entity_typing_cli
 
 cli.add_command(entity_typing_cli)
