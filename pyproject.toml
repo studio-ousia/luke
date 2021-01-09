@@ -19,8 +19,8 @@ tensorflow = "*"
 torch = "*"
 tqdm = "*"
 transformers = "*"
-wikipedia2vec = "*"
 ujson = "*"
+wikipedia2vec = "*"
 
 [tool.poetry.dev-dependencies]
 black = "^19.10b0"
