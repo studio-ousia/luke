@@ -34,16 +34,17 @@ def cli():
 
 
 @cli.command()
+@click.option("--checkpoint-file", type=click.Path(exists=True))
 @click.option("--data-dir", default="data/record", type=click.Path(exists=True))
 @click.option("--doc-stride", default=128)
+@click.option("--do-eval/--no-eval", default=True)
+@click.option("--do-train/--no-train", default=True)
+@click.option("--eval-batch-size", default=32)
 @click.option("--max-query-length", default=90)
 @click.option("--max-seq-length", default=512)
-@click.option("--do-train/--no-train", default=True)
-@click.option("--train-batch-size", default=1)
 @click.option("--num-train-epochs", default=2.0)
-@click.option("--do-eval/--no-eval", default=True)
-@click.option("--eval-batch-size", default=32)
 @click.option("--seed", default=4)
+@click.option("--train-batch-size", default=1)
 @trainer_args
 @click.pass_obj
 def run(common_args, **task_args):
@@ -77,7 +78,7 @@ def run(common_args, **task_args):
         model.load_state_dict(args.model_weights, strict=False)
         model.to(args.device)
 
-        train_dataloader, _, _, _ = load_and_cache_examples(args, "train")
+        train_dataloader, _, _, _ = load_examples(args, "train")
 
         num_train_steps_per_epoch = len(train_dataloader) // args.gradient_accumulation_steps
         num_train_steps = int(num_train_steps_per_epoch * args.num_train_epochs)
@@ -120,7 +121,10 @@ def run(common_args, **task_args):
 
     if args.do_eval:
         model = LukeForEntitySpanQA(args)
-        model.load_state_dict(torch.load(os.path.join(args.output_dir, WEIGHTS_NAME), map_location="cpu"))
+        if args.checkpoint_file:
+            model.load_state_dict(torch.load(args.checkpoint_file, map_location="cpu"))
+        else:
+            model.load_state_dict(torch.load(os.path.join(args.output_dir, WEIGHTS_NAME), map_location="cpu"))
         model.to(args.device)
 
         output_file = os.path.join(args.output_dir, "predictions.json")
@@ -135,7 +139,7 @@ def run(common_args, **task_args):
 
 
 def evaluate(args, model, fold="dev", output_file=None):
-    dataloader, examples, features, processor = load_and_cache_examples(args, fold)
+    dataloader, examples, features, processor = load_examples(args, fold)
     doc_predictions = defaultdict(list)
     for batch in tqdm(dataloader, desc="Eval"):
         model.eval()
@@ -161,7 +165,7 @@ def evaluate(args, model, fold="dev", output_file=None):
     return evaluate_on_record(dev_data, predictions)[0]
 
 
-def load_and_cache_examples(args, fold):
+def load_examples(args, fold):
     if args.local_rank not in (-1, 0) and fold == "train":
         torch.distributed.barrier()
 
@@ -180,40 +184,17 @@ def load_and_cache_examples(args, fold):
         segment_b_id = 1
         add_extra_sep_token = False
 
-    cache_file = os.path.join(
-        args.data_dir,
-        "cached_"
-        + "_".join(
-            (
-                bert_model_name.split("-")[0],
-                str(args.max_seq_length),
-                str(args.max_mention_length),
-                str(args.doc_stride),
-                str(args.max_query_length),
-                fold,
-            )
-        )
-        + ".pkl",
+    logger.info("Creating features from the dataset...")
+    features = convert_examples_to_features(
+        examples,
+        args.tokenizer,
+        args.max_seq_length,
+        args.max_mention_length,
+        args.doc_stride,
+        args.max_query_length,
+        segment_b_id,
+        add_extra_sep_token,
     )
-    if os.path.exists(cache_file):
-        logger.info("Loading features from the cached file %s", cache_file)
-        features = torch.load(cache_file)
-    else:
-        logger.info("Creating features from the dataset...")
-
-        features = convert_examples_to_features(
-            examples,
-            args.tokenizer,
-            args.max_seq_length,
-            args.max_mention_length,
-            args.doc_stride,
-            args.max_query_length,
-            segment_b_id,
-            add_extra_sep_token,
-        )
-
-        if args.local_rank in (-1, 0):
-            torch.save(features, cache_file)
 
     if args.local_rank == 0 and fold == "train":
         torch.distributed.barrier()
