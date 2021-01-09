@@ -54,7 +54,7 @@ class EntityVocab(object):
             self._parse_jsonl_vocab_file(vocab_file)
 
     def _parse_tsv_vocab_file(self, vocab_file: str):
-        with open(vocab_file, "r") as f:
+        with open(vocab_file, "r", encoding="utf-8") as f:
             for (index, line) in enumerate(f):
                 title, count = line.rstrip().split("\t")
                 entity = Entity(title, None)
