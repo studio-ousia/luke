@@ -94,7 +94,7 @@ $ python -m examples.cli \
     --no-train
 ```
 
-**Training the model from scratch:**
+**Fine-tuning the model:**
 
 ```bash
 $ python -m examples.cli \
@@ -126,7 +126,7 @@ $ python -m examples.cli \
     --no-train
 ```
 
-**Training the model from scratch:**
+**Fine-tuning the model:**
 
 ```bash
 $ python -m examples.cli \
@@ -158,7 +158,7 @@ $ python -m examples.cli \
     --no-train
 ```
 
-**Training the model from scratch:**
+**Fine-tuning the model:**
 
 ```bash
 $ python -m examples.cli\
@@ -190,7 +190,7 @@ $ python -m examples.cli \
     --no-train
 ```
 
-**Training the model from scratch:**
+**Fine-tuning the model:**
 
 ```bash
 $ python -m examples.cli \
@@ -229,7 +229,7 @@ $ python -m examples.cli \
     --no-train
 ```
 
-**Training the model from scratch:**
+**Fine-tuning the model:**
 
 ```bash
 $ python -m examples.cli \
