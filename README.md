@@ -21,6 +21,22 @@ classification), and
 This repository contains the source code to pre-train the model and fine-tune it
 to solve downstream tasks.
 
+## Release Notes
+
+### November 5, 2021: LUKE-500K (base) model
+
+LUKE-500K (base) is a new pretrained LUKE model which is smaller than existing
+LUKE-500K (large). The experimental results of the LUKE-500K (base) and
+LUKE-500K (large) on SQuAD v1 and CoNLL-2003 are as follows:
+
+| Task                          | Dataset                                                      | Metric | LUKE-500K (base) | LUKE-500K (large) |
+| ----------------------------- | ------------------------------------------------------------ | ------ | ---------------- | ----------------- |
+| Extractive Question Answering | [SQuAD v1.1](https://rajpurkar.github.io/SQuAD-explorer/)    | EM/F1  | 86.1/92.3        | 90.2/95.4         |
+| Named Entity Recognition      | [CoNLL-2003](https://www.clips.uantwerpen.be/conll2003/ner/) | F1     | 93.3             | 94.3              |
+
+We tuned only the batch size and learning rate in the experiments using
+LUKE-500K (base).
+
 ## Comparison with State-of-the-Art
 
 LUKE outperforms the previous state-of-the-art methods on five important NLP
@@ -53,9 +69,10 @@ The virtual environment automatically created by Poetry can be activated by
 We initially release the pre-trained model with 500K entity vocabulary based on
 the `roberta.large` model.
 
-| Name          | Base Model                                                                                          | Entity Vocab Size | Params | Download                                                                                   |
-| ------------- | --------------------------------------------------------------------------------------------------- | ----------------- | ------ | ------------------------------------------------------------------------------------------ |
-| **LUKE-500K** | [roberta.large](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models) | 500K              | 483 M  | [Link](https://drive.google.com/file/d/1S7smSBELcZWV7-slfrb94BKcSCCoxGfL/view?usp=sharing) |
+| Name                  | Base Model                                                                                          | Entity Vocab Size | Params | Download                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------- | ----------------- | ------ | ------------------------------------------------------------------------------------------ |
+| **LUKE-500K (base)**  | [roberta.base](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models)  | 500K              | 253 M  | [Link](https://drive.google.com/file/d/17JvBfXTMuXHX_00yq6kXUDB6OJStfSK_/view?usp=sharing) |
+| **LUKE-500K (large)** | [roberta.large](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models) | 500K              | 483 M  | [Link](https://drive.google.com/file/d/1S7smSBELcZWV7-slfrb94BKcSCCoxGfL/view?usp=sharing) |
 
 ## Reproducing Experimental Results
 
