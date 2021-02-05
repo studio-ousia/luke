@@ -42,7 +42,7 @@ LUKE-500K (base).
 LUKE outperforms the previous state-of-the-art methods on five important NLP
 tasks:
 
-| Task                           | Dataset                                                                      | Metric | LUKE              | Previous SOTA                                                             |
+| Task                           | Dataset                                                                      | Metric | LUKE-500K (large) | Previous SOTA                                                             |
 | ------------------------------ | ---------------------------------------------------------------------------- | ------ | ----------------- | ------------------------------------------------------------------------- |
 | Extractive Question Answering  | [SQuAD v1.1](https://rajpurkar.github.io/SQuAD-explorer/)                    | EM/F1  | **90.2**/**95.4** | 89.9/95.1 ([Yang et al., 2019](https://arxiv.org/abs/1906.08237))         |
 | Named Entity Recognition       | [CoNLL-2003](https://www.clips.uantwerpen.be/conll2003/ner/)                 | F1     | **94.3**          | 93.5 ([Baevski et al., 2019](https://arxiv.org/abs/1903.07785))           |
