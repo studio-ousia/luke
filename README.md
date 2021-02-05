@@ -21,20 +21,20 @@ classification), and
 This repository contains the source code to pre-train the model and fine-tune it
 to solve downstream tasks.
 
-## Release Notes
+## News
 
-### November 5, 2021: LUKE-500K (base) model
+**November 5, 2021: LUKE-500K (base) model**
 
-LUKE-500K (base) is a new pretrained LUKE model which is smaller than existing
-LUKE-500K (large). The experimental results of the LUKE-500K (base) and
-LUKE-500K (large) on SQuAD v1 and CoNLL-2003 are as follows:
+We released LUKE-500K (base), a new pretrained LUKE model which is smaller than
+existing LUKE-500K (large). The experimental results of the LUKE-500K (base) and
+LUKE-500K (large) on SQuAD v1 and CoNLL-2003 are shown as follows:
 
 | Task                          | Dataset                                                      | Metric | LUKE-500K (base) | LUKE-500K (large) |
 | ----------------------------- | ------------------------------------------------------------ | ------ | ---------------- | ----------------- |
 | Extractive Question Answering | [SQuAD v1.1](https://rajpurkar.github.io/SQuAD-explorer/)    | EM/F1  | 86.1/92.3        | 90.2/95.4         |
 | Named Entity Recognition      | [CoNLL-2003](https://www.clips.uantwerpen.be/conll2003/ner/) | F1     | 93.3             | 94.3              |
 
-We tuned only the batch size and learning rate in the experiments using
+We tuned only the batch size and learning rate in the experiments based on
 LUKE-500K (base).
 
 ## Comparison with State-of-the-Art
