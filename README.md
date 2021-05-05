@@ -23,6 +23,42 @@ to solve downstream tasks.
 
 ## News
 
+**May 5, 2021: LUKE is added to Hugging Face Transformers**
+
+LUKE has been added to the
+[master branch of the Hugging Face Transformers library](https://github.com/huggingface/transformers).
+You can now solve entity-related tasks (e.g., named entity recognition, relation
+classification, entity typing) easily using this library.
+
+For example, the LUKE-large model fine-tuned on the TACRED dataset can be used
+as follows:
+
+```python
+>>> from transformers import LukeTokenizer, LukeForEntityPairClassification
+>>> model = LukeForEntityPairClassification.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
+>>> tokenizer = LukeTokenizer.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
+>>> text = "Beyoncé lives in Los Angeles."
+>>> entity_spans = [(0, 7), (17, 28)]  # character-based entity spans corresponding to "Beyoncé" and "Los Angeles"
+>>> inputs = tokenizer(text, entity_spans=entity_spans, return_tensors="pt")
+>>> outputs = model(**inputs)
+>>> logits = outputs.logits
+>>> predicted_class_idx = int(logits[0].argmax())
+>>> print("Predicted class:", model.config.id2label[predicted_class_idx])
+Predicted class: per:cities_of_residence
+```
+
+We also provide the following three Colab notebooks that show how to reproduce
+our experimental results on CoNLL-2003, TACRED, and Open Entity datasets using
+the library:
+
+- [Reproducing experimental results of LUKE on CoNLL-2003 Using Hugging Face Transformers](https://colab.research.google.com/github/studio-ousia/luke/blob/master/notebooks/huggingface_conll_2003.ipynb)
+- [Reproducing experimental results of LUKE on TACRED Using Hugging Face Transformers](https://colab.research.google.com/github/studio-ousia/luke/blob/master/notebooks/huggingface_tacred.ipynb)
+- [Reproducing experimental results of LUKE on Open Entity Using Hugging Face Transformers](https://colab.research.google.com/github/studio-ousia/luke/blob/master/notebooks/huggingface_open_entity.ipynb)
+
+Please refer to the
+[official documentation](https://huggingface.co/transformers/master/model_doc/luke.html)
+for further details.
+
 **November 5, 2021: LUKE-500K (base) model**
 
 We released LUKE-500K (base), a new pretrained LUKE model which is smaller than
