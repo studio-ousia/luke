@@ -220,7 +220,7 @@ $ python -m examples.cli\
     ner run \
     --data-dir=<DATA_DIR> \
     --train-batch-size=2 \
-    --gradient-accumulation-steps=2 \
+    --gradient-accumulation-steps=4 \
     --learning-rate=1e-5 \
     --num-train-epochs=5 \
     --fp16
