@@ -1,13 +1,14 @@
-from typing import List, Iterator
+from typing import List, Dict, NamedTuple
 import functools
 import logging
 import multiprocessing
 import queue
 import random
 import unicodedata
+from collections import Counter
 
 import numpy as np
-from transformers.tokenization_roberta import RobertaTokenizer
+from transformers.models.roberta import RobertaTokenizer
 
 from luke.pretraining.dataset import WikipediaPretrainingDataset
 from luke.utils.entity_vocab import MASK_TOKEN
@@ -22,7 +23,7 @@ class LukePretrainingBatchGenerator(object):
 
     def __init__(
         self,
-        dataset_dir: str,
+        datasets: List[WikipediaPretrainingDataset],
         batch_size: int,
         masked_lm_prob: float,
         masked_entity_prob: float,
@@ -32,11 +33,14 @@ class LukePretrainingBatchGenerator(object):
         unmasked_entity_prob: float,
         random_entity_prob: float,
         mask_words_in_entity_span: bool,
+        starting_step: int,
+        word_only: bool = False,
+        cls_entity_prediction: bool = False,
         **dataset_kwargs
     ):
         self._worker_func = functools.partial(
             LukePretrainingBatchWorker,
-            dataset_dir=dataset_dir,
+            datasets=datasets,
             batch_size=batch_size,
             masked_lm_prob=masked_lm_prob,
             masked_entity_prob=masked_entity_prob,
@@ -46,6 +50,9 @@ class LukePretrainingBatchGenerator(object):
             unmasked_entity_prob=unmasked_entity_prob,
             random_entity_prob=random_entity_prob,
             mask_words_in_entity_span=mask_words_in_entity_span,
+            starting_step=starting_step,
+            word_only=word_only,
+            cls_entity_prediction=cls_entity_prediction,
             **dataset_kwargs
         )
 
@@ -72,7 +79,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
     def __init__(
         self,
         output_queue: multiprocessing.Queue,
-        dataset_dir: str,
+        datasets: List[WikipediaPretrainingDataset],
         batch_size: int,
         masked_lm_prob: float,
         masked_entity_prob: float,
@@ -82,12 +89,15 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         unmasked_entity_prob: float,
         random_entity_prob: float,
         mask_words_in_entity_span: bool,
+        starting_step: int,
+        word_only: bool,
+        cls_entity_prediction: bool,
         **dataset_kwargs
     ):
         super(LukePretrainingBatchWorker, self).__init__()
 
         self._output_queue = output_queue
-        self._dataset_dir = dataset_dir
+        self._datasets = datasets
         self._batch_size = batch_size
         self._masked_lm_prob = masked_lm_prob
         self._masked_entity_prob = masked_entity_prob
@@ -97,44 +107,68 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         self._unmasked_entity_prob = unmasked_entity_prob
         self._random_entity_prob = random_entity_prob
         self._mask_words_in_entity_span = mask_words_in_entity_span
+        self._starting_step = starting_step
+        self._word_only = word_only
+        self._cls_entity_prediction = cls_entity_prediction
         self._dataset_kwargs = dataset_kwargs
 
         if "shuffle_buffer_size" not in self._dataset_kwargs:
             self._dataset_kwargs["shuffle_buffer_size"] = batch_size * 1000
 
     def run(self):
-        self._pretraining_dataset = WikipediaPretrainingDataset(self._dataset_dir)
-        self._tokenizer = self._pretraining_dataset.tokenizer
-        self._entity_vocab = self._pretraining_dataset.entity_vocab
-        self._max_seq_length = self._pretraining_dataset.max_seq_length
-        self._max_entity_length = self._pretraining_dataset.max_entity_length
-        self._max_mention_length = self._pretraining_dataset.max_mention_length
+        representative_dataset = self._datasets[0]
+
+        self._tokenizer = representative_dataset.tokenizer
+        self._entity_vocab = representative_dataset.entity_vocab
+        self._max_seq_length = representative_dataset.max_seq_length
+        self._max_entity_length = representative_dataset.max_entity_length
+        self._max_mention_length = representative_dataset.max_mention_length
         self._cls_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.cls_token)
         self._sep_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.sep_token)
         self._mask_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.mask_token)
         self._pad_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.pad_token)
-
-        self._entity_mask_id = self._pretraining_dataset.entity_vocab.get_id(
-            MASK_TOKEN, self._pretraining_dataset.language
+        self._entity_mask_id = representative_dataset.entity_vocab.get_id(MASK_TOKEN, representative_dataset.language)
+        dataset_sampler = DatasetSampler(
+            datasets=self._datasets, dataset_kwargs=self._dataset_kwargs, starting_step=self._starting_step,
         )
 
         buf = []
+
+        class BufferItem(NamedTuple):
+            word_features: Dict[str, np.ndarray]
+            entity_features: Dict[str, np.ndarray]
+            page_id: int
+
         max_word_len = 1
         max_entity_len = 1
-        for item in self._pretraining_dataset.create_iterator(**self._dataset_kwargs):
-            entity_feat, masked_entity_positions = self._create_entity_features(
-                item["entity_ids"], item["entity_position_ids"]
-            )
-            word_feat = self._create_word_features(item["word_ids"], masked_entity_positions)
+        for item in dataset_sampler:
+            if not self._word_only:
+                entity_feat, masked_entity_positions = self._create_entity_features(
+                    item["entity_ids"], item["entity_position_ids"]
+                )
+                max_entity_len = max(max_entity_len, item["entity_ids"].size)
+            else:
+                entity_feat = None
+                masked_entity_positions = []
 
+            word_feat = self._create_word_features(item["word_ids"], masked_entity_positions)
             max_word_len = max(max_word_len, item["word_ids"].size + 2)  # 2 for [CLS] and [SEP]
-            max_entity_len = max(max_entity_len, item["entity_ids"].size)
-            buf.append((word_feat, entity_feat, item["page_id"]))
+
+            buf.append(BufferItem(word_feat, entity_feat, item["page_id"]))
 
             if len(buf) == self._batch_size:
                 batch = {}
-                batch.update({k: np.stack([o[0][k][:max_word_len] for o in buf]) for k in buf[0][0].keys()})
-                batch.update({k: np.stack([o[1][k][:max_entity_len] for o in buf]) for k in buf[0][1].keys()})
+                word_keys = buf[0].word_features.keys()
+                batch.update({k: np.stack([o.word_features[k][:max_word_len] for o in buf]) for k in word_keys})
+
+                if self._cls_entity_prediction:
+                    batch.update({"page_id": np.array([o.page_id for o in buf], dtype=np.int)})
+
+                if not self._word_only:
+                    entity_keys = buf[0].entity_features.keys()
+                    batch.update(
+                        {k: np.stack([o.entity_features[k][:max_entity_len] for o in buf]) for k in entity_keys}
+                    )
                 self._output_queue.put(batch, True)
 
                 buf = []
@@ -271,49 +305,52 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         return False
 
 
-class MultilingualBatchGenerator(LukePretrainingBatchGenerator):
-    """
-    Launch a new process in order to avoid data processing being a bottleneck during training.
-    """
-
+class DatasetSampler:
     def __init__(
         self,
-        dataset_dir_list: List[str],
-        dataset_size_list: List[int],
-        sampling_smoothing_factor: float,
-        batch_size: int,
-        masked_lm_prob: float,
-        masked_entity_prob: float,
-        whole_word_masking: bool,
-        unmasked_word_prob: float,
-        random_word_prob: float,
-        unmasked_entity_prob: float,
-        random_entity_prob: float,
-        mask_words_in_entity_span: bool,
-        **dataset_kwargs
+        datasets: List[WikipediaPretrainingDataset],
+        dataset_kwargs: Dict,
+        starting_step: int,
+        smoothing_factor: float = 0.7,
+        random_seed: int = 0,
     ):
+        np.random.seed(random_seed)
+        self.datasets = datasets
+        self.datasets_dirs = [d.dataset_dir for d in datasets]
 
-        self.batch_generator_list = [
-            LukePretrainingBatchGenerator(
-                dataset_dir,
-                batch_size=batch_size,
-                masked_lm_prob=masked_lm_prob,
-                masked_entity_prob=masked_entity_prob,
-                whole_word_masking=whole_word_masking,
-                unmasked_word_prob=unmasked_word_prob,
-                random_word_prob=random_word_prob,
-                unmasked_entity_prob=unmasked_entity_prob,
-                random_entity_prob=random_entity_prob,
-                mask_words_in_entity_span=mask_words_in_entity_span,
-                **dataset_kwargs
-            )
-            for dataset_dir in dataset_dir_list
-        ]
-        self.sampling_rate = self.get_sampling_rate(dataset_size_list, sampling_smoothing_factor)
+        self._dataset_kwargs = dataset_kwargs
+        self.num_datasets = len(datasets)
+        self.sampling_rate = self.get_sampling_rate([len(d) for d in self.datasets], smoothing_factor=smoothing_factor)
+        self.iterators = self._prepare_iterators(starting_step, num_workers=dataset_kwargs["num_workers"])
 
-    def generate_batches(self, queue_size: int = 10000):
-        batch_iterators = [g.generate_batches(queue_size) for g in self.batch_generator_list]
-        yield from self.sampling_from_iterators(batch_iterators, sampling_rate=self.sampling_rate)
+    def _prepare_iterators(self, starting_step: int, num_workers: int = 1):
+        skip_counter = Counter()
+        for i in range(starting_step // num_workers):
+            d = self._sample_dataset()
+            skip_counter[d] += num_workers
+        iterators = {
+            d.dataset_dir: d.create_iterator(skip=skip_counter[d], **self._dataset_kwargs) for d in self.datasets
+        }
+        return iterators
+
+    def _sample_dataset(self):
+        return np.random.choice(self.datasets_dirs, p=self.sampling_rate)
+
+    def __iter__(self):
+        """
+        Randomly choose an iterator according to ``sampling_rate``, and yield an element from it.
+        """
+        stopped_datasets = set()
+        while len(stopped_datasets) < self.num_datasets:
+            sampled_dataset = self._sample_dataset()
+            if sampled_dataset in stopped_datasets:
+                continue
+            sampled_iterator = self.iterators[sampled_dataset]
+            try:
+                yield next(sampled_iterator)
+            except StopIteration:
+                stopped_datasets.add(sampled_dataset)
+                continue
 
     @staticmethod
     def get_sampling_rate(data_size_list: List[int], smoothing_factor: float = 0.7) -> List[float]:
@@ -325,15 +362,3 @@ class MultilingualBatchGenerator(LukePretrainingBatchGenerator):
         data_size_list = [size ** smoothing_factor for size in data_size_list]
         size_sum = sum(data_size_list)
         return [size / size_sum for size in data_size_list]
-
-    @staticmethod
-    def sampling_from_iterators(iterators: List[Iterator], sampling_rate: List[float]):
-        """
-        Randomly choose an iterator according to ``sampling_rate``, and yield an element from it.
-        """
-        while True:
-            g = np.random.choice(iterators, p=sampling_rate)
-            try:
-                yield next(g)
-            except StopIteration:
-                break

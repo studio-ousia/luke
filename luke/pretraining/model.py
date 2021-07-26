@@ -1,11 +1,11 @@
-from typing import Optional
+from typing import Optional, Dict
 import torch
 from torch import nn
-from torch.nn import CrossEntropyLoss
-from transformers.modeling_bert import ACT2FN, BertLayerNorm, BertPreTrainingHeads
-from transformers.modeling_roberta import RobertaLMHead
+from transformers.models.bert.modeling_bert import ACT2FN, BertPreTrainingHeads
+from transformers.models.roberta.modeling_roberta import RobertaLMHead
 
 from luke.model import LukeModel, LukeConfig
+from luke.pretraining.metrics import Average, Accuracy
 
 
 class EntityPredictionHeadTransform(nn.Module):
@@ -16,7 +16,7 @@ class EntityPredictionHeadTransform(nn.Module):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
             self.transform_act_fn = config.hidden_act
-        self.LayerNorm = BertLayerNorm(config.entity_emb_size, eps=config.layer_norm_eps)
+        self.LayerNorm = nn.LayerNorm(config.entity_emb_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states: torch.Tensor):
         hidden_states = self.dense(hidden_states)
@@ -53,8 +53,22 @@ class LukePretrainingModel(LukeModel):
 
         self.entity_predictions = EntityPredictionHead(config)
         self.entity_predictions.decoder.weight = self.entity_embeddings.entity_embeddings.weight
+        self.loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
+
+        if self.config.cls_entity_prediction:
+            self.cls_entity_predictions = EntityPredictionHead(config)
+            self.cls_entity_predictions.decoder.weight = self.entity_embeddings.entity_embeddings.weight
 
         self.apply(self.init_weights)
+
+        self.metrics = {
+            "masked_lm_loss": Average(),
+            "masked_lm_accuracy": Accuracy(),
+            "masked_entity_loss": Average(),
+            "masked_entity_accuracy": Accuracy(),
+            "entity_prediction_loss": Average(),
+            "entity_prediction_accuracy": Accuracy(),
+        }
 
     def forward(
         self,
@@ -67,6 +81,7 @@ class LukePretrainingModel(LukeModel):
         entity_attention_mask: torch.LongTensor,
         masked_entity_labels: Optional[torch.LongTensor] = None,
         masked_lm_labels: Optional[torch.LongTensor] = None,
+        page_id: torch.LongTensor = None,
         **kwargs
     ):
         model_dtype = next(self.parameters()).dtype  # for fp16 compatibility
@@ -82,7 +97,6 @@ class LukePretrainingModel(LukeModel):
         )
         word_sequence_output, entity_sequence_output = output[:2]
 
-        loss_fn = CrossEntropyLoss(ignore_index=-1)
         ret = dict(loss=word_ids.new_tensor(0.0, dtype=model_dtype))
 
         if masked_entity_labels is not None:
@@ -95,14 +109,12 @@ class LukePretrainingModel(LukeModel):
                 entity_scores = self.entity_predictions(target_entity_sequence_output)
                 entity_scores = entity_scores.view(-1, self.config.entity_vocab_size)
 
-                ret["masked_entity_loss"] = loss_fn(entity_scores, target_entity_labels)
-                ret["masked_entity_correct"] = (torch.argmax(entity_scores, 1).data == target_entity_labels.data).sum()
-                ret["masked_entity_total"] = target_entity_labels.ne(-1).sum()
-                ret["loss"] += ret["masked_entity_loss"]
-            else:
-                ret["masked_entity_loss"] = word_ids.new_tensor(0.0, dtype=model_dtype)
-                ret["masked_entity_correct"] = word_ids.new_tensor(0, dtype=torch.long)
-                ret["masked_entity_total"] = word_ids.new_tensor(0, dtype=torch.long)
+                masked_entity_loss = self.loss_fn(entity_scores, target_entity_labels)
+                self.metrics["masked_entity_loss"](masked_entity_loss)
+                self.metrics["masked_entity_accuracy"](
+                    prediction=torch.argmax(entity_scores, dim=1), target=target_entity_labels
+                )
+                ret["loss"] += masked_entity_loss
 
         if masked_lm_labels is not None:
             masked_lm_mask = masked_lm_labels != -1
@@ -117,13 +129,25 @@ class LukePretrainingModel(LukeModel):
                 masked_lm_scores = masked_lm_scores.view(-1, self.config.vocab_size)
                 masked_lm_labels = torch.masked_select(masked_lm_labels, masked_lm_mask)
 
-                ret["masked_lm_loss"] = loss_fn(masked_lm_scores, masked_lm_labels)
-                ret["masked_lm_correct"] = (torch.argmax(masked_lm_scores, 1).data == masked_lm_labels.data).sum()
-                ret["masked_lm_total"] = masked_lm_labels.ne(-1).sum()
-                ret["loss"] += ret["masked_lm_loss"]
-            else:
-                ret["masked_lm_loss"] = word_ids.new_tensor(0.0, dtype=model_dtype)
-                ret["masked_lm_correct"] = word_ids.new_tensor(0, dtype=torch.long)
-                ret["masked_lm_total"] = word_ids.new_tensor(0, dtype=torch.long)
+                masked_lm_loss = self.loss_fn(masked_lm_scores, masked_lm_labels)
+
+                self.metrics["masked_lm_loss"](masked_lm_loss)
+                self.metrics["masked_lm_accuracy"](
+                    prediction=torch.argmax(masked_lm_scores, dim=1), target=masked_lm_labels
+                )
+                ret["loss"] += masked_lm_loss
+
+        if page_id is not None:
+            cls_token_embeddings = word_sequence_output[:, 0]
+
+            entity_scores = self.cls_entity_predictions(cls_token_embeddings)
+            entity_prediction_loss = self.loss_fn(entity_scores, page_id)
+
+            ret["loss"] += entity_prediction_loss
+            self.metrics["entity_prediction_loss"](entity_prediction_loss)
+            self.metrics["entity_prediction_accuracy"](
+                prediction=torch.argmax(entity_scores, dim=1), target=page_id
+            )
 
         return ret
+

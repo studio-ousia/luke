@@ -17,7 +17,7 @@ class SentenceTokenizer:
             return ICUSentenceTokenizer(name)
 
 
-class ICUSentenceTokenizer:
+class ICUSentenceTokenizer(SentenceTokenizer):
     """ Segment text to sentences. """
 
     def __init__(self, locale="en"):

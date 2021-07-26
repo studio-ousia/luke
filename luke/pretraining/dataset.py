@@ -26,6 +26,7 @@ DATASET_FILE = "dataset.tf"
 # global variables used in pool workers
 _dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length = None
 _max_mention_length = _min_sentence_length = _include_sentences_without_entities = _include_unk_entities = None
+_abstract_only = None
 
 
 @click.command()
@@ -38,6 +39,7 @@ _max_mention_length = _min_sentence_length = _include_sentences_without_entities
 @click.option("--max-entity-length", default=128)
 @click.option("--max-mention-length", default=30)
 @click.option("--min-sentence-length", default=5)
+@click.option("--abstract-only", is_flag=True)
 @click.option("--include-sentences-without-entities", is_flag=True)
 @click.option("--include-unk-entities/--skip-unk-entities", default=False)
 @click.option("--pool-size", default=multiprocessing.cpu_count())
@@ -59,7 +61,7 @@ def build_wikipedia_pretraining_dataset(
 
 class WikipediaPretrainingDataset(object):
     def __init__(self, dataset_dir: str):
-        self._dataset_dir = dataset_dir
+        self.dataset_dir = dataset_dir
         with open(os.path.join(dataset_dir, METADATA_FILE)) as metadata_file:
             self.metadata = json.load(metadata_file)
 
@@ -90,11 +92,11 @@ class WikipediaPretrainingDataset(object):
         else:
             import transformers as tokenizer_module
         tokenizer_class = getattr(tokenizer_module, tokenizer_class_name)
-        return tokenizer_class.from_pretrained(self._dataset_dir)
+        return tokenizer_class.from_pretrained(self.dataset_dir)
 
     @property
     def entity_vocab(self):
-        vocab_file_path = get_entity_vocab_file_path(self._dataset_dir)
+        vocab_file_path = get_entity_vocab_file_path(self.dataset_dir)
         return EntityVocab(vocab_file_path)
 
     def create_iterator(
@@ -106,6 +108,11 @@ class WikipediaPretrainingDataset(object):
         shuffle_seed: int = 0,
         num_parallel_reads: int = 10,
     ):
+
+        # The TensorFlow 2.0 has enabled eager execution by default.
+        # At the starting of algorithm, we need to use this to disable eager execution.
+        tf.compat.v1.disable_eager_execution()
+
         features = dict(
             word_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
             entity_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
@@ -113,7 +120,7 @@ class WikipediaPretrainingDataset(object):
             page_id=tf.io.FixedLenFeature([1], tf.int64),
         )
         dataset = tf.data.TFRecordDataset(
-            [os.path.join(self._dataset_dir, DATASET_FILE)],
+            [os.path.join(self.dataset_dir, DATASET_FILE)],
             compression_type="GZIP",
             num_parallel_reads=num_parallel_reads,
         )
@@ -150,6 +157,7 @@ class WikipediaPretrainingDataset(object):
         max_entity_length: int,
         max_mention_length: int,
         min_sentence_length: int,
+        abstract_only: bool,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
         pool_size: int,
@@ -186,6 +194,7 @@ class WikipediaPretrainingDataset(object):
                     max_entity_length,
                     max_mention_length,
                     min_sentence_length,
+                    abstract_only,
                     include_sentences_without_entities,
                     include_unk_entities,
                 )
@@ -225,11 +234,13 @@ class WikipediaPretrainingDataset(object):
         max_entity_length: int,
         max_mention_length: int,
         min_sentence_length: int,
+        abstract_only: bool,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
     ):
         global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length
         global _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
+        global _abstract_only
         global _language
 
         _dump_db = dump_db
@@ -242,6 +253,7 @@ class WikipediaPretrainingDataset(object):
         _min_sentence_length = min_sentence_length
         _include_sentences_without_entities = include_sentences_without_entities
         _include_unk_entities = include_unk_entities
+        _abstract_only = abstract_only
         _language = dump_db.language
 
     @staticmethod
@@ -263,6 +275,9 @@ class WikipediaPretrainingDataset(object):
                 return _tokenizer.tokenize(text)
 
         for paragraph in _dump_db.get_paragraphs(page_title):
+
+            if _abstract_only and not paragraph.abstract:
+                continue
 
             paragraph_text = paragraph.text
 

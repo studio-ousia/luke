@@ -7,6 +7,7 @@ import multiprocessing
 from collections import Counter, OrderedDict, defaultdict, namedtuple
 from contextlib import closing
 from multiprocessing.pool import Pool
+import logging
 
 import click
 from tqdm import tqdm
@@ -23,6 +24,8 @@ SPECIAL_TOKENS = {PAD_TOKEN, UNK_TOKEN, MASK_TOKEN}
 Entity = namedtuple("Entity", ["title", "language"])
 
 _dump_db = None  # global variable used in multiprocessing workers
+
+logger = logging.getLogger(__name__)
 
 
 @click.command()
@@ -49,12 +52,33 @@ class EntityVocab(object):
 
         # allow tsv files for backward compatibility
         if vocab_file.endswith(".tsv"):
+            logger.info("Detected vocab file type: tsv")
             self._parse_tsv_vocab_file(vocab_file)
-        else:
+        elif vocab_file.endswith(".jsonl"):
+            logger.info("Detected vocab file type: jsonl")
             self._parse_jsonl_vocab_file(vocab_file)
+        else:
+            logger.info("Detected vocab file type: pretrained")
+            self._from_pretrained(vocab_file)
+
+        self.special_token_ids = {}
+        for special_token in SPECIAL_TOKENS:
+            special_token_entity = self.search_across_languages(special_token)[0]
+            self.special_token_ids[special_token] = self.get_id(*special_token_entity)
+
+    def _from_pretrained(self, transformer_model_name: str):
+        from transformers.models.luke.tokenization_luke import LukeTokenizer
+
+        luke_tokenizer = LukeTokenizer.from_pretrained(transformer_model_name)
+        title_to_idx = luke_tokenizer.entity_vocab
+        for title, idx in title_to_idx.items():
+            entity = Entity(title, None)
+            self.vocab[entity] = idx
+            self.counter[entity] = None
+            self.inv_vocab[idx] = [entity]
 
     def _parse_tsv_vocab_file(self, vocab_file: str):
-        with open(vocab_file, "r", encoding="utf-8") as f:
+        with open(vocab_file, "r") as f:
             for (index, line) in enumerate(f):
                 title, count = line.rstrip().split("\t")
                 entity = Entity(title, None)
@@ -110,6 +134,13 @@ class EntityVocab(object):
         entity = Entity(title, language)
         return self.counter.get(entity, 0)
 
+    def search_across_languages(self, title: str) -> List[Entity]:
+        results = []
+        for entity in self.vocab.keys():
+            if entity.title == title:
+                results.append(entity)
+        return results
+
     def save(self, out_file: str):
         with open(out_file, "w") as f:
             for ent_id, entities in self.inv_vocab.items():
@@ -155,7 +186,7 @@ class EntityVocab(object):
 
         with open(out_file, "w") as f:
             for ent_id, (title, count) in enumerate(title_dict.items()):
-                json.dump({"id": ent_id, "entities": [[title, language]], "count": count}, f)
+                json.dump({"id": ent_id, "entities": [[title, language]], "count": count}, f, ensure_ascii=False)
                 f.write("\n")
 
     @staticmethod
@@ -174,12 +205,13 @@ class EntityVocab(object):
 
 
 @click.command()
-@click.option("entity_vocab_files", "-v", multiple=True)
-@click.option("inter_wiki_db_path", "-i", type=click.Path())
-@click.option("out_file", "-o", type=click.Path())
-@click.option("vocab_size", "-s", type=int)
+@click.option("--entity-vocab-files", "-v", multiple=True)
+@click.option("--inter-wiki-db-path", "-i", type=click.Path())
+@click.option("--out-file", "-o", type=click.Path())
+@click.option("--vocab-size", type=int)
+@click.option("--min-num-languages", type=int)
 def build_multilingual_entity_vocab(
-    entity_vocab_files: List[str], inter_wiki_db_path: str, out_file: str, vocab_size: int = 1000000
+    entity_vocab_files: List[str], inter_wiki_db_path: str, out_file: str, vocab_size: int, min_num_languages: int
 ):
 
     for entity_vocab_path in entity_vocab_files:
@@ -193,30 +225,33 @@ def build_multilingual_entity_vocab(
     db = InterwikiDB.load(inter_wiki_db_path)
 
     vocab: Dict[Entity, int] = {}  # title -> index
-    inv_vocab = defaultdict(set)  # index -> Set[title]
-    count_dict = defaultdict(int)  # index -> count
+    inv_vocab = defaultdict(set)  # ent_id -> Set[title]
+    count_dict = defaultdict(int)  # ent_id -> count
+    index_mapping = {}  # inter-language index -> ent_id
 
     special_token_to_idx = {special_token: idx for idx, special_token in enumerate(SPECIAL_TOKENS)}
     current_new_id = len(special_token_to_idx)
 
     for entity_vocab_path in entity_vocab_files:
+        logger.info(f"Reading {entity_vocab_path}")
         with open(entity_vocab_path, "r") as f:
-            for line in f:
+            for line in tqdm(f):
                 entity_dict = json.loads(line)
                 for title, lang in entity_dict["entities"]:
                     entity = Entity(title, lang)
-                    multilingual_entities = {entity}
                     if title not in SPECIAL_TOKENS:
-                        aligned_entities = {Entity(t, ln) for t, ln in db.query(title, lang)}
-                        multilingual_entities.update(aligned_entities)
+                        try:
+                            inter_language_id = db.get_id(title, lang)
+                        except KeyError:
+                            inter_language_id = None
+
                         # judge if we should assign a new id to these entities
-                        already_registered_entities = aligned_entities & vocab.keys()
-                        if len(already_registered_entities) > 0:
-                            already_registered_entity = list(already_registered_entities)[0]
-                            ent_id = vocab[already_registered_entity]
+                        if inter_language_id is not None and inter_language_id in index_mapping:
+                            ent_id = index_mapping[inter_language_id]
                         else:
                             ent_id = current_new_id
                             current_new_id += 1
+                            index_mapping[inter_language_id] = ent_id
                     else:
                         ent_id = special_token_to_idx[title]
 
@@ -226,10 +261,19 @@ def build_multilingual_entity_vocab(
     json_dicts = [
         {"entities": list(inv_vocab[ent_id]), "count": count_dict[ent_id]} for ent_id in range(current_new_id)
     ]
-    json_dicts.sort(key=lambda x: -x["count"] if x["count"] != 0 else -math.inf)
-    json_dicts = json_dicts[:vocab_size]
 
+    logger.info(f"Vocab size without truncation: {len(json_dicts)}")
+
+    if min_num_languages is not None:
+        json_dicts = [d for d in json_dicts if len(d["entities"]) >= min_num_languages]
+
+    json_dicts.sort(key=lambda x: -x["count"] if x["count"] != 0 else -math.inf)
+    if vocab_size is not None:
+        json_dicts = json_dicts[:vocab_size]
+
+    logger.info(f"Final vocab size: {len(json_dicts)}")
+    logger.info(f"Saving to {out_file}")
     with open(out_file, "w") as f:
         for ent_id, item in enumerate(json_dicts):
-            json.dump({"id": ent_id, **item}, f)
+            json.dump({"id": ent_id, **item}, f, ensure_ascii=False)
             f.write("\n")

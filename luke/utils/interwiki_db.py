@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import List
+from typing import List, Tuple
 
 import bz2
 import logging
@@ -34,18 +34,32 @@ class InterwikiDB(object):
         self._indptr = indptr
         self._title_indices = title_indices
 
-    def query(self, title: str, lang: str):
-        try:
-            key = "%s:%s" % (title, lang)
-            row = self._title_indices[self._title_trie[key]]
-            objs = [
-                KEY_RULE.match(self._title_trie.restore_key(ind))
-                for ind in self._data[self._indptr[row] : self._indptr[row + 1]]
-            ]
-            return [(o.group(1), o.group(2)) for o in objs]
+    def get_id(self, title: str, lang: str) -> int:
+        """ Return the inter-language id in the database."""
+        key = f"{title}:{lang}"
+        return self._title_indices[self._title_trie[key]]
 
+    def get_titles_from_id(self, idx: str) -> List[Tuple[str, str]]:
+        objs = [
+            KEY_RULE.match(self._title_trie.restore_key(ind))
+            for ind in self._data[self._indptr[idx] : self._indptr[idx + 1]]
+        ]
+        return [(o.group(1), o.group(2)) for o in objs]
+
+    def query(self, title: str, lang: str) -> List[Tuple[str, str]]:
+        try:
+            idx = self.get_id(title, lang)
+            return self.get_titles_from_id(idx)
         except KeyError:
             return []
+
+    def get_title_translation(self, title: str, source_language: str, target_language: str) -> str:
+        target_title = [title for title, lang in self.query(title, source_language) if lang == target_language]
+
+        if len(target_title) > 0:
+            return target_title[0]
+        else:
+            return None
 
     @staticmethod
     def build(wiki_data_file: str, target_languages: List[str] = None):

@@ -7,8 +7,8 @@ from transformers.optimization import AdamW
 
 
 class LukeAdamW(AdamW):
-    def __init__(self, params, *args, grad_avg_device=None, **kwargs):
-        super(LukeAdamW, self).__init__(params, *args, **kwargs)
+    def __init__(self, params, *args, lr=1e-5, betas=(0.9, 0.999), eps=1e-6, grad_avg_device=None, **kwargs):
+        super(LukeAdamW, self).__init__(params, *args, lr=lr, betas=betas, eps=eps, **kwargs)
         if grad_avg_device is None:
             self.grad_avg_device = self.param_groups[0]["params"][0].device
         else:
