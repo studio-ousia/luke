@@ -17,6 +17,9 @@ poetry run python evaluate_transformers_checkpoint.py TEST_DATA_PATH
 # {'f1': 0.9461946902654867, 'precision': 0.945859872611465, 'recall': 0.9465297450424929}.
 ```
 
+You may find the result a little higher than the original paper of LUKE.  
+This is due to a minor difference in the data preprocessing in the evaluation code.
+
 # Training
 We configure some parameters through environmental variables.
 ```bash
