@@ -57,9 +57,11 @@ class EntityVocab(object):
         elif vocab_file.endswith(".jsonl"):
             logger.info("Detected vocab file type: jsonl")
             self._parse_jsonl_vocab_file(vocab_file)
-        else:
-            logger.info("Detected vocab file type: pretrained")
+        elif "luke" in vocab_file:
+            logger.info("Detected vocab file type: pretrained transformers")
             self._from_pretrained(vocab_file)
+        else:
+            raise ValueError(f"Unrecognized vocab_file format: {vocab_file}")
 
         self.special_token_ids = {}
         for special_token in SPECIAL_TOKENS:
@@ -142,6 +144,13 @@ class EntityVocab(object):
         return results
 
     def save(self, out_file: str):
+
+        if Path(out_file).suffix != ".jsonl":
+            raise ValueError(
+                "The saved file has to has the jsonl extension so that it will be loaded properly.\n"
+                f"out_file: {out_file}"
+            )
+
         with open(out_file, "w") as f:
             for ent_id, entities in self.inv_vocab.items():
                 count = self.counter[entities[0]]

@@ -7,7 +7,7 @@ jobs:
     steps:
       - checkout
       - run: sudo apt-get update
-      - run: sudo apt-get install libicu-dev
+      - run: sudo apt-get install libicu-dev pkg-config
       - restore_cache:
           keys:
             - deps-{{ checksum "poetry.lock" }}
