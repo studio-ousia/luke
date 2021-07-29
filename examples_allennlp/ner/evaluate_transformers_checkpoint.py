@@ -3,7 +3,6 @@ import json
 import tqdm
 import torch
 
-
 from allennlp.common import Params
 from allennlp.common.util import import_module_and_submodules
 from allennlp.data import Vocabulary
@@ -15,7 +14,7 @@ from allennlp.nn import util as nn_util
 
 from transformers import LukeTokenizer, LukeForEntitySpanClassification
 
-from examples.ner.reader import ConllExhaustiveReader
+from examples.ner.reader import ConllSpanReader
 
 
 @click.command()
@@ -37,7 +36,7 @@ def evaluate_transformers_checkpoint(
     batch_size: int,
     cuda_device: int,
     result_save_path: str,
-    prediction_save_path: str
+    prediction_save_path: str,
 ):
     """
     Expected results for CoNLL-2003 NER English test set.
@@ -60,7 +59,7 @@ def evaluate_transformers_checkpoint(
     """
     import_module_and_submodules("examples")
 
-    reader = ConllExhaustiveReader(
+    reader = ConllSpanReader(
         tokenizer=PretrainedTransformerTokenizer(
             model_name=checkpoint_tokenizer_name, add_special_tokens=False, tokenizer_kwargs={"add_prefix_space": True}
         ),
