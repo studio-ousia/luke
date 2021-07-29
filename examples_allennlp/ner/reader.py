@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import itertools
 import math
 import numpy as np
@@ -6,6 +6,8 @@ from allennlp.data import Tokenizer, DatasetReader, TokenIndexer, Instance, Toke
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from allennlp.data.fields import TextField, TensorField, MetadataField, LabelField, ListField
 from transformers.models.luke.tokenization_luke import LukeTokenizer
+
+from seqeval.scheme import Entities, IOB1, Entity
 
 NON_ENTITY = "O"
 
@@ -56,7 +58,7 @@ def check_add_prefix_space(tokenizer: Tokenizer):
 
 
 @DatasetReader.register("conll_span")
-class ConllExhaustiveReader(DatasetReader):
+class ConllSpanReader(DatasetReader):
     def __init__(
         self,
         token_indexers: Dict[str, TokenIndexer],
@@ -98,34 +100,20 @@ class ConllExhaustiveReader(DatasetReader):
         subword_start_positions = frozenset(token2subword)
         subword_sentence_boundaries = [sum(len(token) for token in tokens[:p]) for p in sentence_boundaries]
 
-        # get the span indices of subwords for entities
-        entity_labels = {}
-        start = None
-        cur_type = None
-        for n, label in enumerate(labels):
-            if label == "O" or n in sentence_boundaries:
-                if start is not None:
-                    entity_labels[(token2subword[start], token2subword[n])] = cur_type
-                    start = None
-                    cur_type = None
+        # extract entities from IOB tags
+        # we need to pass sentence by sentence
+        entities: List[Entity] = []
+        for s, e in zip(sentence_boundaries[:-1], sentence_boundaries[1:]):
+            for ent in Entities([labels[s:e]], scheme=IOB1).entities[0]:
+                ent.start += s
+                ent.end += s
+                entities.append(ent)
 
-            if label.startswith("B"):
-                if start is not None:
-                    entity_labels[(token2subword[start], token2subword[n])] = cur_type
-                start = n
-                cur_type = label[2:]
-
-            elif label.startswith("I"):
-                if start is None:
-                    start = n
-                    cur_type = label[2:]
-                elif cur_type != label[2:]:
-                    entity_labels[(token2subword[start], token2subword[n])] = cur_type
-                    start = n
-                    cur_type = label[2:]
-
-        if start is not None:
-            entity_labels[(token2subword[start], len(subwords))] = cur_type
+        span_to_entity_label: Dict[Tuple[int, int], str] = dict()
+        for ent in entities:
+            subword_start = token2subword[ent.start]
+            subword_end = token2subword[ent.end]
+            span_to_entity_label[(subword_start, subword_end)] = ent.tag
 
         # split data according to sentence boundaries
         for n in range(len(subword_sentence_boundaries) - 1):
@@ -182,9 +170,7 @@ class ConllExhaustiveReader(DatasetReader):
                     original_entity_spans.append(
                         (subword2token[doc_entity_start], subword2token[doc_entity_end - 1] + 1)
                     )
-
-                    labels.append(entity_labels.get((doc_entity_start, doc_entity_end), NON_ENTITY))
-                    entity_labels.pop((doc_entity_start, doc_entity_end), None)
+                    labels.append(span_to_entity_label.pop((doc_entity_start, doc_entity_end), NON_ENTITY))
 
             # split instances
             split_size = math.ceil(len(entity_ids) / self.max_entity_length)
@@ -211,6 +197,8 @@ class ConllExhaustiveReader(DatasetReader):
                     )
 
                 yield Instance(fields)
+
+        assert len(span_to_entity_label) == 0
 
     def _read(self, file_path: str):
         for i, (words, labels, sentence_boundaries) in enumerate(
