@@ -21,13 +21,7 @@ logger = logging.getLogger(__name__)
 
 class LukeConfig(BertConfig):
     def __init__(
-        self,
-        vocab_size: int,
-        entity_vocab_size: int,
-        bert_model_name: str,
-        entity_emb_size: int = None,
-        cls_entity_prediction: bool = False,
-        **kwargs,
+        self, vocab_size: int, entity_vocab_size: int, bert_model_name: str, entity_emb_size: int = None, **kwargs
     ):
         super(LukeConfig, self).__init__(vocab_size, **kwargs)
 
@@ -37,11 +31,6 @@ class LukeConfig(BertConfig):
             self.entity_emb_size = self.hidden_size
         else:
             self.entity_emb_size = entity_emb_size
-
-        self.cls_entity_prediction = cls_entity_prediction
-
-    def __repr__(self):
-        return "{} {}".format(self.__class__.__name__, self.to_json_string(use_diff=False))
 
 
 class EntityEmbeddings(nn.Module):
@@ -113,10 +102,12 @@ class LukeModel(nn.Module):
         word_seq_size = word_ids.size(1)
 
         embedding_output = self.embeddings(word_ids, word_segment_ids)
+
         attention_mask = self._compute_extended_attention_mask(word_attention_mask, entity_attention_mask)
         if entity_ids is not None:
             entity_embedding_output = self.entity_embeddings(entity_ids, entity_position_ids, entity_segment_ids)
             embedding_output = torch.cat([embedding_output, entity_embedding_output], dim=1)
+
         encoder_outputs = self.encoder(embedding_output, attention_mask, [None] * self.config.num_hidden_layers)
         sequence_output = encoder_outputs[0]
         word_sequence_output = sequence_output[:, :word_seq_size, :]
@@ -196,9 +187,6 @@ class LukeModel(nn.Module):
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
         return extended_attention_mask
-
-    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        return {k: m.get_metric(reset=reset) for k, m in self.metrics.items()}
 
 
 class LukeEntityAwareAttentionModel(LukeModel):
