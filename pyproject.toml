@@ -18,9 +18,11 @@ seqeval = "*"
 tensorflow = "*"
 torch = "*"
 tqdm = "*"
-transformers = "*"
+transformers = "4.6.0"
 ujson = "*"
-wikipedia2vec = "*"
+allennlp = "2.5.0"
+tensorboard = "1.15.0"
+wikipedia2vec = "^1.0.5"
 
 [tool.poetry.dev-dependencies]
 black = "^19.10b0"

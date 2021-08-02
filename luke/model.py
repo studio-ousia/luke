@@ -5,17 +5,16 @@ from typing import Dict
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers.modeling_bert import (
+from transformers.models.bert.modeling_bert import (
     BertConfig,
     BertEmbeddings,
     BertEncoder,
     BertIntermediate,
-    BertLayerNorm,
     BertOutput,
     BertPooler,
     BertSelfOutput,
 )
-from transformers.modeling_roberta import RobertaEmbeddings
+from transformers.models.roberta.modeling_roberta import RobertaEmbeddings
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ class EntityEmbeddings(nn.Module):
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(
@@ -128,7 +127,7 @@ class LukeModel(nn.Module):
                 module.weight.data.zero_()
             else:
                 module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
-        elif isinstance(module, BertLayerNorm):
+        elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
         if isinstance(module, nn.Linear) and module.bias is not None:

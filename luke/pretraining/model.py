@@ -2,8 +2,8 @@ from typing import Optional
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
-from transformers.modeling_bert import ACT2FN, BertLayerNorm, BertPreTrainingHeads
-from transformers.modeling_roberta import RobertaLMHead
+from transformers.models.bert.modeling_bert import ACT2FN, BertPreTrainingHeads
+from transformers.models.roberta.modeling_roberta import RobertaLMHead
 
 from luke.model import LukeModel, LukeConfig
 
@@ -16,7 +16,7 @@ class EntityPredictionHeadTransform(nn.Module):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
             self.transform_act_fn = config.hidden_act
-        self.LayerNorm = BertLayerNorm(config.entity_emb_size, eps=config.layer_norm_eps)
+        self.LayerNorm = nn.LayerNorm(config.entity_emb_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states: torch.Tensor):
         hidden_states = self.dense(hidden_states)

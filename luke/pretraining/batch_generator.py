@@ -7,7 +7,7 @@ import random
 import unicodedata
 
 import numpy as np
-from transformers.tokenization_roberta import RobertaTokenizer
+from transformers.models.roberta import RobertaTokenizer
 
 from luke.pretraining.dataset import WikipediaPretrainingDataset
 from luke.utils.entity_vocab import MASK_TOKEN
