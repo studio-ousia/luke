@@ -26,8 +26,8 @@ We configure some parameters through environmental variables.
 # We assume you are in the root directory of luke. 
 
 export SEED=0;
-export TRAIN_DATA_PATH="data/ner/train.conllu";
-export VALIDATION_DATA_PATH="data/ner/dev.conllu";
+export TRAIN_DATA_PATH="data/ner/eng.train";
+export VALIDATION_DATA_PATH="data/ner/eng.testa";
 
 # train LUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/luke-base";
@@ -43,5 +43,5 @@ poetry run allennlp train examples/ner/configs/transformers.jsonnet  -s results/
 poetry run allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples --output-file OUTPUT_FILE 
 
 # example for LUKE
-poetry run allennlp evaluate results/ner/luke-base data/ner/test.conllu --include-package examples --output-file results/ner/luke-base/metrics_test.json --cuda 0
+poetry run allennlp evaluate results/ner/luke-base data/ner/eng.testb --include-package examples --output-file results/ner/luke-base/metrics_test.json --cuda 0
 ```
