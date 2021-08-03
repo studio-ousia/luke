@@ -23,6 +23,18 @@ to solve downstream tasks.
 
 ## News
 
+**August 3, 2021: New example code based on Hugging Face Transformers and
+AllenNLP is available**
+
+New fine-tuning examples of three downstream tasks, i.e., _NER_, _relation
+classification_, and _entity typing_, have been added to LUKE. These examples
+are developed based on Hugging Face Transformers and AllenNLP. The fine-tuning
+models are defined using simple AllenNLP's Jsonnet config files!
+
+The example code is available in the
+[examples_allennlp](https://github.com/studio-ousia/luke/tree/master/examples_allennlp)
+directory.
+
 **May 5, 2021: LUKE is added to Hugging Face Transformers**
 
 LUKE has been added to the
