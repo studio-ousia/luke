@@ -2,12 +2,12 @@ version: 2
 jobs:
   build_and_test:
     docker:
-      - image: cimg/python:3.7.12-browsers
+      - image: cimg/python:3.7.12
     working_directory: ~/repo
     steps:
       - checkout
       - run: sudo apt-get update
-      - run: sudo apt-get install libicu-dev pkg-config
+      - run: sudo apt-get install libicu-dev pkg-config default-jdk-headless
       - restore_cache:
           keys:
             - deps-{{ checksum "poetry.lock" }}
