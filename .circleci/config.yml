@@ -2,7 +2,7 @@ version: 2
 jobs:
   build_and_test:
     docker:
-      - image: cimg/python:3.7.12
+      - image: cimg/python:3.7.12-browsers
     working_directory: ~/repo
     steps:
       - checkout
