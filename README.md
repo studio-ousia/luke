@@ -6,8 +6,9 @@
 
 **LUKE** (**L**anguage **U**nderstanding with **K**nowledge-based
 **E**mbeddings) is a new pre-trained contextualized representation of words and
-entities based on transformer. It achieves state-of-the-art results on important
-NLP benchmarks including
+entities based on transformer. It was proposed in our paper
+[LUKE: Deep Contextualized Entity Representations with Entity-aware Self-attention](https://arxiv.org/abs/2010.01057).
+It achieves state-of-the-art results on important NLP benchmarks including
 **[SQuAD v1.1](https://rajpurkar.github.io/SQuAD-explorer/)** (extractive
 question answering),
 **[CoNLL-2003](https://www.clips.uantwerpen.be/conll2003/ner/)** (named entity
@@ -23,6 +24,17 @@ to solve downstream tasks.
 
 ## News
 
+**November 24, 2021: Entity disambiguation example is available**
+
+The example code of entity disambiguation based on LUKE has been added to this
+repository. This model was originally proposed in
+[our paper](https://arxiv.org/abs/1909.00426), and achieved state-of-the-art
+results on five standard entity disambiguation datasets: AIDA-CoNLL, MSNBC,
+AQUAINT, ACE2004, and WNED-WIKI.
+
+For further details, please refer to the
+[example directory](https://github.com/studio-ousia/luke/tree/master/examples/entity_disambiguation).
+
 **August 3, 2021: New example code based on Hugging Face Transformers and
 AllenNLP is available**
 
@@ -32,8 +44,7 @@ are developed based on Hugging Face Transformers and AllenNLP. The fine-tuning
 models are defined using simple AllenNLP's Jsonnet config files!
 
 The example code is available in the
-[examples_allennlp](https://github.com/studio-ousia/luke/tree/master/examples_allennlp)
-directory.
+[examples_allennlp directory](https://github.com/studio-ousia/luke/tree/master/examples_allennlp).
 
 **May 5, 2021: LUKE is added to Hugging Face Transformers**
 
