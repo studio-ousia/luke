@@ -7,7 +7,7 @@ from itertools import chain, repeat
 from multiprocessing.pool import Pool
 
 from tqdm import tqdm
-from transformers.tokenization_roberta import RobertaTokenizer
+from transformers import RobertaTokenizer
 
 logger = logging.getLogger(__name__)
 

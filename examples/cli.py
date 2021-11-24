@@ -6,6 +6,8 @@ import subprocess
 import sys
 from argparse import Namespace
 
+from transformers import RobertaTokenizer
+
 logging.getLogger("transformers").setLevel(logging.WARNING)
 
 import click
@@ -99,9 +101,13 @@ def cli(ctx, **kwargs):
 
         if args.model_file:
             model_archive = ModelArchive.load(args.model_file)
-            ctx.obj["tokenizer"] = model_archive.tokenizer
             ctx.obj["entity_vocab"] = model_archive.entity_vocab
             ctx.obj["bert_model_name"] = model_archive.bert_model_name
+            if model_archive.bert_model_name.startswith("roberta"):
+                # the current example code does not support the fast tokenizer
+                ctx.obj["tokenizer"] = RobertaTokenizer.from_pretrained(model_archive.bert_model_name)
+            else:
+                ctx.obj["tokenizer"] = model_archive.tokenizer
             ctx.obj["model_config"] = model_archive.config
             ctx.obj["max_mention_length"] = model_archive.max_mention_length
             ctx.obj["model_weights"] = model_archive.state_dict

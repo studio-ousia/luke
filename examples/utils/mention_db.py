@@ -7,7 +7,7 @@ import click
 import joblib
 import marisa_trie
 from tqdm import tqdm
-from transformers.tokenization_bert import BasicTokenizer
+from transformers import BasicTokenizer
 from wikipedia2vec.dump_db import DumpDB
 
 SEP_CHAR = "\u2581"

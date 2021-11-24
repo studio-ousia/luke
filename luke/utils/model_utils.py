@@ -70,7 +70,10 @@ class ModelArchive(object):
 
     @property
     def config(self):
-        return LukeConfig(**self.metadata["model_config"])
+        config = LukeConfig(**self.metadata["model_config"])
+        if self.bert_model_name.startswith("roberta"):  # for compatibility for recent transformers
+            config.pad_token_id = 1
+        return config
 
     @property
     def tokenizer(self):
