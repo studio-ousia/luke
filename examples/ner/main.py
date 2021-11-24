@@ -121,8 +121,9 @@ def evaluate(args, model, fold, output_file=None):
 
     assert len(all_predictions) == len(examples)
 
-    final_labels = []
-    final_predictions = []
+    sent_words_list = []
+    sent_labels_list = []
+    sent_predictions_list = []
 
     for example_index, example in enumerate(examples):
         predictions = all_predictions[example_index]
@@ -138,30 +139,35 @@ def evaluate(args, model, fold, output_file=None):
                 if span[1] - span[0] > 1:
                     predicted_sequence[span[0] + 1 : span[1]] = ["I-" + label] * (span[1] - span[0] - 1)
 
-        final_predictions += predicted_sequence
-        final_labels += example.labels
+        for sent_index in range(len(example.sentence_boundaries) - 1):
+            sent_start, sent_end = example.sentence_boundaries[sent_index : sent_index + 2]
+            sent_words_list.append(example.words[sent_start:sent_end])
+            sent_predictions_list.append(predicted_sequence[sent_start:sent_end])
+            sent_labels_list.append(example.labels[sent_start:sent_end])
 
     # convert IOB2 -> IOB1
     prev_type = None
-    for n, label in enumerate(final_predictions):
-        if label[0] == "B" and label[2:] != prev_type:
-            final_predictions[n] = "I" + label[1:]
-        prev_type = label[2:]
+    for sent_predictions in sent_predictions_list:
+        for n, label in enumerate(sent_predictions):
+            if label[0] == "B" and label[2:] != prev_type:
+                sent_predictions[n] = "I" + label[1:]
+            prev_type = label[2:]
 
     if output_file:
-        all_words = [w for e in examples for w in e.words]
         with open(output_file, "w") as f:
-            for item in zip(all_words, final_labels, final_predictions):
-                f.write(" ".join(item) + "\n")
+            for (sent_words, sent_predictions, sent_labels) in zip(
+                sent_words_list, sent_predictions_list, sent_labels_list
+            ):
+                for word, prediction, label in zip(sent_words, sent_predictions, sent_labels):
+                    f.write(f"{word} {label} {prediction}\n")
+                f.write("\n")
 
-    assert len(final_predictions) == len(final_labels)
-    print("The number of labels:", len(final_labels))
-    print(seqeval.metrics.classification_report(final_labels, final_predictions, digits=4))
+    print(seqeval.metrics.classification_report(sent_labels_list, sent_predictions_list, digits=4))
 
     return dict(
-        f1=seqeval.metrics.f1_score(final_labels, final_predictions),
-        precision=seqeval.metrics.precision_score(final_labels, final_predictions),
-        recall=seqeval.metrics.recall_score(final_labels, final_predictions),
+        f1=seqeval.metrics.f1_score(sent_labels_list, sent_predictions_list),
+        precision=seqeval.metrics.precision_score(sent_labels_list, sent_predictions_list),
+        recall=seqeval.metrics.recall_score(sent_labels_list, sent_predictions_list),
     )
 
 
