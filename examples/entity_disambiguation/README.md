@@ -11,10 +11,10 @@ datasets: AIDA-CoNLL, MSNBC, AQUAINT, ACE2004, and WNED-WIKI.
 
 ## Reproducing Experiments
 
-- Dataset:
-  [Link](https://drive.google.com/file/d/1vjzrlp0uYtI6gjpnExdF3MtK21Orx9Lg/view?usp=sharing)
 - Model checkpoint file:
   [Link](https://drive.google.com/file/d/1BTf9XM83tWrq9VOXqj9fXlGm2mP5DNRF/view?usp=sharing)
+- Dataset:
+  [Link](https://drive.google.com/file/d/1vjzrlp0uYtI6gjpnExdF3MtK21Orx9Lg/view?usp=sharing)
 
 **Zero-shot evaluation of the trained model:**
 
@@ -42,7 +42,7 @@ $ python -m examples.cli \
     --train-batch-size=2 \
     --gradient-accumulation-steps=8 \
     --do-train \
-    --do-eval \
+    --do-eval
 ```
 
 ## Citation
