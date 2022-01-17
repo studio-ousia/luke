@@ -15,8 +15,8 @@ from allennlp.nn import util as nn_util
 
 from transformers import LukeTokenizer, LukeForEntityClassification
 
-from examples.entity_typing.reader import EntityTypingReader
-from examples.utils.util import ENT
+from examples_allennlp.entity_typing.reader import EntityTypingReader
+from examples_allennlp.utils.util import ENT
 
 
 @click.command()
@@ -57,7 +57,7 @@ def evaluate_transformers_checkpoint(
     cuda_device : int
     result_save_path : str
     """
-    import_module_and_submodules("examples")
+    import_module_and_submodules("examples_allennlp")
 
     tokenizer_kwargs = {"additional_special_tokens": [ENT]}
     reader = EntityTypingReader(

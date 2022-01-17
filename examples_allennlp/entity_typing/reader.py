@@ -5,7 +5,7 @@ from allennlp.data import DatasetReader, TokenIndexer, Tokenizer, Instance, Toke
 from allennlp.data.fields import SpanField, TextField, MultiLabelField, TensorField, MetadataField
 
 from transformers.models.luke.tokenization_luke import LukeTokenizer
-from examples.utils.util import ENT, list_rindex
+from examples_allennlp.utils.util import ENT, list_rindex
 
 
 ENTITY_LABELS = {"entity", "event", "group", "location", "object", "organization", "person", "place", "time"}

@@ -1,5 +1,5 @@
 local base = import "lib/base.libsonnet";
-local model = import "lib/transformers_luke_model.jsonnet";
+local model = import "lib/transformers_model_luke.jsonnet";
 
 
 base + {

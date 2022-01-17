@@ -3,7 +3,7 @@ import torch
 
 from allennlp.modules.token_embedders import TokenEmbedder
 
-from examples.utils.span_utils import get_span_max_length, span_to_position_ids
+from examples_allennlp.utils.span_utils import get_span_max_length, span_to_position_ids
 from .feature_extractor import RCFeatureExtractor
 
 

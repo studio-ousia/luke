@@ -15,8 +15,8 @@ from allennlp.nn import util as nn_util
 
 from transformers import LukeTokenizer, LukeForEntityPairClassification
 
-from examples.relation_classification.reader import RelationClassificationReader
-from examples.utils.util import ENT, ENT2
+from examples_allennlp.relation_classification.reader import RelationClassificationReader
+from examples_allennlp.utils.util import ENT, ENT2
 
 
 @click.command()
@@ -57,7 +57,7 @@ def evaluate_transformers_checkpoint(
     cuda_device : int
     result_save_path : str
     """
-    import_module_and_submodules("examples")
+    import_module_and_submodules("examples_allennlp")
 
     tokenizer_kwargs = {"additional_special_tokens": [ENT, ENT2]}
     reader = RelationClassificationReader(

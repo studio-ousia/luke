@@ -14,7 +14,7 @@ from allennlp.nn import util as nn_util
 
 from transformers import LukeTokenizer, LukeForEntitySpanClassification
 
-from examples.ner.reader import ConllSpanReader
+from examples_allennlp.ner.reader import ConllSpanReader
 
 
 @click.command()
@@ -57,7 +57,7 @@ def evaluate_transformers_checkpoint(
     cuda_device : int
     result_save_path : str
     """
-    import_module_and_submodules("examples")
+    import_module_and_submodules("examples_allennlp")
 
     reader = ConllSpanReader(
         tokenizer=PretrainedTransformerTokenizer(
