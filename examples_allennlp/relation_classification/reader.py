@@ -6,7 +6,7 @@ from allennlp.data import DatasetReader, TokenIndexer, Tokenizer, Instance, Toke
 from allennlp.data.fields import SpanField, TextField, LabelField, TensorField, MetadataField
 
 from transformers.models.luke.tokenization_luke import LukeTokenizer
-from examples.utils.util import ENT, ENT2, list_rindex
+from examples_allennlp.utils.util import ENT, ENT2, list_rindex
 
 
 def parse_tacred_file(path: str):

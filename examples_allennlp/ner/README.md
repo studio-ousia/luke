@@ -11,7 +11,7 @@ We assume that the files follow the CoNLL-2003 format.
 
 # Reproduce the checkpoint result
 ```bash
-# We assume you are in this directory (examples/ner). 
+# We assume you are in this directory (examples_allennlp/ner). 
 poetry run python evaluate_transformers_checkpoint.py TEST_DATA_PATH
 # expected results:
 # {'f1': 0.9461946902654867, 'precision': 0.945859872611465, 'recall': 0.9465297450424929}.
@@ -31,17 +31,17 @@ export VALIDATION_DATA_PATH="data/ner/eng.testa";
 
 # train LUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/luke-base";
-poetry run allennlp train examples/ner/configs/transformers_luke.jsonnet -s results/ner/luke-base --include-package examples -o '{"trainer": {"cuda_device": 0}}'
+poetry run allennlp train examples_allennlp/ner/configs/transformers_luke.jsonnet -s results/ner/luke-base --include-package examples_allennlp -o '{"trainer": {"cuda_device": 0}}'
 
 # you can also fine-tune models from the BERT family
 export TRANSFORMERS_MODEL_NAME="roberta-base";
-poetry run allennlp train examples/ner/configs/transformers.jsonnet  -s results/ner/roberta-base --include-package examples
+poetry run allennlp train examples_allennlp/ner/configs/transformers.jsonnet  -s results/ner/roberta-base --include-package examples_allennlp
 ```
 
 # Evaluation
 ```bash
-poetry run allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples --output-file OUTPUT_FILE 
+poetry run allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples_allennlp --output-file OUTPUT_FILE 
 
 # example for LUKE
-poetry run allennlp evaluate results/ner/luke-base data/ner/eng.testb --include-package examples --output-file results/ner/luke-base/metrics_test.json --cuda 0
+poetry run allennlp evaluate results/ner/luke-base data/ner/eng.testb --include-package examples_allennlp --output-file results/ner/luke-base/metrics_test.json --cuda 0
 ```

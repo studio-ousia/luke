@@ -5,7 +5,7 @@ from allennlp.modules.token_embedders import TokenEmbedder
 from allennlp.modules.seq2seq_encoders import Seq2SeqEncoder
 from allennlp.modules.seq2seq_encoders import PassThroughEncoder
 
-from examples.utils.span_utils import span_pooling, extract_span_start
+from examples_allennlp.utils.span_utils import span_pooling, extract_span_start
 from .feature_extractor import ETFeatureExtractor
 
 
