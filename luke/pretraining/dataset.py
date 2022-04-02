@@ -1,31 +1,40 @@
 import functools
 import itertools
 import json
+import logging
 import multiprocessing
 import os
 import random
-import re
 from contextlib import closing
 from multiprocessing.pool import Pool
+from typing import Optional
 
 import click
 import tensorflow as tf
+import transformers
 from tensorflow.io import TFRecordWriter
 from tensorflow.train import Int64List
-from transformers import PreTrainedTokenizer, RobertaTokenizer
 from tqdm import tqdm
+from transformers import AutoTokenizer, PreTrainedTokenizer
 from wikipedia2vec.dump_db import DumpDB
 
+from luke.pretraining.tokenization import tokenize, tokenize_segments
 from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab
-from luke.utils.sentence_tokenizer import SentenceTokenizer
-from luke.utils.model_utils import METADATA_FILE, ENTITY_VOCAB_FILE, get_entity_vocab_file_path
-from luke.utils.word_tokenizer import AutoTokenizer
+from luke.utils.model_utils import (
+    ENTITY_VOCAB_FILE,
+    METADATA_FILE,
+    get_entity_vocab_file_path,
+)
+from luke.utils.sentence_splitter import SentenceSplitter
+
+logger = logging.getLogger(__name__)
 
 DATASET_FILE = "dataset.tf"
 
 # global variables used in pool workers
-_dump_db = _tokenizer = _sentence_tokenizer = _entity_vocab = _max_num_tokens = _max_entity_length = None
+_dump_db = _tokenizer = _sentence_splitter = _entity_vocab = _max_num_tokens = _max_entity_length = None
 _max_mention_length = _min_sentence_length = _include_sentences_without_entities = _include_unk_entities = None
+_abstract_only = _language = None
 
 
 @click.command()
@@ -38,28 +47,30 @@ _max_mention_length = _min_sentence_length = _include_sentences_without_entities
 @click.option("--max-entity-length", default=128)
 @click.option("--max-mention-length", default=30)
 @click.option("--min-sentence-length", default=5)
+@click.option("--abstract-only", is_flag=True)
 @click.option("--include-sentences-without-entities", is_flag=True)
 @click.option("--include-unk-entities/--skip-unk-entities", default=False)
 @click.option("--pool-size", default=multiprocessing.cpu_count())
 @click.option("--chunk-size", default=100)
 @click.option("--max-num-documents", default=None, type=int)
+@click.option("--predefined-entities-only", is_flag=True)
 def build_wikipedia_pretraining_dataset(
-    dump_db_file: str, tokenizer_name: str, entity_vocab_file: str, output_dir: str, sentence_tokenizer: str, **kwargs
+    dump_db_file: str, tokenizer_name: str, entity_vocab_file: str, output_dir: str, sentence_splitter: str, **kwargs
 ):
     dump_db = DumpDB(dump_db_file)
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-    sentence_tokenizer = SentenceTokenizer.from_name(sentence_tokenizer)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=False)
+    sentence_splitter = SentenceSplitter.from_name(sentence_splitter)
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     entity_vocab = EntityVocab(entity_vocab_file)
-    WikipediaPretrainingDataset.build(dump_db, tokenizer, sentence_tokenizer, entity_vocab, output_dir, **kwargs)
+    WikipediaPretrainingDataset.build(dump_db, tokenizer, sentence_splitter, entity_vocab, output_dir, **kwargs)
 
 
-class WikipediaPretrainingDataset(object):
+class WikipediaPretrainingDataset:
     def __init__(self, dataset_dir: str):
-        self._dataset_dir = dataset_dir
+        self.dataset_dir = dataset_dir
         with open(os.path.join(dataset_dir, METADATA_FILE)) as metadata_file:
             self.metadata = json.load(metadata_file)
 
@@ -85,16 +96,12 @@ class WikipediaPretrainingDataset(object):
     @property
     def tokenizer(self):
         tokenizer_class_name = self.metadata.get("tokenizer_class", "")
-        if tokenizer_class_name == "XLMRobertaTokenizer":
-            import luke.utils.word_tokenizer as tokenizer_module
-        else:
-            import transformers as tokenizer_module
-        tokenizer_class = getattr(tokenizer_module, tokenizer_class_name)
-        return tokenizer_class.from_pretrained(self._dataset_dir)
+        tokenizer_class = getattr(transformers, tokenizer_class_name)
+        return tokenizer_class.from_pretrained(self.dataset_dir)
 
     @property
     def entity_vocab(self):
-        vocab_file_path = get_entity_vocab_file_path(self._dataset_dir)
+        vocab_file_path = get_entity_vocab_file_path(self.dataset_dir)
         return EntityVocab(vocab_file_path)
 
     def create_iterator(
@@ -105,20 +112,29 @@ class WikipediaPretrainingDataset(object):
         shuffle_buffer_size: int = 1000,
         shuffle_seed: int = 0,
         num_parallel_reads: int = 10,
+        repeat: bool = True,
+        shuffle: bool = True,
     ):
+
+        # The TensorFlow 2.0 has enabled eager execution by default.
+        # At the starting of algorithm, we need to use this to disable eager execution.
+        tf.compat.v1.disable_eager_execution()
+
         features = dict(
             word_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
             entity_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
             entity_position_ids=tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True),
-            page_id=tf.io.FixedLenFeature([1], tf.int64),
+            page_id=tf.io.FixedLenFeature([1], tf.int64, default_value=[0]),
         )
         dataset = tf.data.TFRecordDataset(
-            [os.path.join(self._dataset_dir, DATASET_FILE)],
+            [os.path.join(self.dataset_dir, DATASET_FILE)],
             compression_type="GZIP",
             num_parallel_reads=num_parallel_reads,
         )
-        dataset = dataset.repeat()
-        dataset = dataset.shuffle(shuffle_buffer_size, seed=shuffle_seed)
+        if repeat:
+            dataset = dataset.repeat()
+        if shuffle:
+            dataset = dataset.shuffle(shuffle_buffer_size, seed=shuffle_seed)
         dataset = dataset.skip(skip)
         dataset = dataset.shard(num_workers, worker_index)
         dataset = dataset.map(functools.partial(tf.io.parse_single_example, features=features))
@@ -143,18 +159,20 @@ class WikipediaPretrainingDataset(object):
         cls,
         dump_db: DumpDB,
         tokenizer: PreTrainedTokenizer,
-        sentence_tokenizer: SentenceTokenizer,
+        sentence_splitter: SentenceSplitter,
         entity_vocab: EntityVocab,
         output_dir: str,
         max_seq_length: int,
         max_entity_length: int,
         max_mention_length: int,
         min_sentence_length: int,
+        abstract_only: bool,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
         pool_size: int,
         chunk_size: int,
-        max_num_documents: int,
+        max_num_documents: Optional[int],
+        predefined_entities_only: bool,
     ):
 
         target_titles = [
@@ -162,6 +180,11 @@ class WikipediaPretrainingDataset(object):
             for title in dump_db.titles()
             if not (":" in title and title.lower().split(":")[0] in ("image", "file", "category"))
         ]
+
+        if predefined_entities_only:
+            lang = dump_db.language  # None <- entity_vocab の parse に合わせる
+            target_titles = [title for title in target_titles if entity_vocab.contains(title, lang)]
+
         random.shuffle(target_titles)
 
         if max_num_documents is not None:
@@ -180,12 +203,13 @@ class WikipediaPretrainingDataset(object):
                 initargs = (
                     dump_db,
                     tokenizer,
-                    sentence_tokenizer,
+                    sentence_splitter,
                     entity_vocab,
                     max_num_tokens,
                     max_entity_length,
                     max_mention_length,
                     min_sentence_length,
+                    abstract_only,
                     include_sentences_without_entities,
                     include_unk_entities,
                 )
@@ -219,22 +243,24 @@ class WikipediaPretrainingDataset(object):
     def _initialize_worker(
         dump_db: DumpDB,
         tokenizer: PreTrainedTokenizer,
-        sentence_tokenizer: SentenceTokenizer,
+        sentence_splitter: SentenceSplitter,
         entity_vocab: EntityVocab,
         max_num_tokens: int,
         max_entity_length: int,
         max_mention_length: int,
         min_sentence_length: int,
+        abstract_only: bool,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
     ):
-        global _dump_db, _tokenizer, _sentence_tokenizer, _entity_vocab, _max_num_tokens, _max_entity_length
+        global _dump_db, _tokenizer, _sentence_splitter, _entity_vocab, _max_num_tokens, _max_entity_length
         global _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
+        global _abstract_only
         global _language
 
         _dump_db = dump_db
         _tokenizer = tokenizer
-        _sentence_tokenizer = sentence_tokenizer
+        _sentence_splitter = sentence_splitter
         _entity_vocab = entity_vocab
         _max_num_tokens = max_num_tokens
         _max_entity_length = max_entity_length
@@ -242,6 +268,7 @@ class WikipediaPretrainingDataset(object):
         _min_sentence_length = min_sentence_length
         _include_sentences_without_entities = include_sentences_without_entities
         _include_unk_entities = include_unk_entities
+        _abstract_only = abstract_only
         _language = dump_db.language
 
     @staticmethod
@@ -253,16 +280,10 @@ class WikipediaPretrainingDataset(object):
 
         sentences = []
 
-        def tokenize(text: str, add_prefix_space: bool):
-            text = re.sub(r"\s+", " ", text).rstrip()
-            if not text:
-                return []
-            if isinstance(_tokenizer, RobertaTokenizer):
-                return _tokenizer.tokenize(text, add_prefix_space=add_prefix_space)
-            else:
-                return _tokenizer.tokenize(text)
-
         for paragraph in _dump_db.get_paragraphs(page_title):
+
+            if _abstract_only and not paragraph.abstract:
+                continue
 
             paragraph_text = paragraph.text
 
@@ -283,7 +304,7 @@ class WikipediaPretrainingDataset(object):
                     elif _include_unk_entities:
                         paragraph_links.append((UNK_TOKEN, link.start, link.end))
 
-            sent_spans = _sentence_tokenizer.span_tokenize(paragraph_text.rstrip())
+            sent_spans = _sentence_splitter.get_sentence_spans(paragraph_text.rstrip())
             for sent_start, sent_end in sent_spans:
                 cur = sent_start
                 sent_words = []
@@ -295,28 +316,23 @@ class WikipediaPretrainingDataset(object):
                         continue
                     entity_id = _entity_vocab.get_id(link_title, _language)
 
-                    text = paragraph_text[cur:link_start]
-                    if cur == 0 or text.startswith(" ") or paragraph_text[cur - 1] == " ":
-                        sent_words += tokenize(text, True)
-                    else:
-                        sent_words += tokenize(text, False)
+                    sent_tokenized, link_words = tokenize_segments(
+                        [paragraph_text[cur:link_start], paragraph_text[link_start:link_end]],
+                        tokenizer=_tokenizer,
+                        add_prefix_space=cur == 0 or paragraph_text[cur - 1] == " ",
+                    )
 
-                    link_text = paragraph_text[link_start:link_end]
-
-                    if link_start == 0 or link_text.startswith(" ") or paragraph_text[link_start - 1] == " ":
-                        link_words = tokenize(link_text, True)
-                    else:
-                        link_words = tokenize(link_text, False)
+                    sent_words += sent_tokenized
 
                     sent_links.append((entity_id, len(sent_words), len(sent_words) + len(link_words)))
                     sent_words += link_words
                     cur = link_end
 
-                text = paragraph_text[cur:sent_end]
-                if cur == 0 or text.startswith(" ") or paragraph_text[cur - 1] == " ":
-                    sent_words += tokenize(text, True)
-                else:
-                    sent_words += tokenize(text, False)
+                sent_words += tokenize(
+                    text=paragraph_text[cur:sent_end],
+                    tokenizer=_tokenizer,
+                    add_prefix_space=cur == 0 or paragraph_text[cur - 1] == " ",
+                )
 
                 if len(sent_words) < _min_sentence_length or len(sent_words) > _max_num_tokens:
                     continue

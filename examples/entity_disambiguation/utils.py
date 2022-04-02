@@ -15,7 +15,7 @@ punc_remover = re.compile(r"[\W]+")
 
 
 class EntityDisambiguationDataset(object):
-    def __init__(self, dataset_dir):
+    def __init__(self, dataset_dir, wikipedia_titles_file=None, wikipedia_redirects_file=None):
         person_names = frozenset(load_person_names(os.path.join(dataset_dir, "persons.txt")))
 
         self.train = load_documents(
@@ -54,14 +54,12 @@ class EntityDisambiguationDataset(object):
         )
 
         valid_titles = None
-        wikipedia_titles_file = os.path.join(dataset_dir, "enwiki_20181220_titles.txt")
-        if os.path.exists(wikipedia_titles_file):
+        if wikipedia_titles_file:
             with open(wikipedia_titles_file) as f:
-                valid_titles = frozenset([line.rstrip() for line in f])
+                valid_titles = frozenset([t.rstrip() for t in f])
 
         redirects = {}
-        wikipedia_redirects_file = os.path.join(dataset_dir, "enwiki_20181220_redirects.tsv")
-        if os.path.exists(wikipedia_redirects_file):
+        if wikipedia_redirects_file:
             with open(wikipedia_redirects_file) as f:
                 for line in f:
                     (src, dest) = line.rstrip().split("\t")
@@ -161,7 +159,7 @@ class InputFeatures(object):
 
 def load_person_names(input_file):
     with open(input_file) as f:
-        return [line.strip() for line in f]
+        return [t.strip() for t in f]
 
 
 def load_documents(csv_path, conll_path, person_names):

@@ -1,7 +1,7 @@
 import functools
 import operator
-import pytest
 
+import pytest
 import torch
 from transformers import AutoConfig, AutoModel
 

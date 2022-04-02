@@ -1,6 +1,7 @@
 import os
-import pytest
 import tempfile
+
+import pytest
 
 from luke.utils.entity_vocab import EntityVocab
 
