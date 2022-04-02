@@ -11,8 +11,8 @@ In this code, you can experiment with the task of reading comprehension (extract
 * [MLQA](https://aclanthology.org/2020.acl-main.653/)
 
 ##### Download datasets
-[SQuAD](https://rajpurkar.github.io/SQuAD-explorer)  
-
+Download the SQuAD dataset from [here](https://rajpurkar.github.io/SQuAD-explorer).
+The XQuAD and MLQA can be obtained through the following commands.
 ```bash
 cd data
 git clone https://github.com/deepmind/xquad.git
@@ -31,11 +31,11 @@ export VALIDATION_DATA_PATH="data/SQuAD/dev-v1.1.json";
 
 # train LUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/luke-base";
-poetry run allennlp train examples/reading_comprehension/configs_squad/transformers_luke_with_entity_aware_attention.jsonnet -s results/reading_comprehension/luke-base --include-package examples -o '{"trainer": {"cuda_device": 0}}'
+poetry run allennlp train examples/reading_comprehension/configs_squad/transformers_luke_with_entity_aware_attention.jsonnet -s results/reading_comprehension/luke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # train mLUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/mluke-base";
-poetry run allennlp train examples/reading_comprehension/configs_squad/transformers_luke.jsonnet -s results/reading_comprehension/mluke-base --include-package examples -o '{"trainer": {"cuda_device": 0}}'
+poetry run allennlp train examples/reading_comprehension/configs_squad/transformers_luke.jsonnet -s results/reading_comprehension/mluke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # you can also fine-tune models from the BERT family
 export TRANSFORMERS_MODEL_NAME="roberta-base";
@@ -43,8 +43,8 @@ poetry run allennlp train examples/reading_comprehension/configs_squad/transform
 ```
 
 ## Evaluation
-
-To performa cross-lingual evaluation with entity linking, download the files of mention candidates from [here](https://drive.google.com/file/d/12m-mV8sud4F3yXtiVh5QXp3SBPLh_Eje/view?usp=sharing).
+To perform cross-lingual evaluation with entity representation, download the files of mention candidates from [here](https://drive.google.com/file/d/12m-mV8sud4F3yXtiVh5QXp3SBPLh_Eje/view?usp=sharing).
+The following examples assume the mention candidates are under `data` directory.
 
 ```bash
 poetry run allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples --output-file OUTPUT_FILE 

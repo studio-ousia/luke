@@ -25,8 +25,8 @@ to solve downstream tasks.
 ## News
 
 **April xx, 2022: The mLUKE fine-tuning code is available**
-[The example code](examples) is updated.
 
+[The example code](examples) is updated.
 Now you can reproduce the experiments in [the mLUKE paper](https://arxiv.org/abs/2110.08151).
 For the details, please see `README.md` under each example directory.
 
@@ -50,7 +50,7 @@ are developed based on Hugging Face Transformers and AllenNLP. The fine-tuning
 models are defined using simple AllenNLP's Jsonnet config files!
 
 The example code is available in the
-[examples_allennlp directory](examples).
+[examples directory](examples).
 
 **May 5, 2021: LUKE is added to Hugging Face Transformers**
 

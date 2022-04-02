@@ -65,14 +65,11 @@ export VALIDATION_DATA_PATH="data/kbp37/dev.txt";
 
 # train mLUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/mluke-base";
-poetry run allennlp train examples/relation_classification/configs/transformers_luke.jsonnet -s results/relation_classification/mluke-base --include-package examples -o '{"trainer": {"cuda_device": 0}}'
+poetry run allennlp train examples/relation_classification/configs/transformers_luke.jsonnet -s results/relation_classification/mluke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # train other multilingual models
 export TRANSFORMERS_MODEL_NAME="xlm-roberta-base";
 poetry run allennlp train examples/relation_classification/configs/transformers.jsonnet  -s results/relation_classification/xlm-roberta-base --include-package examples
-
-export TRANSFORMERS_MODEL_NAME="studio-ousia/mluke-large";
-poetry run allennlp train examples/relation_classification/configs/transformers_luke.jsonnet -s results/relation_classification/mluke-large-debu --include-package examples -o '{"trainer.cuda_device": 0, "data_loader.batch_size": 2}'
 ```
 
 ## Evaluation
@@ -83,7 +80,7 @@ poetry run allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package exampl
 poetry run allennlp evaluate results/relation_classification/luke-base data/tacred/test.json --include-package examples --output-file results/relation_classification/luke-base/metrics_test.json --cuda 0
 
 # example of mLUKE
-poetry run allennlp evaluate results/relation_classification/mluke-base data/RELX/Datasets/RELX/RELX_es.txt --include-package examples --output-file results/relation_classification/mluke-base/metrics_relx_es.json --cuda 3
+poetry run allennlp evaluate results/relation_classification/mluke-base data/RELX/Datasets/RELX/RELX_es.txt --include-package examples --output-file results/relation_classification/mluke-base/metrics_relx_es.json --cuda 0
 ```
 
 ## Make Prediction
