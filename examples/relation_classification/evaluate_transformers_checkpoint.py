@@ -19,7 +19,7 @@ from examples.relation_classification.reader import RelationClassificationReader
 from examples.utils.util import ENT, ENT2
 
 model_config_mapping = {
-    "studio-ousia/luke-large-finetuned-tacred": "examples/relation_classification/configs/lib/transformers_luke_with_entity_aware_attention.jsonnet",
+    "studio-ousia/luke-large-finetuned-tacred": "examples/relation_classification/configs/lib/transformers_model_luke_with_entity_aware_attention.jsonnet",
     "studio-ousia/mluke-large-lite-finetuned-kbp37": "examples/relation_classification/configs/lib/transformers_model_luke.jsonnet",
 }
 

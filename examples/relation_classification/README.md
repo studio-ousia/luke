@@ -20,6 +20,8 @@ git clone https://github.com/boun-tabi/RELX.git
 For the TACRED dataset, you need to access through [LDC](https://catalog.ldc.upenn.edu/LDC2018T24).
 
 ## Reproduce the checkpoint result
+We observe running the below commands with different environments (possibly with different python or torch versions) gives slightly different model outputs and performance (± around 0.02), which we do not have a good solution ¯\_(ツ)_/¯.
+
 ### LUKE-large
 ```bash
 # Reproduce the result of studio-ousia/luke-large-finetuned-tacred.
