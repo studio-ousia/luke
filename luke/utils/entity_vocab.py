@@ -165,8 +165,8 @@ class EntityVocab:
 
         if Path(out_file).suffix != ".jsonl":
             raise ValueError(
-                "The saved file has to has the jsonl extension so that it will be loaded properly.\n"
-                f"out_file: {out_file}"
+                "The saved file has to explicitly have the jsonl extension so that it will be loaded properly,\n"
+                f"but the name provided is {out_file}."
             )
 
         with open(out_file, "w") as f:
