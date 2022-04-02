@@ -17,7 +17,7 @@ from transformers import LukeForEntitySpanClassification, AutoTokenizer
 from examples.ner.reader import ConllSpanReader
 
 model_config_mapping = {
-    "studio-ousia/luke-large-finetuned-conll-2003": "examples/ner/configs/transformers_luke_with_entity_aware_attention.jsonnet",
+    "studio-ousia/luke-large-finetuned-conll-2003": "examples/ner/configs/lib/transformers_luke_with_entity_aware_attention.jsonnet",
     "studio-ousia/mluke-large-lite-finetuned-conll-2003": "examples/ner/configs/lib/transformers_model_luke.jsonnet",
 }
 
