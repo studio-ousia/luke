@@ -1,4 +1,3 @@
-local seed = std.parseInt(std.extVar("SEED"));
 local transformers_model_name = std.extVar("TRANSFORMERS_MODEL_NAME");
 
 local extra_tokens = ["<ent>"];
@@ -53,7 +52,7 @@ local token_indexers = {
         "validation_metric": "+micro_fscore"
     },
     "data_loader": {"batch_size": 4, "shuffle": true},
-    "random_seed": seed,
-    "numpy_seed": seed,
-    "pytorch_seed": seed
+    "random_seed": 0,
+    "numpy_seed": 0,
+    "pytorch_seed": 0
 }

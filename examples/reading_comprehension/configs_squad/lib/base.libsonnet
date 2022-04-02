@@ -1,4 +1,3 @@
-local seed = std.parseInt(std.extVar("SEED"));
 local train_data_path = std.extVar("TRAIN_DATA_PATH");
 local validation_data_path = std.extVar("VALIDATION_DATA_PATH");
 
@@ -47,7 +46,7 @@ local num_epochs = 2;
             "warmup_ratio": 0.06
         },
     },
-    "random_seed": seed,
-    "numpy_seed": seed,
-    "pytorch_seed": seed
+    "random_seed": 0,
+    "numpy_seed": 0,
+    "pytorch_seed": 0
 }

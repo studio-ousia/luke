@@ -124,6 +124,13 @@ LUKE can be installed using [Poetry](https://python-poetry.org/):
 
 ```bash
 $ poetry install
+
+# If you want to run pretraining
+$ poetry install -E pretraining
+$ poetry install -E icu
+
+# If you want to run the code under `examples`
+$ poetry install -E examples
 ```
 
 The virtual environment automatically created by Poetry can be activated by

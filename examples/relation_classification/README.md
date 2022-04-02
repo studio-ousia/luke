@@ -42,7 +42,6 @@ Note that you need provide what dataset you are dealing with through `TASK`.
 
 ### Monolingual (Tacred)
 ```bash
-export SEED=0;
 export DATASET="tacred";
 export TRAIN_DATA_PATH="data/tacred/train.json";
 export VALIDATION_DATA_PATH="data/tacred/dev.json";
@@ -58,7 +57,6 @@ poetry run allennlp train examples/relation_classification/configs/transformers.
 
 ### Multilingual (KBP37)
 ```bash
-export SEED=0;
 export DATASET="kbp37";
 export TRAIN_DATA_PATH="data/kbp37/train.txt";
 export VALIDATION_DATA_PATH="data/kbp37/dev.txt";

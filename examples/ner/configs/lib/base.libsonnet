@@ -1,4 +1,3 @@
-local seed = std.parseInt(std.extVar("SEED"));
 local transformers_model_name = std.extVar("TRANSFORMERS_MODEL_NAME");
 
 local tokenizer = {"type": "pretrained_transformer", "model_name": transformers_model_name,
@@ -50,7 +49,7 @@ local token_indexers = {
         "validation_metric": "+f1"
     },
     "data_loader": {"batch_size": 2, "shuffle": true},
-    "random_seed": seed,
-    "numpy_seed": seed,
-    "pytorch_seed": seed
+    "random_seed": 0,
+    "numpy_seed": 0,
+    "pytorch_seed": 0
 }

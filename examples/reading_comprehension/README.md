@@ -25,7 +25,6 @@ We configure some parameters through environmental variables.
 
 ### SQuAD
 ```bash
-export SEED=0;
 export TRAIN_DATA_PATH="data/SQuAD/train-v1.1.json";
 export VALIDATION_DATA_PATH="data/SQuAD/dev-v1.1.json";
 

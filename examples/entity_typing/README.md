@@ -19,19 +19,18 @@ We only use the manually annotated data under `ultrafine_acl18/crowd` for traini
 # Reproduce the result of studio-ousia/luke-large-finetuned-open-entity.
 poetry run python examples/entity_typing/evaluate_transformers_checkpoint.py data/ultrafine_acl18/crowd/test.json
 # expected results:
-# {'accuracy': 0.8887742601070346, 'macro_fscore': 0.5886632942601121, 'micro_fscore': 0.7267450297489478}.
+# {'micro_precision': 0.7997806072235107, 'micro_recall': 0.7657563090324402, 'micro_fscore': 0.7823987007141113}.
 ```
 
 # Training
 We configure some parameters through environmental variables.
 ```bash
-export SEED=0;
 export TRAIN_DATA_PATH="data/ultrafine_acl18/crowd/train.json";
 export VALIDATION_DATA_PATH="data/ultrafine_acl18/crowd/dev.json";
 
 # train LUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/luke-base";
-poetry run allennlp train examples/entity_typing/configs/transformers_luke_with_entity_aware_attention.jsonnet -s results/entity_typing/luke-base --include-package examples -o '{"trainer": {"cuda_device": 0}}'
+poetry run allennlp train examples/entity_typing/configs/transformers_luke_with_entity_aware_attention.jsonnet -s results/entity_typing/luke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # you can also fine-tune models from the BERT family
 export TRANSFORMERS_MODEL_NAME="roberta-base";

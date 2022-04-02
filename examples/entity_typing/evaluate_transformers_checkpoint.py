@@ -37,9 +37,6 @@ def evaluate_transformers_checkpoint(
     result_save_path: str,
 ):
     """
-    Expected results for ``test.json`` from the Open Entity dataset:
-    {'micro_precision': 0.7997806072235107, 'micro_recall': 0.7657563090324402, 'micro_fscore': 0.7823987007141113}.
-
     Parameters
     ----------
     data_path : str
