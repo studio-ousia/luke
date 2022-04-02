@@ -24,8 +24,9 @@ to solve downstream tasks.
 
 ## News
 
-**April 1, 2022: The mLUKE fine-tuning code is available**
+**April xx, 2022: The mLUKE fine-tuning code is available**
 [The example code](examples) is updated.
+
 Now you can reproduce the experiments in [the mLUKE paper](https://arxiv.org/abs/2110.08151).
 For the details, please see `README.md` under each example directory.
 
