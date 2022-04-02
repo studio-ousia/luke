@@ -328,16 +328,10 @@ $ python -m examples.cli \
 ## Citation
 
 If you use LUKE in your work, please cite the
-[original paper](https://arxiv.org/abs/2010.01057):
+[original paper](https://arxiv.org/abs/2010.01057).
+The reference information can be found [here](https://aclanthology.org/2020.emnlp-main.523/).
 
-```
-@inproceedings{yamada2020luke,
-  title={LUKE: Deep Contextualized Entity Representations with Entity-aware Self-attention},
-  author={Ikuya Yamada and Akari Asai and Hiroyuki Shindo and Hideaki Takeda and Yuji Matsumoto},
-  booktitle={EMNLP},
-  year={2020}
-}
-```
+For mLUKE, please cite the [following paper](https://arxiv.org/abs/2110.08151).
 
 ## Contact Info
 
