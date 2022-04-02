@@ -12,7 +12,7 @@ We assume that the data files follow the CoNLL-2003 format.
 ```bash
 # Reproduce the result of studio-ousia/luke-large-finetuned-conll-2003.
 poetry run python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/en/test.txt studio-ousia/luke-large-finetuned-conll-2003 --cuda-device 0
-# expected results:
+# Expected results (you may observe slightly different results due to environmental differences):
 # {'f1': 0.9461946902654867, 'precision': 0.945859872611465, 'recall': 0.9465297450424929}.
 ```
 You may find the result a little higher than [the original paper of LUKE](https://arxiv.org/abs/2010.01057). This is due to a minor difference in the data preprocessing in the evaluation code.

@@ -26,7 +26,7 @@ We observe running the below commands with different environments (possibly with
 ```bash
 # Reproduce the result of studio-ousia/luke-large-finetuned-tacred.
 poetry run python examples/relation_classification/evaluate_transformers_checkpoint.py tacred data/tacred/test.json studio-ousia/luke-large-finetuned-tacred --cuda-device 0
-# expected results:
+# Expected results (you may observe slightly different results due to environmental differences):
 # {'accuracy': 0.8887742601070346, 'macro_fscore': 0.5886632942601121, 'micro_fscore': 0.7267450297489478}.
 ```
 
@@ -34,7 +34,7 @@ poetry run python examples/relation_classification/evaluate_transformers_checkpo
 ```bash
 # Reproduce the result of studio-ousia/mluke-large-lite-finetuned-kbp37
 poetry run python examples/relation_classification/evaluate_transformers_checkpoint.py kbp37 data/RELX/Datasets/RELX/RELX_es.txt studio-ousia/mluke-large-lite-finetuned-kbp37 --cuda-device 0
-# expected results:
+# Expected results (you may observe slightly different results due to environmental differences):
 # {'accuracy': 0.651394422310757, 'macro_fscore': 0.6782825333267248, 'micro_fscore': 0.6848072562358276}
 ```
 
@@ -50,7 +50,7 @@ export VALIDATION_DATA_PATH="data/tacred/dev.json";
 
 # train LUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/luke-base";
-poetry run allennlp train examples/relation_classification/configs/transformers_luke_with_entity_aware_attention.jsonnet -s results/relation_classification/luke-base --include-package examples -o '{"trainer": {"cuda_device": 0}}'
+poetry run allennlp train examples/relation_classification/configs/transformers_luke_with_entity_aware_attention.jsonnet -s results/relation_classification/luke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # you can also fine-tune models from the BERT family
 export TRANSFORMERS_MODEL_NAME="roberta-base";
