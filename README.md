@@ -24,6 +24,11 @@ to solve downstream tasks.
 
 ## News
 
+**April 1, 2022: The mLUKE fine-tuning code is available**
+[The example code](examples) is updated.
+Now you can reproduce the experiments in [the mLUKE paper](https://arxiv.org/abs/2110.08151).
+For the details, please see `README.md` under each example directory.
+
 **November 24, 2021: Entity disambiguation example is available**
 
 The example code of entity disambiguation based on LUKE has been added to this
@@ -33,7 +38,7 @@ results on five standard entity disambiguation datasets: AIDA-CoNLL, MSNBC,
 AQUAINT, ACE2004, and WNED-WIKI.
 
 For further details, please refer to the
-[example directory](https://github.com/studio-ousia/luke/tree/master/examples/entity_disambiguation).
+[example directory](examples/entity_disambiguation).
 
 **August 3, 2021: New example code based on Hugging Face Transformers and
 AllenNLP is available**
@@ -44,7 +49,7 @@ are developed based on Hugging Face Transformers and AllenNLP. The fine-tuning
 models are defined using simple AllenNLP's Jsonnet config files!
 
 The example code is available in the
-[examples_allennlp directory](https://github.com/studio-ousia/luke/tree/master/examples_allennlp).
+[examples_allennlp directory](examples).
 
 **May 5, 2021: LUKE is added to Hugging Face Transformers**
 
@@ -57,17 +62,17 @@ For example, the LUKE-large model fine-tuned on the TACRED dataset can be used
 as follows:
 
 ```python
->>> from transformers import LukeTokenizer, LukeForEntityPairClassification
->>> model = LukeForEntityPairClassification.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
->>> tokenizer = LukeTokenizer.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
->>> text = "Beyoncé lives in Los Angeles."
->>> entity_spans = [(0, 7), (17, 28)]  # character-based entity spans corresponding to "Beyoncé" and "Los Angeles"
->>> inputs = tokenizer(text, entity_spans=entity_spans, return_tensors="pt")
->>> outputs = model(**inputs)
->>> logits = outputs.logits
->>> predicted_class_idx = int(logits[0].argmax())
->>> print("Predicted class:", model.config.id2label[predicted_class_idx])
-Predicted class: per:cities_of_residence
+from transformers import LukeTokenizer, LukeForEntityPairClassification
+model = LukeForEntityPairClassification.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
+tokenizer = LukeTokenizer.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
+text = "Beyoncé lives in Los Angeles."
+entity_spans = [(0, 7), (17, 28)]  # character-based entity spans corresponding to "Beyoncé" and "Los Angeles"
+inputs = tokenizer(text, entity_spans=entity_spans, return_tensors="pt")
+outputs = model(**inputs)
+logits = outputs.logits
+predicted_class_idx = int(logits[0].argmax())
+print("Predicted class:", model.config.id2label[predicted_class_idx])
+# Predicted class: per:cities_of_residence
 ```
 
 We also provide the following three Colab notebooks that show how to reproduce
@@ -133,197 +138,6 @@ the `roberta.large` model.
 | **LUKE-500K (base)**  | [roberta.base](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models)  | 500K              | 253 M  | [Link](https://drive.google.com/file/d/17JvBfXTMuXHX_00yq6kXUDB6OJStfSK_/view?usp=sharing) |
 | **LUKE-500K (large)** | [roberta.large](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models) | 500K              | 483 M  | [Link](https://drive.google.com/file/d/1S7smSBELcZWV7-slfrb94BKcSCCoxGfL/view?usp=sharing) |
 
-## Reproducing Experimental Results
-
-The experiments were conducted using Python3.6 and PyTorch 1.2.0 installed on a
-server with a single or eight NVidia V100 GPUs. We used
-[NVidia's PyTorch Docker container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
-19.02. For computational efficiency, we used mixed precision training based on
-APEX library which can be installed as follows:
-
-```bash
-$ git clone https://github.com/NVIDIA/apex.git
-$ cd apex
-$ git checkout c3fad1ad120b23055f6630da0b029c8b626db78f
-$ pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
-```
-
-The APEX library is not needed if you do not use `--fp16` option or reproduce
-the results based on the trained checkpoint files.
-
-The commands that reproduce the experimental results are provided as follows:
-
-### Entity Typing on Open Entity Dataset
-
-**Dataset:** [Link](https://github.com/thunlp/ERNIE)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10F6tzx0oPG4g-PeB0O1dqpuYtfiHblZU/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    entity-typing run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    entity-typing run \
-    --data-dir=<DATA_DIR> \
-    --train-batch-size=2 \
-    --gradient-accumulation-steps=2 \
-    --learning-rate=1e-5 \
-    --num-train-epochs=3 \
-    --fp16
-```
-
-### Relation Classification on TACRED Dataset
-
-**Dataset:** [Link](https://nlp.stanford.edu/projects/tacred/)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10XSaQRtQHn13VB_6KALObvok6hdXw7yp/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    relation-classification run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    relation-classification run \
-    --data-dir=<DATA_DIR> \
-    --train-batch-size=4 \
-    --gradient-accumulation-steps=8 \
-    --learning-rate=1e-5 \
-    --num-train-epochs=5 \
-    --fp16
-```
-
-### Named Entity Recognition on CoNLL-2003 Dataset
-
-**Dataset:** [Link](https://www.clips.uantwerpen.be/conll2003/ner/)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10VFEHXMiJGQvD62QbHa8C8XYSeAIt_CP/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    ner run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli\
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    ner run \
-    --data-dir=<DATA_DIR> \
-    --train-batch-size=2 \
-    --gradient-accumulation-steps=4 \
-    --learning-rate=1e-5 \
-    --num-train-epochs=5 \
-    --fp16
-```
-
-### Cloze-style Question Answering on ReCoRD Dataset
-
-**Dataset:** [Link](https://sheng-z.github.io/ReCoRD-explorer/)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10LuPIQi-HslZs_BgHxSnitGe2tw_anZp/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    entity-span-qa run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli \
-    --num-gpus=8 \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    entity-span-qa run \
-    --data-dir=<DATA_DIR> \
-    --train-batch-size=1 \
-    --gradient-accumulation-steps=4 \
-    --learning-rate=1e-5 \
-    --num-train-epochs=2 \
-    --fp16
-```
-
-### Extractive Question Answering on SQuAD 1.1 Dataset
-
-**Dataset:** [Link](https://rajpurkar.github.io/SQuAD-explorer/)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/1097QicHAVnroVVw54niPXoY-iylGNi0K/view?usp=sharing)\
-**Wikipedia data files (compressed):**
-[Link](https://drive.google.com/file/d/129tDJ3ev6IdbJiKOmO6GTgNANunhO_vt/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    reading-comprehension run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-negative \
-    --wiki-link-db-file=enwiki_20160305.pkl \
-    --model-redirects-file=enwiki_20181220_redirects.pkl \
-    --link-redirects-file=enwiki_20160305_redirects.pkl \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli \
-    --num-gpus=8 \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    reading-comprehension run \
-    --data-dir=<DATA_DIR> \
-    --no-negative \
-    --wiki-link-db-file=enwiki_20160305.pkl \
-    --model-redirects-file=enwiki_20181220_redirects.pkl \
-    --link-redirects-file=enwiki_20160305_redirects.pkl \
-    --train-batch-size=2 \
-    --gradient-accumulation-steps=3 \
-    --learning-rate=15e-6 \
-    --num-train-epochs=2 \
-    --fp16
-```
 
 ## Citation
 
