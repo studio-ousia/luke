@@ -30,7 +30,7 @@ to solve downstream tasks.
 Now it is based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers).
 You can reproduce the experiments in [the mLUKE paper](https://arxiv.org/abs/2110.08151) with this implementation.
 For the details, please see `README.md` under each example directory.
-The code used in [the original LUKE paper](https://arxiv.org/abs/2010.01057) is now available in [examples/legacy](examples/legacy).
+The code used in [the original LUKE paper](https://arxiv.org/abs/2010.01057) is now available in [`examples/legacy`](examples/legacy).
 
 **November 24, 2021: Entity disambiguation example is available**
 
@@ -40,8 +40,8 @@ repository. This model was originally proposed in
 results on five standard entity disambiguation datasets: AIDA-CoNLL, MSNBC,
 AQUAINT, ACE2004, and WNED-WIKI.
 
-For further details, please refer to the
-[example directory](examples/entity_disambiguation).
+For further details, please refer to
+[`examples/entity_disambiguation`](examples/entity_disambiguation).
 
 **August 3, 2021: New example code based on Hugging Face Transformers and
 AllenNLP is available**
@@ -51,8 +51,7 @@ classification_, and _entity typing_, have been added to LUKE. These examples
 are developed based on Hugging Face Transformers and AllenNLP. The fine-tuning
 models are defined using simple AllenNLP's Jsonnet config files!
 
-The example code is available in the
-[examples directory](examples).
+The example code is available in [`examples`](examples).
 
 **May 5, 2021: LUKE is added to Hugging Face Transformers**
 
@@ -148,6 +147,10 @@ the `roberta.large` model.
 | **LUKE-500K (base)**  | [roberta.base](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models)  | 500K              | 253 M  | [Link](https://drive.google.com/file/d/17JvBfXTMuXHX_00yq6kXUDB6OJStfSK_/view?usp=sharing) |
 | **LUKE-500K (large)** | [roberta.large](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models) | 500K              | 483 M  | [Link](https://drive.google.com/file/d/1S7smSBELcZWV7-slfrb94BKcSCCoxGfL/view?usp=sharing) |
 
+## Fine-tuning LUKE models
+We release the fine-tuning code based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers) under [`examples`](examples).
+You can run fine-tuning experiments very easily with pre-defined config files and the `allennlp train` command.
+For the details and example commands for each task, please see the task directory under [`examples`](examples). 
 
 ## Citation
 
