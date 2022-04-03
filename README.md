@@ -27,8 +27,10 @@ to solve downstream tasks.
 **April xx, 2022: The mLUKE fine-tuning code is available**
 
 [The example code](examples) is updated.
-Now you can reproduce the experiments in [the mLUKE paper](https://arxiv.org/abs/2110.08151).
+Now it is based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers).
+You can reproduce the experiments in [the mLUKE paper](https://arxiv.org/abs/2110.08151) with this implementation.
 For the details, please see `README.md` under each example directory.
+The code used in [the original LUKE paper](https://arxiv.org/abs/2010.01057) is now available in [examples/legacy](examples/legacy).
 
 **November 24, 2021: Entity disambiguation example is available**
 
