@@ -156,8 +156,3 @@ If you use LUKE in your work, please cite the
 The reference information can be found [here](https://aclanthology.org/2020.emnlp-main.523/).
 
 For mLUKE, please cite the [following paper](https://arxiv.org/abs/2110.08151).
-
-## Contact Info
-
-Please submit a GitHub issue or send an e-mail to Ikuya Yamada
-(`ikuya@ousia.jp`) for help or issues using LUKE.
