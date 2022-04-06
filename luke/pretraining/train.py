@@ -195,20 +195,6 @@ def pretrain(**kwargs):
 
     logger.info("Initializing Deepspeed...")
 
-    def get_gamma(self):
-        if self.last_batch_iteration < self.warmup_num_steps:
-            return float(self.last_batch_iteration) / float(max(1, self.warmup_num_steps))
-            # return self.inverse_log_warm_up * math.log(self.last_batch_iteration + 1)
-        return max(
-            0.0,
-            float(self.total_num_steps - self.last_batch_iteration)
-            / float(max(1.0, self.total_num_steps - self.warmup_num_steps)),
-        )
-
-    from deepspeed.runtime import lr_schedules
-
-    lr_schedules.WarmupDecayLR._get_gamma = get_gamma
-
     weight_decay = args.deepspeed_config.get("optimizer", {}).get("params", {}).get("weight_decay", 0.01)
     optimizer_parameters = create_optimizer_grouped_parameters(model, weight_decay)
     model, optimizer, _, lr_scheduler = deepspeed.initialize(
