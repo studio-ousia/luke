@@ -10,6 +10,7 @@ from typing import List, Tuple
 
 import click
 import numpy as np
+import tensorflow as tf
 import torch
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
@@ -161,6 +162,8 @@ def pretrain(**kwargs):
 
     args = Namespace(**kwargs)
     deepspeed.init_distributed(dist_backend="nccl")
+
+    tf.config.set_visible_devices([], "GPU")
 
     local_rank = int(os.environ["LOCAL_RANK"])
     global_rank = dist.get_rank()
