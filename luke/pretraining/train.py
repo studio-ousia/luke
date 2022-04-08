@@ -122,7 +122,7 @@ def load_state_dict(state_dict: dict, model: LukePretrainingModel, config: LukeC
 
     missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
     assert len(unexpected_keys) == 0
-    logger.info(f"missing keys: {str(missing_keys)}")
+    logger.debug(f"missing keys: {str(missing_keys)}")
 
 
 @click.command()
