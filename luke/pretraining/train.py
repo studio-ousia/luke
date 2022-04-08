@@ -10,6 +10,7 @@ from typing import List, Tuple
 
 import click
 import numpy as np
+import tensorflow as tf
 import torch
 import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
@@ -59,23 +60,12 @@ def create_model_and_config(
     args: Namespace, entity_vocab_size: int, local_rank: int
 ) -> Tuple[LukePretrainingModel, LukeConfig]:
     bert_config = AutoConfig.from_pretrained(args.bert_model_name)
-    deepspeed_transformer_layer_args = {}
-    if args.use_deepspeed_transformer_layer:
-        deepspeed_transformer_layer_args = dict(
-            batch_size=args.deepspeed_config["train_micro_batch_size_per_gpu"],
-            fp16=args.deepspeed_config.get("fp16", {}).get("enabled", False),
-            local_rank=local_rank,
-        )
-        if args.fix_bert_weights:
-            deepspeed_transformer_layer_args["training"] = False
 
     config = LukeConfig(
         entity_vocab_size=entity_vocab_size,
         bert_model_name=args.bert_model_name,
         entity_emb_size=args.entity_emb_size,
         cls_entity_prediction=args.cls_entity_prediction,
-        use_deepspeed_transformer_layer=args.use_deepspeed_transformer_layer,
-        deepspeed_transformer_layer_args=deepspeed_transformer_layer_args,
         **bert_config.to_dict(),
     )
 
@@ -107,8 +97,6 @@ def create_optimizer_grouped_parameters(model: LukePretrainingModel, weight_deca
     param_optimizer = [n for n in param_optimizer if "pooler" not in n[0] and n[1].requires_grad]
     # parameter names for huggingface transformers
     no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
-    # parameter names for deepspeed transformer kernel
-    no_decay += ["attn_nw", "attn_nb", "norm_w", "norm_b", "attn_qkvb", "attn_ob", "inter_b", "output_b"]
 
     grouped_parameters = [
         {
@@ -120,9 +108,7 @@ def create_optimizer_grouped_parameters(model: LukePretrainingModel, weight_deca
     return grouped_parameters
 
 
-def load_state_dict(
-    state_dict: dict, model: LukePretrainingModel, config: LukeConfig, use_deepspeed_transformer_layer: bool
-):
+def load_state_dict(state_dict: dict, model: LukePretrainingModel, config: LukeConfig):
     new_state_dict = {}
     for key, param in state_dict.items():
         key = key.replace("gamma", "weight").replace("beta", "bias")
@@ -134,44 +120,20 @@ def load_state_dict(
 
     state_dict = new_state_dict
 
-    if use_deepspeed_transformer_layer:
-        ds_state_dict = {}
-        for key, param in state_dict.items():
-            if not key.startswith("encoder.layer."):
-                ds_state_dict[key] = param
-
-        for layer_index in range(config.num_hidden_layers):
-            prefix = f"encoder.layer.{layer_index}"
-            ds_state_dict[f"{prefix}.attn_qkvw"] = torch.cat(
-                [
-                    state_dict[f"{prefix}.attention.self.query.weight"],
-                    state_dict[f"{prefix}.attention.self.key.weight"],
-                    state_dict[f"{prefix}.attention.self.value.weight"],
-                ]
-            )
-            ds_state_dict[f"{prefix}.attn_qkvb"] = torch.cat(
-                [
-                    state_dict[f"{prefix}.attention.self.query.bias"],
-                    state_dict[f"{prefix}.attention.self.key.bias"],
-                    state_dict[f"{prefix}.attention.self.value.bias"],
-                ]
-            )
-            ds_state_dict[f"{prefix}.attn_ow"] = state_dict[f"{prefix}.attention.output.dense.weight"]
-            ds_state_dict[f"{prefix}.attn_ob"] = state_dict[f"{prefix}.attention.output.dense.bias"]
-            ds_state_dict[f"{prefix}.attn_nw"] = state_dict[f"{prefix}.attention.output.LayerNorm.weight"]
-            ds_state_dict[f"{prefix}.attn_nb"] = state_dict[f"{prefix}.attention.output.LayerNorm.bias"]
-            ds_state_dict[f"{prefix}.inter_w"] = state_dict[f"{prefix}.intermediate.dense.weight"]
-            ds_state_dict[f"{prefix}.inter_b"] = state_dict[f"{prefix}.intermediate.dense.bias"]
-            ds_state_dict[f"{prefix}.output_w"] = state_dict[f"{prefix}.output.dense.weight"]
-            ds_state_dict[f"{prefix}.output_b"] = state_dict[f"{prefix}.output.dense.bias"]
-            ds_state_dict[f"{prefix}.norm_w"] = state_dict[f"{prefix}.output.LayerNorm.weight"]
-            ds_state_dict[f"{prefix}.norm_b"] = state_dict[f"{prefix}.output.LayerNorm.bias"]
-
-        state_dict = ds_state_dict
-
     missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
     assert len(unexpected_keys) == 0
-    logger.info(f"missing keys: {str(missing_keys)}")
+    logger.debug(f"missing keys: {str(missing_keys)}")
+
+
+@click.command()
+@click.option("--dataset-dir", type=click.Path(), required=True)
+@click.option("--train-batch-size", type=int, required=True)
+@click.option("--num-epochs", type=int, required=True)
+def compute_total_training_steps(dataset_dir, train_batch_size, num_epochs):
+    datasets = load_dataset(dataset_dir)
+    dataset_size = sum([len(d) for d in datasets])
+    train_steps = math.ceil(dataset_size / train_batch_size * num_epochs)
+    print("Total training steps:", train_steps)
 
 
 @click.command()
@@ -198,7 +160,6 @@ def load_state_dict(
 @click.option("--save-interval-steps", type=int)
 @click.option("--unmasked-entity-prob", default=0.0)
 @click.option("--unmasked-word-prob", default=0.1)
-@click.option("--use-deepspeed-transformer-layer", is_flag=True)
 @click.option("--whole-word-masking/--subword-masking", default=True)
 @click.option("--word-only-training", is_flag=True)
 @click.option("--freeze-entity-emb", is_flag=True)
@@ -212,6 +173,8 @@ def pretrain(**kwargs):
 
     args = Namespace(**kwargs)
     deepspeed.init_distributed(dist_backend="nccl")
+
+    tf.config.set_visible_devices([], "GPU")
 
     local_rank = int(os.environ["LOCAL_RANK"])
     global_rank = dist.get_rank()
@@ -243,20 +206,6 @@ def pretrain(**kwargs):
 
     logger.info("Initializing Deepspeed...")
 
-    def get_gamma(self):
-        if self.last_batch_iteration < self.warmup_num_steps:
-            return float(self.last_batch_iteration) / float(max(1, self.warmup_num_steps))
-            # return self.inverse_log_warm_up * math.log(self.last_batch_iteration + 1)
-        return max(
-            0.0,
-            float(self.total_num_steps - self.last_batch_iteration)
-            / float(max(1.0, self.total_num_steps - self.warmup_num_steps)),
-        )
-
-    from deepspeed.runtime import lr_schedules
-
-    lr_schedules.WarmupDecayLR._get_gamma = get_gamma
-
     weight_decay = args.deepspeed_config.get("optimizer", {}).get("params", {}).get("weight_decay", 0.01)
     optimizer_parameters = create_optimizer_grouped_parameters(model, weight_decay)
     model, optimizer, _, lr_scheduler = deepspeed.initialize(
@@ -273,7 +222,7 @@ def pretrain(**kwargs):
         else:
             logger.info(f"Initializing the model parameters from {args.resume_hf_checkpoint_file}...")
             state_dict = torch.load(args.resume_hf_checkpoint_file, map_location="cpu")
-        load_state_dict(state_dict, model.module, config, args.use_deepspeed_transformer_layer)
+        load_state_dict(state_dict, model.module, config)
         state_dict = None
 
     else:

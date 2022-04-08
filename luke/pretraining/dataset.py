@@ -42,7 +42,7 @@ _abstract_only = _language = None
 @click.argument("tokenizer_name")
 @click.argument("entity_vocab_file", type=click.Path(exists=True))
 @click.argument("output_dir", type=click.Path(file_okay=False))
-@click.option("--sentence-tokenizer", default="en")
+@click.option("--sentence-splitter", default="en")
 @click.option("--max-seq-length", default=512)
 @click.option("--max-entity-length", default=128)
 @click.option("--max-mention-length", default=30)

@@ -1,4 +1,3 @@
-import copy
 import logging
 import math
 from typing import Dict
@@ -28,8 +27,6 @@ class LukeConfig(BertConfig):
         bert_model_name: str,
         entity_emb_size: int = None,
         cls_entity_prediction: bool = False,
-        use_deepspeed_transformer_layer: bool = False,
-        deepspeed_transformer_layer_args: dict = {},
         **kwargs,
     ):
         super().__init__(vocab_size, **kwargs)
@@ -42,9 +39,6 @@ class LukeConfig(BertConfig):
             self.entity_emb_size = entity_emb_size
 
         self.cls_entity_prediction = cls_entity_prediction
-
-        self.use_deepspeed_transformer_layer = use_deepspeed_transformer_layer
-        self.deepspeed_transformer_layer_args = deepspeed_transformer_layer_args
 
     def __repr__(self):
         return "{} {}".format(self.__class__.__name__, self.to_json_string(use_diff=False))
@@ -94,28 +88,7 @@ class LukeEncoder(nn.Module):
     def __init__(self, config: LukeConfig):
         super().__init__()
         self.output_hidden_states = config.output_hidden_states
-
-        if config.use_deepspeed_transformer_layer:
-            from deepspeed import DeepSpeedTransformerConfig, DeepSpeedTransformerLayer
-
-            ds_config = DeepSpeedTransformerConfig(
-                hidden_size=config.hidden_size,
-                intermediate_size=config.intermediate_size,
-                heads=config.num_attention_heads,
-                attn_dropout_ratio=config.attention_probs_dropout_prob,
-                hidden_dropout_ratio=config.hidden_dropout_prob,
-                num_hidden_layers=config.num_hidden_layers,
-                initializer_range=config.initializer_range,
-                layer_norm_eps=config.layer_norm_eps,
-                pre_layer_norm=False,
-                stochastic_mode=False,
-                huggingface=True,
-                **config.deepspeed_transformer_layer_args,
-            )
-            self.layer = nn.ModuleList([DeepSpeedTransformerLayer(ds_config) for _ in range(config.num_hidden_layers)])
-
-        else:
-            self.layer = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
+        self.layer = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
 
     def forward(self, hidden_states, attention_mask=None):
         all_hidden_states = ()
@@ -177,16 +150,9 @@ class LukeModel(nn.Module):
 
         if entity_ids is not None:
             entity_sequence_output = sequence_output[:, word_seq_size:, :]
-            return (
-                word_sequence_output,
-                entity_sequence_output,
-                pooled_output,
-            ) + encoder_outputs[1:]
+            return (word_sequence_output, entity_sequence_output, pooled_output,) + encoder_outputs[1:]
         else:
-            return (
-                word_sequence_output,
-                pooled_output,
-            ) + encoder_outputs[1:]
+            return (word_sequence_output, pooled_output,) + encoder_outputs[1:]
 
     def init_weights(self, module: nn.Module):
         if isinstance(module, nn.Linear):
