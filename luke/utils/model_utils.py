@@ -1,18 +1,16 @@
-import glob
 import json
 import os
+from pathlib import Path
 import tarfile
 import tempfile
-from pathlib import Path
 from typing import Dict
 
 import click
 import torch
-from transformers import AutoTokenizer
 
 from luke.model import LukeConfig
-
 from .entity_vocab import EntityVocab
+from transformers import AutoTokenizer
 
 MODEL_FILE = "pytorch_model.bin"
 METADATA_FILE = "metadata.json"
@@ -33,11 +31,11 @@ def get_entity_vocab_file_path(directory: str) -> str:
 
 
 @click.command()
-@click.argument("model_dir", type=click.Path())
-@click.argument("epoch", type=int)
+@click.argument("model_file", type=click.Path())
 @click.argument("out_file", type=click.Path())
 @click.option("--compress", type=click.Choice(["", "gz", "bz2", "xz"]), default="")
-def create_model_archive(model_dir: str, epoch: int, out_file: str, compress: str):
+def create_model_archive(model_file: str, out_file: str, compress: str):
+    model_dir = os.path.dirname(model_file)
     json_file = os.path.join(model_dir, METADATA_FILE)
     with open(json_file) as f:
         model_data = json.load(f)
@@ -48,11 +46,7 @@ def create_model_archive(model_dir: str, epoch: int, out_file: str, compress: st
         out_file = out_file + file_ext
 
     with tarfile.open(out_file, mode="w:" + compress) as archive_file:
-        model_file = glob.glob(os.path.join(model_dir, "checkpoints", f"epoch{epoch}", "*.pt"))[0]
-        model_states = torch.load(model_file, map_location="cpu")["module"]
-        with tempfile.NamedTemporaryFile() as f:
-            torch.save(model_states, f.name, _use_new_zipfile_serialization=False)
-            archive_file.add(f.name, arcname=MODEL_FILE)
+        archive_file.add(model_file, arcname=MODEL_FILE)
 
         vocab_file_path = get_entity_vocab_file_path(model_dir)
         archive_file.add(vocab_file_path, arcname=Path(vocab_file_path).name)
@@ -64,7 +58,7 @@ def create_model_archive(model_dir: str, epoch: int, out_file: str, compress: st
             archive_file.add(metadata_file.name, arcname=METADATA_FILE)
 
 
-class ModelArchive:
+class ModelArchive(object):
     def __init__(self, state_dict: Dict[str, torch.Tensor], metadata: dict, entity_vocab: EntityVocab):
         self.state_dict = state_dict
         self.metadata = metadata
@@ -76,7 +70,10 @@ class ModelArchive:
 
     @property
     def config(self):
-        return LukeConfig(**self.metadata["model_config"])
+        config = LukeConfig(**self.metadata["model_config"])
+        if self.bert_model_name.startswith("roberta"):  # for compatibility for recent transformers
+            config.pad_token_id = 1
+        return config
 
     @property
     def tokenizer(self):
