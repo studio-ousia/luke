@@ -127,6 +127,17 @@ def load_state_dict(state_dict: dict, model: LukePretrainingModel, config: LukeC
 
 @click.command()
 @click.option("--dataset-dir", type=click.Path(), required=True)
+@click.option("--train-batch-size", type=int, required=True)
+@click.option("--num-epochs", type=int, required=True)
+def compute_total_training_steps(dataset_dir, train_batch_size, num_epochs):
+    datasets = load_dataset(dataset_dir)
+    dataset_size = sum([len(d) for d in datasets])
+    train_steps = math.ceil(dataset_size / train_batch_size * num_epochs)
+    print("Total training steps:", train_steps)
+
+
+@click.command()
+@click.option("--dataset-dir", type=click.Path(), required=True)
 @click.option("--output-dir", type=click.Path(), required=True)
 @click.option("--deepspeed-config-file", type=click.Path(exists=True), required=True)
 @click.option("--log-dir", type=click.Path())
