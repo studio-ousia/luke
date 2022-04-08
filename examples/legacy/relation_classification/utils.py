@@ -2,7 +2,7 @@ import json
 import os
 
 from tqdm import tqdm
-from transformers.models.roberta import RobertaTokenizer
+from transformers import RobertaTokenizer
 
 HEAD_TOKEN = "[HEAD]"
 TAIL_TOKEN = "[TAIL]"
@@ -108,6 +108,7 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_mention_le
     label_map = {l: i for i, l in enumerate(label_list)}
 
     def tokenize(text):
+        text = text.rstrip()
         if isinstance(tokenizer, RobertaTokenizer):
             return tokenizer.tokenize(text, add_prefix_space=True)
         else:

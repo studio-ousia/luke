@@ -2,7 +2,7 @@ import json
 import os
 
 from tqdm import tqdm
-from transformers.models.roberta import RobertaTokenizer
+from transformers import RobertaTokenizer
 
 ENTITY_TOKEN = "[ENTITY]"
 
@@ -76,7 +76,7 @@ def convert_examples_to_features(examples, label_list, tokenizer, max_mention_le
     for example in tqdm(examples):
 
         def preprocess_and_tokenize(text, start, end=None):
-            target_text = text[start:end]
+            target_text = text[start:end].rstrip()
             for a, b in conv_tables:
                 target_text = target_text.replace(a, b)
 

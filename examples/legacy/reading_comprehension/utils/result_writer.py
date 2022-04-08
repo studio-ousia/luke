@@ -3,8 +3,8 @@ import logging
 import math
 import collections
 
-from transformers.models.bert import BasicTokenizer
-from transformers.models.roberta import RobertaTokenizer
+from transformers import BasicTokenizer
+from transformers import RobertaTokenizer
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@ import itertools
 import math
 import os
 import unicodedata
-from transformers.models.roberta import RobertaTokenizer
+from transformers import RobertaTokenizer
 
 
 class InputExample(object):

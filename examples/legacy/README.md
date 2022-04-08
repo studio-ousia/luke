@@ -23,6 +23,12 @@ The commands that reproduce the experimental results are provided as follows:
 **Dataset:** [Link](https://github.com/thunlp/ERNIE)\
 **Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10F6tzx0oPG4g-PeB0O1dqpuYtfiHblZU/view?usp=sharing)
 
+**Prepare the dataset**
+```Bash
+$ gdown --id 1HlWw7Q6-dFSm9jNSCh4VaBf1PlGqt9im
+$ tar xzf data.tar.gz
+```
+
 **Using the checkpoint file:**
 
 ```bash

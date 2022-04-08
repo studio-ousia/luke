@@ -26,13 +26,14 @@ def cli():
 
 
 @cli.command()
+@click.option("--checkpoint-file", type=click.Path(exists=True))
 @click.option("--data-dir", default="data/tacred", type=click.Path(exists=True))
-@click.option("--do-train/--no-train", default=True)
-@click.option("--train-batch-size", default=4)
-@click.option("--num-train-epochs", default=5.0)
 @click.option("--do-eval/--no-eval", default=True)
+@click.option("--do-train/--no-train", default=True)
 @click.option("--eval-batch-size", default=128)
+@click.option("--num-train-epochs", default=5.0)
 @click.option("--seed", default=42)
+@click.option("--train-batch-size", default=4)
 @trainer_args
 @click.pass_obj
 def run(common_args, **task_args):
@@ -55,7 +56,7 @@ def run(common_args, **task_args):
     args.model_config.entity_vocab_size = 3
     args.model_weights["entity_embeddings.entity_embeddings.weight"] = torch.cat([entity_emb[:1], mask_emb])
 
-    train_dataloader, _, _, label_list = load_and_cache_examples(args, fold="train")
+    train_dataloader, _, _, label_list = load_examples(args, fold="train")
     num_labels = len(label_list)
 
     results = {}
@@ -105,7 +106,10 @@ def run(common_args, **task_args):
 
     if args.do_eval:
         model = LukeForRelationClassification(args, num_labels)
-        model.load_state_dict(torch.load(os.path.join(args.output_dir, WEIGHTS_NAME), map_location="cpu"))
+        if args.checkpoint_file:
+            model.load_state_dict(torch.load(args.checkpoint_file, map_location="cpu"))
+        else:
+            model.load_state_dict(torch.load(os.path.join(args.output_dir, WEIGHTS_NAME), map_location="cpu"))
         model.to(args.device)
 
         for eval_set in ("dev", "test"):
@@ -121,7 +125,7 @@ def run(common_args, **task_args):
 
 
 def evaluate(args, model, fold="dev", output_file=None):
-    dataloader, _, _, label_list = load_and_cache_examples(args, fold=fold)
+    dataloader, _, _, label_list = load_examples(args, fold=fold)
     predictions = []
     labels = []
 
@@ -164,7 +168,7 @@ def evaluate(args, model, fold="dev", output_file=None):
     return dict(precision=precision, recall=recall, f1=f1)
 
 
-def load_and_cache_examples(args, fold="train"):
+def load_examples(args, fold="train"):
     if args.local_rank not in (-1, 0) and fold == "train":
         torch.distributed.barrier()
 
@@ -178,21 +182,8 @@ def load_and_cache_examples(args, fold="train"):
 
     label_list = processor.get_label_list(args.data_dir)
 
-    bert_model_name = args.model_config.bert_model_name
-
-    cache_file = os.path.join(
-        args.data_dir,
-        "cached_" + "_".join((bert_model_name.split("-")[0], str(args.max_mention_length), fold)) + ".pkl",
-    )
-    if os.path.exists(cache_file):
-        logger.info("Loading features from cached file %s", cache_file)
-        features = torch.load(cache_file)
-    else:
-        logger.info("Creating features from dataset file")
-        features = convert_examples_to_features(examples, label_list, args.tokenizer, args.max_mention_length)
-
-        if args.local_rank in (-1, 0):
-            torch.save(features, cache_file)
+    logger.info("Creating features from the dataset...")
+    features = convert_examples_to_features(examples, label_list, args.tokenizer, args.max_mention_length)
 
     if args.local_rank == 0 and fold == "train":
         torch.distributed.barrier()
