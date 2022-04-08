@@ -178,7 +178,7 @@ For mLUKE, please cite [this paper](https://arxiv.org/abs/2110.08151).
     title = "m{LUKE}: {T}he Power of Entity Representations in Multilingual Pretrained Language Models",
     author = "Ri, Ryokan  and
       Yamada, Ikuya  and
-      Tsuruoka, Yoshimasa  and
+      Tsuruoka, Yoshimasa",
     booktitle = "ACL 2022 (to appear)",
     year = "2022",
 }
