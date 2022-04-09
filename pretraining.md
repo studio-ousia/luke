@@ -1,8 +1,14 @@
 # Pretraining LUKE
 
-This document describes how to pretrain LUKE using a Wikipedia dump file.
+This document describes how to pretrain LUKE on your machine.
 
 ## 1. Install required packages
+
+First, the following Python packages need to be installed.
+
+- [DeepSpeed](https://www.deepspeed.ai/)
+- [Pyjnius](https://pyjnius.readthedocs.io) (LUKE)
+- [PyICU](https://gitlab.pyicu.org/main/pyicu) (mLUKE)
 
 **LUKE:**
 
@@ -16,41 +22,54 @@ poetry install --extras "pretraining opennlp"
 poetry install --extras "pretraining icu"
 ```
 
+If you face troubles to install them, please refer to the documentation of the
+corresponding package.
+
 ## 2. Build a database from a Wikipedia dump
+
+A Wikipedia dump file is converted to the database file using the
+`build-dump-db` command. The dump file can be downloaded from
+[Wikimedia Downloads](https://dumps.wikimedia.org/).
 
 **LUKE:**
 
 ```bash
-wget https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
-python luke/cli.py build-dump-db enwiki-latest-pages-articles.xml.bz2 enwiki.lmdb
+python luke/cli.py build-dump-db enwiki-latest-pages-articles.xml.bz2 enwiki.db
 ```
 
 **mLUKE:**
 
 ## 3. Build an entity vocabulary
 
+The entity vocabulary file can be built using the `build-entity-vocab` command.
+The number of entities included in the vocabulary can be configured using the
+`--vocab-size` option.
+
 **LUKE:**
 
 ```bash
 python luke/cli.py \
     build-entity-vocab \
-    enwiki.lmdb \
+    enwiki.db \
     enwiki_entity_vocab.jsonl \
     --vocab-size=500000
 ```
 
 **mLUKE:**
 
-The size of the entity vocabulary can be configured using `--vocab-size` option.
-
 ## 4. Build a pretraining dataset
+
+The processed dataset file can be built using the
+`build-wikipedia-pretraining-dataset` command. `BASE_MODEL_NAME` should be
+either `roberta-base` or `roberta-large` for LUKE and `xlm-roberta-base` or
+`xlm-roberta-large` for mLUKE.
 
 **LUKE:**
 
 ```bash
 python luke/cli.py \
     build-wikipedia-pretraining-dataset \
-    enwiki.lmdb \
+    enwiki.db \
     <BASE_MODEL_NAME> \
     enwiki_entity_vocab.jsonl \
     enwiki_pretraining_dataset \
@@ -58,11 +77,13 @@ python luke/cli.py \
     --include-unk-entities
 ```
 
-`BASE_MODEL_NAME` should be either `roberta-base` or `roberta-large`.
-
 **mLUKE:**
 
 ## 5. Compute the number of training steps
+
+Before starting to train the model, we need to compute the total number of
+training steps using the `compute-total-training-steps` to configure learning
+rate scheduler.
 
 **LUKE:**
 
@@ -76,19 +97,24 @@ python luke/cli.py \
 
 **mLUKE:**
 
-## 5. Pretrain LUKE
+## 6. Pretrain LUKE
 
 The pretraining of LUKE is implemented based on
-[Deepspeed](https://www.deepspeed.ai/) and the hyperparamters can be configured
-using its [Configuration JSON](https://www.deepspeed.ai/docs/config-json/).
+[Deepspeed](https://www.deepspeed.ai/) and hyperparamters can be configured
+using its [configuration JSON file](https://www.deepspeed.ai/docs/config-json/).
 
-The configuration files of our pretrained models are available in the
+The configuration files corresponding to our publicized models (i.e.,
+`luke-base`, `luke-large`, `mluke-base`, and `mluke-large`) are available in the
 [pretraining_config](https://github.com/studio-ousia/luke/tree/master/pretraining_config)
-directory.
+directory. If you train the model using the configuration file, please set the
+`total_num_steps` propery to the total number of training steps computed above.
 
-The pretraining of LUKE and mLUKE consists of two separate stages. We update
-only the entity embeddings in the first stage, and train the entire model in the
-second stage.
+The pretraining of LUKE and mLUKE consists of two separate stages to stabilize
+the training. Specifically, we update only the entity embeddings with a large
+learning late in the first stage, and train the entire model with a small
+learning rate in the second stage. When starting the second-stage training, the
+checkpoint directory of the first stage model needs to be specified in the
+`--resume-checkpoint-id` option.
 
 **LUKE (stage 1):**
 
@@ -97,7 +123,7 @@ deepspeed \
     --num_gpus=<NUM_GPUS> \
     luke/pretraining/train.py \
     --output-dir=<OUTPUT_DIR> \
-    --deepspeed-config-file=<DEEPSPEED_CONFIG_JSON_FILE> \
+    --deepspeed-config-file=<DEEPSPEED_CONFIG_STAGE1_JSON_FILE> \
     --dataset-dir=enwiki_pretraining_dataset/ \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
@@ -111,7 +137,7 @@ deepspeed \
     --num_gpus=<NUM_GPUS> \
     luke/pretraining/train.py \
     --output-dir=<OUTPUT_DIR> \
-    --deepspeed-config-file=<DEEPSPEED_CONFIG_JSON_FILE> \
+    --deepspeed-config-file=<DEEPSPEED_CONFIG_STAGE2_JSON_FILE> \
     --dataset-dir=enwiki_pretraining_dataset/ \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
