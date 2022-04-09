@@ -22,8 +22,8 @@ poetry install --extras "pretraining opennlp"
 poetry install --extras "pretraining icu"
 ```
 
-If you face troubles to install them, please refer to the documentation of the
-corresponding package.
+If you face trouble when installing these packages, please refer to the
+documentation of the corresponding package.
 
 ## 2. Build a database from a Wikipedia dump
 
@@ -51,7 +51,7 @@ The number of entities included in the vocabulary can be configured using the
 python luke/cli.py \
     build-entity-vocab \
     enwiki.db \
-    enwiki_entity_vocab.jsonl \
+    luke_entity_vocab.jsonl \
     --vocab-size=500000
 ```
 
@@ -71,8 +71,8 @@ python luke/cli.py \
     build-wikipedia-pretraining-dataset \
     enwiki.db \
     <BASE_MODEL_NAME> \
-    enwiki_entity_vocab.jsonl \
-    enwiki_pretraining_dataset \
+    luke_entity_vocab.jsonl \
+    luke_pretraining_dataset \
     --sentence-splitter=opennlp \
     --include-unk-entities
 ```
@@ -90,7 +90,7 @@ rate scheduler.
 ```bash
 python luke/cli.py \
     compute-total-training-steps \
-    --dataset-dir=enwiki_pretraining_dataset \
+    --dataset-dir=luke_pretraining_dataset \
     --train-batch-size=2048 \
     --num-epochs=20
 ```
@@ -107,12 +107,12 @@ The configuration files corresponding to our publicized models (i.e.,
 `luke-base`, `luke-large`, `mluke-base`, and `mluke-large`) are available in the
 [pretraining_config](https://github.com/studio-ousia/luke/tree/master/pretraining_config)
 directory. If you train the model using the configuration file, please set the
-`total_num_steps` propery to the total number of training steps computed above.
+total number of training steps computed above in the `total_num_steps` property.
 
 The pretraining of LUKE and mLUKE consists of two separate stages to stabilize
-the training. Specifically, we update only the entity embeddings with a large
-learning late in the first stage, and train the entire model with a small
-learning rate in the second stage. When starting the second-stage training, the
+the training. Specifically, we update only the entity embeddings with large
+learning late in the first stage, and train the entire model with small learning
+rate in the second stage. When starting the second-stage training, the
 checkpoint directory of the first stage model needs to be specified in the
 `--resume-checkpoint-id` option.
 
@@ -124,7 +124,7 @@ deepspeed \
     luke/pretraining/train.py \
     --output-dir=<OUTPUT_DIR> \
     --deepspeed-config-file=<DEEPSPEED_CONFIG_STAGE1_JSON_FILE> \
-    --dataset-dir=enwiki_pretraining_dataset/ \
+    --dataset-dir=luke_pretraining_dataset/ \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
     --fix-bert-weights \
@@ -138,9 +138,40 @@ deepspeed \
     luke/pretraining/train.py \
     --output-dir=<OUTPUT_DIR> \
     --deepspeed-config-file=<DEEPSPEED_CONFIG_STAGE2_JSON_FILE> \
-    --dataset-dir=enwiki_pretraining_dataset/ \
+    --dataset-dir=luke_pretraining_dataset/ \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
     --reset-optimization-states \
     --resume-checkpoint-id=<STAGE1_LAST_CHECKPOINT_DIR> \
 ```
+
+**mLUKE (stage 1):**
+
+```bash
+deepspeed \
+    --num_gpus=<NUM_GPUS> \
+    luke/pretraining/train.py \
+    --output-dir=<OUTPUT_DIR> \
+    --deepspeed-config-file=<DEEPSPEED_CONFIG_STAGE1_JSON_FILE> \
+    --dataset-dir=mluke_pretraining_dataset/* \
+    --bert-model-name=<BASE_MODEL_NAME> \
+    --num-epochs=<NUM_EPOCHS> \
+    --fix-bert-weights \
+```
+
+**mLUKE (stage 2):**
+
+```bash
+deepspeed \
+    --num_gpus=<NUM_GPUS> \
+    luke/pretraining/train.py \
+    --output-dir=<OUTPUT_DIR> \
+    --deepspeed-config-file=<DEEPSPEED_CONFIG_STAGE2_JSON_FILE> \
+    --dataset-dir=mluke_pretraining_dataset/* \
+    --bert-model-name=<BASE_MODEL_NAME> \
+    --num-epochs=<NUM_EPOCHS> \
+    --reset-optimization-states \
+    --resume-checkpoint-id=<STAGE1_LAST_CHECKPOINT_DIR> \
+```
+
+## 7. Upload to HuggingFace Hub
