@@ -7,7 +7,7 @@ from contextlib import closing
 from multiprocessing.pool import Pool
 
 from tqdm import tqdm
-from transformers.models.roberta import RobertaTokenizer
+from transformers import RobertaTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +145,7 @@ def _process_example(args):
     tokenizer = params.tokenizer
 
     def tokenize(text, add_prefix_space=False):
+        text = text.rstrip()
         if isinstance(tokenizer, RobertaTokenizer):
             return tokenizer.tokenize(text, add_prefix_space=add_prefix_space)
         else:

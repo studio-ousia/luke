@@ -153,9 +153,33 @@ You can run fine-tuning experiments very easily with pre-defined config files an
 For the details and example commands for each task, please see the task directory under [`examples`](examples). 
 
 ## Citation
-
 If you use LUKE in your work, please cite the
 [original paper](https://arxiv.org/abs/2010.01057).
-The reference information can be found [here](https://aclanthology.org/2020.emnlp-main.523/).
+```
+@inproceedings{yamada-etal-2020-luke,
+    title = "{LUKE}: Deep Contextualized Entity Representations with Entity-aware Self-attention",
+    author = "Yamada, Ikuya  and
+      Asai, Akari  and
+      Shindo, Hiroyuki  and
+      Takeda, Hideaki  and
+      Matsumoto, Yuji",
+    booktitle = "Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP)",
+    year = "2020",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2020.emnlp-main.523",
+    doi = "10.18653/v1/2020.emnlp-main.523",
+}
+```
+The full reference information can also be found [here](https://aclanthology.org/2020.emnlp-main.523/).
 
-For mLUKE, please cite the [following paper](https://arxiv.org/abs/2110.08151).
+For mLUKE, please cite [this paper](https://arxiv.org/abs/2110.08151).
+```
+@inproceedings{ri-etal-2022-mluke,
+    title = "m{LUKE}: {T}he Power of Entity Representations in Multilingual Pretrained Language Models",
+    author = "Ri, Ryokan  and
+      Yamada, Ikuya  and
+      Tsuruoka, Yoshimasa",
+    booktitle = "ACL 2022 (to appear)",
+    year = "2022",
+}
+```
