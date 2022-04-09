@@ -127,7 +127,7 @@ deepspeed \
     --dataset-dir=luke_pretraining_dataset/ \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
-    --fix-bert-weights \
+    --fix-bert-weights
 ```
 
 **LUKE (stage 2):**
@@ -142,7 +142,7 @@ deepspeed \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
     --reset-optimization-states \
-    --resume-checkpoint-id=<STAGE1_LAST_CHECKPOINT_DIR> \
+    --resume-checkpoint-id=<STAGE1_LAST_CHECKPOINT_DIR>
 ```
 
 **mLUKE (stage 1):**
@@ -156,7 +156,7 @@ deepspeed \
     --dataset-dir=mluke_pretraining_dataset/* \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
-    --fix-bert-weights \
+    --fix-bert-weights
 ```
 
 **mLUKE (stage 2):**
@@ -171,7 +171,7 @@ deepspeed \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
     --reset-optimization-states \
-    --resume-checkpoint-id=<STAGE1_LAST_CHECKPOINT_DIR> \
+    --resume-checkpoint-id=<STAGE1_LAST_CHECKPOINT_DIR>
 ```
 
 ## 7. Upload to HuggingFace Hub
