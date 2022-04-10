@@ -100,7 +100,7 @@ python luke/cli.py \
 ## 6. Pretrain LUKE
 
 The pretraining of LUKE is implemented based on
-[Deepspeed](https://www.deepspeed.ai/) and hyperparamters can be configured
+[DeepSpeed](https://www.deepspeed.ai/) and hyperparamters can be configured
 using its [configuration JSON file](https://www.deepspeed.ai/docs/config-json/).
 
 The configuration files corresponding to our publicized models (i.e.,
