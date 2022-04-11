@@ -39,6 +39,12 @@ python luke/cli.py build-dump-db enwiki-latest-pages-articles.xml.bz2 enwiki.db
 
 **mLUKE:**
 
+Create the dataset for the 24 languages.
+```bash
+for l in ar bn de nl el en es fi fr hi id it ja ko pl pt ru sv sw te th tr vi zh
+python luke/cli.py build-dump-db "${l}wiki-latest-pages-articles.xml.bz2" "${l}wiki.db"
+```
+
 ## 3. Build an entity vocabulary
 
 The entity vocabulary file can be built using the `build-entity-vocab` command.
@@ -56,6 +62,32 @@ python luke/cli.py \
 ```
 
 **mLUKE:**
+
+
+To build a multilingual vocabulary, you need an interwiki DB to map same entities across languages into the same ids.
+Download the latest wikidata dump from [here](https://dumps.wikimedia.org/wikidatawiki/entities), and then build the interwiki DB by `python luke/cli.py build-interwiki-db`.
+
+Example
+```bash
+# this is the data used for our model
+# the link is out-of-date so please use the latest data instead
+wget https://dumps.wikimedia.org/wikidatawiki/entities/20201130/wikidata-20201130-all.json.bz2
+
+python luke/cli.py build-interwiki-db wikidata-20201130-all.json.bz2 interwiki.db
+```
+
+Create entity vocabularies for each language and then combine them with the interwiki DB.
+```bash
+for l in ar bn de nl el en es fi fr hi id it ja ko pl pt ru sv sw te th tr vi zh
+python luke/cli.py  build-entity-vocab "${l}wiki.db" "mluke_entity_vocab_${l}.jsonl"
+
+
+COMMAND="python luke/cli.py vuild-interwiki-db -i interwiki.db -o mluke_entity_vocab.jsonl --vocab-size 1200000 --min-num-languages 3"
+# add options by for loop because there are so many..
+for l in ar bn de nl el en es fi fr hi id it ja ko pl pt ru sv sw te th tr vi zh
+COMMAND=$COMMAND+" -v mluke_entity_vocab_${l}.jsonl"
+eval $COMMAND
+```
 
 ## 4. Build a pretraining dataset
 
@@ -78,6 +110,16 @@ python luke/cli.py \
 ```
 
 **mLUKE:**
+```bash
+for l in ar bn de nl el en es fi fr hi id it ja ko pl pt ru sv sw te th tr vi zh
+python luke/cli.py \
+    build-wikipedia-pretraining-dataset \
+    "${l}wiki.db" \
+    <BASE_MODEL_NAME> \
+    mluke_entity_vocab.jsonl \
+    "mluke_pretraining_dataset/${l}" \
+    --sentence-splitter=$l
+```
 
 ## 5. Compute the number of training steps
 
@@ -96,6 +138,13 @@ python luke/cli.py \
 ```
 
 **mLUKE:**
+```bash
+python luke/cli.py \
+    compute-total-training-steps \
+    --dataset-dir="mluke_pretraining_dataset/*" \
+    --train-batch-size=2048 \
+    --num-epochs=20
+```
 
 ## 6. Pretrain LUKE
 
