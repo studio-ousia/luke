@@ -223,4 +223,25 @@ deepspeed \
     --resume-checkpoint-id=<STAGE1_LAST_CHECKPOINT_DIR>
 ```
 
-## 7. Upload to HuggingFace Hub
+## 7. Use the pretrained model with HuggingFace Transformers
+The pretrained model can be used with the [transformers](https://github.com/huggingface/transformers) library after converting the checkpoint weights and metadata to the appropriate format.
+Specify the saved files and choose the appropriate tokenizer class (`--tokenizer-class`) from `LukeTokenizer` or `MLukeTokenizer`.
+
+```bash
+python luke/cli.py \
+    convert-luke-to-huggingface-model \ 
+    --checkpoint-path=<OUTPUT_DIR>/checkpoints/epoch20/mp_rank_00_model_states.pt \
+    --metadata-path=<OUTPUT_DIR>/metadata.json  \
+    --entity-vocab-path=<OUTPUT_DIR>/entity_vocab.jsonl \ 
+    --transformers-model-save-path=<TRANSFORMER_MODEL_SAVE_PATH> \ 
+    --tokenizer-class=<TOKENIZER_CLASS> 
+```
+
+Then you can load the model with transformers library.
+
+```python
+from transformers import AutoModel
+model = AutoModel.from_pretrained(TRANSFORMER_MODEL_SAVE_PATH)
+```
+
+Also, you can upload the model to the Hugging Face Hub by following the instructions [here](https://huggingface.co/docs/hub/adding-a-model).
