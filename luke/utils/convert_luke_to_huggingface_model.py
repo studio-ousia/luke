@@ -9,7 +9,9 @@ from transformers.tokenization_utils_base import AddedToken
 
 
 @click.command()
-@click.option("--checkpoint-path", type=click.Path(exists=True), help="Path to a pytorch_model.bin file.", required=True)
+@click.option(
+    "--checkpoint-path", type=click.Path(exists=True), help="Path to a pytorch_model.bin file.", required=True
+)
 @click.option(
     "--metadata-path",
     type=click.Path(exists=True),
@@ -19,7 +21,7 @@ from transformers.tokenization_utils_base import AddedToken
 @click.option(
     "--entity-vocab-path",
     type=click.Path(exists=True),
-    help="Path to an entity_vocab.tsv file, containing the entity vocabulary.",
+    help="Path to an entity_vocab.jsonl file, containing the entity vocabulary.",
     required=True,
 )
 @click.option(
@@ -34,12 +36,19 @@ from transformers.tokenization_utils_base import AddedToken
     help="The Tokenizer class to use in transformers.",
     required=True,
 )
+@click.option(
+    "--set-entity-aware-attention-default",
+    type=bool,
+    help="If true, use_entity_aware_attention is set to true in the model config.",
+    required=True,
+)
 def convert_luke_to_huggingface_model(
     checkpoint_path: str,
     metadata_path: str,
     entity_vocab_path: str,
     transformers_model_save_path: str,
     tokenizer_class: str,
+    set_entity_aware_attention_default: bool,
 ):
     # Load configuration defined in the metadata file
     with open(metadata_path) as metadata_file:
@@ -91,13 +100,16 @@ def convert_luke_to_huggingface_model(
         ent2_decoder_bias = decoder_bias[ent2_init_index].unsqueeze(0)
         state_dict[bias_name] = torch.cat([decoder_bias, ent_decoder_bias, ent2_decoder_bias])
 
-    # Initialize the query layers of the entity-aware self-attention mechanism
+    # If the model is pretrained without the entity-aware self-attention mechanism,
+    # the normal attention weights are copied to the ones for entity aware attention
+    # so that you can use them during fine-tuning
     for layer_index in range(config.num_hidden_layers):
         for matrix_name in ["query.weight", "query.bias"]:
             prefix = f"encoder.layer.{layer_index}.attention.self."
-            state_dict[prefix + "w2e_" + matrix_name] = state_dict[prefix + matrix_name]
-            state_dict[prefix + "e2w_" + matrix_name] = state_dict[prefix + matrix_name]
-            state_dict[prefix + "e2e_" + matrix_name] = state_dict[prefix + matrix_name]
+            for infix in ["w2e_", "e2w_", "e2e_"]:
+                entity_aware_weight_name = prefix + infix + matrix_name
+                if entity_aware_weight_name not in state_dict:
+                    state_dict[entity_aware_weight_name] = state_dict[prefix + matrix_name]
 
     # Initialize the embedding of the [MASK2] entity using that of the [MASK] entity for downstream tasks
     entity_emb = state_dict["entity_embeddings.entity_embeddings.weight"]
@@ -136,8 +148,10 @@ def convert_luke_to_huggingface_model(
     assert (model.luke.entity_embeddings.entity_embeddings.weight == model.entity_predictions.decoder.weight).all()
 
     # Finally, save our PyTorch model and tokenizer
-    print("Saving PyTorch model to {}".format(transformers_model_save_path))
+    print(f"Saving PyTorch model to {transformers_model_save_path}")
+    model.config.use_entity_aware_attention = set_entity_aware_attention_default
     model.save_pretrained(transformers_model_save_path)
+    tokenizer.save_pretrained(transformers_model_save_path)
 
 
 def load_original_entity_vocab(entity_vocab_path):
