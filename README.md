@@ -28,9 +28,13 @@ to solve downstream tasks.
 
 [The example code](examples) is updated.
 Now it is based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers).
-You can reproduce the experiments in [the mLUKE paper](https://arxiv.org/abs/2110.08151) with this implementation.
+You can reproduce the experiments in the [LUKE](https://arxiv.org/abs/2010.01057) and [mLUKE](https://arxiv.org/abs/2110.08151) papers with this implementation.
 For the details, please see `README.md` under each example directory.
-The code used in [the original LUKE paper](https://arxiv.org/abs/2010.01057) is now available in [`examples/legacy`](examples/legacy).
+The older code used in [the LUKE paper](https://arxiv.org/abs/2010.01057) has been moved to [`examples/legacy`](examples/legacy).
+
+**April xx, 2022: The detailed instructions for pretraining LUKE models are available**
+
+For those interested in pretraining LUKE models, we explain how to prepare datasets and run the pretraining code on [`pretraining.md`](pretraining.md).
 
 **November 24, 2021: Entity disambiguation example is available**
 
@@ -151,6 +155,9 @@ the `roberta.large` model.
 We release the fine-tuning code based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers) under [`examples`](examples).
 You can run fine-tuning experiments very easily with pre-defined config files and the `allennlp train` command.
 For the details and example commands for each task, please see the task directory under [`examples`](examples). 
+
+## Pre-training LUKE models
+The detailed instructions for pretraining luke models can be found on [`pretraining.md`](pretraining.md).
 
 ## Citation
 If you use LUKE in your work, please cite the
