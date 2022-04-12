@@ -1,5 +1,8 @@
-## Installation
-When you want to run the code under this directory, please run `poetry install -E examples` to install the required libraries.
+# Fine-tuning for downstream tasks 
+
+We use the [allennlp](https://github.com/allenai/allennlp) library as the backbone of our fine-tuning code (except for `entity_disambiguation` and `legacy`). When you want to make modification with the code, we recommend referring to [the tutorial of allennlp](https://guide.allennlp.org/) to get a basic understanding of the library. 
+
+For further details and examples, see the `README.md` under the directories of each task.
 
 ## On the hyper-parameter tuning
 The training commands described on `README.md` under each directory are just examples, not necessarily reproducing the results on the papers ([LUKE](https://arxiv.org/abs/2010.01057) or [mLUKE](https://arxiv.org/abs/2110.08151)) with a single run.
