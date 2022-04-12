@@ -39,6 +39,12 @@ python luke/cli.py build-dump-db enwiki-latest-pages-articles.xml.bz2 enwiki.db
 
 **mLUKE:**
 
+Create the dataset for the 24 languages.
+```bash
+for l in ar bn de nl el en es fi fr hi id it ja ko pl pt ru sv sw te th tr vi zh
+python luke/cli.py build-dump-db "${l}wiki-latest-pages-articles.xml.bz2" "${l}wiki.db"
+```
+
 ## 3. Build an entity vocabulary
 
 The entity vocabulary file can be built using the `build-entity-vocab` command.
@@ -56,6 +62,30 @@ python luke/cli.py \
 ```
 
 **mLUKE:**
+
+
+To build a multilingual vocabulary, you need an interwiki DB to map same entities across languages into the same ids.
+Download the latest wikidata dump from [here](https://dumps.wikimedia.org/wikidatawiki/entities), and then build the interwiki DB by `python luke/cli.py build-interwiki-db`.
+
+Example
+```bash
+wget https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2
+
+python luke/cli.py build-interwiki-db latest-all.json.bz2 interwiki.db
+```
+
+Create entity vocabularies for each language and then combine them with the interwiki DB.
+```bash
+for l in ar bn de nl el en es fi fr hi id it ja ko pl pt ru sv sw te th tr vi zh
+python luke/cli.py  build-entity-vocab "${l}wiki.db" "mluke_entity_vocab_${l}.jsonl"
+
+
+COMMAND="python luke/cli.py vuild-interwiki-db -i interwiki.db -o mluke_entity_vocab.jsonl --vocab-size 1200000 --min-num-languages 3"
+# add options by for loop because there are so many..
+for l in ar bn de nl el en es fi fr hi id it ja ko pl pt ru sv sw te th tr vi zh
+COMMAND=$COMMAND+" -v mluke_entity_vocab_${l}.jsonl"
+eval $COMMAND
+```
 
 ## 4. Build a pretraining dataset
 
@@ -78,6 +108,16 @@ python luke/cli.py \
 ```
 
 **mLUKE:**
+```bash
+for l in ar bn de nl el en es fi fr hi id it ja ko pl pt ru sv sw te th tr vi zh
+python luke/cli.py \
+    build-wikipedia-pretraining-dataset \
+    "${l}wiki.db" \
+    <BASE_MODEL_NAME> \
+    mluke_entity_vocab.jsonl \
+    "mluke_pretraining_dataset/${l}" \
+    --sentence-splitter=$l
+```
 
 ## 5. Compute the number of training steps
 
@@ -96,6 +136,13 @@ python luke/cli.py \
 ```
 
 **mLUKE:**
+```bash
+python luke/cli.py \
+    compute-total-training-steps \
+    --dataset-dir="mluke_pretraining_dataset/*" \
+    --train-batch-size=2048 \
+    --num-epochs=20
+```
 
 ## 6. Pretrain LUKE
 
@@ -174,4 +221,25 @@ deepspeed \
     --resume-checkpoint-id=<STAGE1_LAST_CHECKPOINT_DIR>
 ```
 
-## 7. Upload to HuggingFace Hub
+## 7. Use the pretrained model with HuggingFace Transformers
+The pretrained model can be used with the [transformers](https://github.com/huggingface/transformers) library after converting the checkpoint weights and metadata to the appropriate format.
+Specify the saved files and choose the appropriate tokenizer class (`--tokenizer-class`) from `LukeTokenizer` or `MLukeTokenizer`.
+
+```bash
+python luke/cli.py \
+    convert-luke-to-huggingface-model \ 
+    --checkpoint-path=<OUTPUT_DIR>/checkpoints/epoch20/mp_rank_00_model_states.pt \
+    --metadata-path=<OUTPUT_DIR>/metadata.json  \
+    --entity-vocab-path=<OUTPUT_DIR>/entity_vocab.jsonl \ 
+    --transformers-model-save-path=<TRANSFORMER_MODEL_SAVE_PATH> \ 
+    --tokenizer-class=<TOKENIZER_CLASS> 
+```
+
+Then you can load the model with transformers library.
+
+```python
+from transformers import AutoModel
+model = AutoModel.from_pretrained(TRANSFORMER_MODEL_SAVE_PATH)
+```
+
+Also, you can upload the model to the Hugging Face Hub by following the instructions [here](https://huggingface.co/docs/hub/adding-a-model).

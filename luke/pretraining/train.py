@@ -130,9 +130,16 @@ def load_state_dict(state_dict: dict, model: LukePretrainingModel, config: LukeC
 @click.option("--train-batch-size", type=int, required=True)
 @click.option("--num-epochs", type=int, required=True)
 def compute_total_training_steps(dataset_dir, train_batch_size, num_epochs):
-    datasets = load_dataset(dataset_dir)
-    dataset_size = sum([len(d) for d in datasets])
-    train_steps = math.ceil(dataset_size / train_batch_size * num_epochs)
+    dataset_directories = glob.glob(dataset_dir)
+    if len(dataset_directories) == 0:
+        raise ValueError(f"{dataset_dir} does not match any directory.")
+
+    total_dataset_size = 0
+    for dataset_dir in dataset_directories:
+        datasets = load_dataset(dataset_dir)
+        dataset_size = sum([len(d) for d in datasets])
+        total_dataset_size += dataset_size
+    train_steps = math.ceil(total_dataset_size / train_batch_size * num_epochs)
     print("Total training steps:", train_steps)
 
 
