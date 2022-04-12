@@ -16,7 +16,7 @@ tqdm = "^4.63.0"
 ujson = "^5.1.0"
 wikipedia2vec = "^1.0.5"
 transformers = "4.13.0"
-allennlp = "2.9.1"
+allennlp = {extras = ["checklist"], version = "^2.9.2"}
 allennlp-models = "2.9.0"
 seqeval = "1.2.2"
 PyICU = {version = "^2.8.1", optional = true}
