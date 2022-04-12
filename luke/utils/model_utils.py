@@ -10,7 +10,7 @@ import torch
 
 from luke.model import LukeConfig
 from .entity_vocab import EntityVocab
-from .word_tokenizer import AutoTokenizer
+from transformers import AutoTokenizer
 
 MODEL_FILE = "pytorch_model.bin"
 METADATA_FILE = "metadata.json"

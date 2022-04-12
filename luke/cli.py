@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 import os
 import random
+
 import click
 import numpy as np
 import torch
@@ -22,6 +23,7 @@ import luke.pretraining.train
 import luke.utils.entity_vocab
 import luke.utils.interwiki_db
 import luke.utils.model_utils
+import luke.utils.convert_luke_to_huggingface_model
 
 
 @click.group()
@@ -56,11 +58,11 @@ def build_dump_db(dump_file: str, out_file: str, **kwargs):
 cli.add_command(luke.utils.entity_vocab.build_entity_vocab)
 cli.add_command(luke.pretraining.dataset.build_wikipedia_pretraining_dataset)
 cli.add_command(luke.pretraining.train.pretrain)
-cli.add_command(luke.pretraining.train.resume_pretraining)
-cli.add_command(luke.pretraining.train.start_pretraining_worker)
+cli.add_command(luke.pretraining.train.compute_total_training_steps)
 cli.add_command(luke.utils.interwiki_db.build_interwiki_db)
 cli.add_command(luke.utils.entity_vocab.build_multilingual_entity_vocab)
 cli.add_command(luke.utils.model_utils.create_model_archive)
+cli.add_command(luke.utils.convert_luke_to_huggingface_model.convert_luke_to_huggingface_model)
 
 
 if __name__ == "__main__":

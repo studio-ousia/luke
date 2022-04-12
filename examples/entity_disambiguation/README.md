@@ -1,7 +1,7 @@
 # Global Entity Disambiguation with Pretrained Contextualized Embeddings of Words and Entities
 
 This directory contains the source code for our paper
-[Global Entity Disambiguation with Pretrained Contextualized Embeddings of Words and Entities](https://arxiv.org/abs/1909.00426).
+[Global Entity Disambiguation with BERT](https://arxiv.org/abs/1909.00426).
 
 The proposed model addresses entity disambiguation based on LUKE using _local_
 (word-based) and _global_ (entity-based) contextual information. The model is
@@ -19,7 +19,7 @@ datasets: AIDA-CoNLL, MSNBC, AQUAINT, ACE2004, and WNED-WIKI.
 **Zero-shot evaluation of the trained model:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_ed.tar.gz
     --output-dir=<OUTPUT_DIR> \
     entity-disambiguation run
@@ -31,7 +31,7 @@ $ python -m examples.cli \
 **Fine-tuning the model using the CoNLL dataset:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_ed.tar.gz \
     entity-disambiguation run \
     --data-dir=data/entity_disambiguation \
@@ -51,10 +51,14 @@ If you find this work useful, please cite
 [our paper](https://arxiv.org/abs/1909.00426):
 
 ```
-@article{yamada2019global,
-  title={Global Entity Disambiguation with Pretrained Contextualized Embeddings of Words and Entities},
-  author={Ikuya Yamada and Koki Washio and Hiroyuki Shindo and Yuji Matsumoto},
-  journal={arXiv preprint arXiv:1909.00426},
-  year={2019}
+@inproceedings{yamada-etal-2022-global-ed,
+    title = "Global Entity Disambiguation with BERT",
+    author = "Yamada, Ikuya  and
+      Washio, Koki  and
+      Shindo, Hiroyuki  and
+      Matsumoto, Yuji",
+    booktitle = "NAACL",
+    year = "2022",
+    publisher = "Association for Computational Linguistics"
 }
 ```

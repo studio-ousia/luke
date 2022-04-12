@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from typing import List
-
 import bz2
 import logging
 import re
+from typing import List, Tuple
+
 import click
 import joblib
 import numpy as np
@@ -27,23 +27,29 @@ def build_interwiki_db(wikidata_dump_file: str, out_file: str, language: List[st
     interwiki_db.save(out_file)
 
 
-class InterwikiDB(object):
+class InterwikiDB:
     def __init__(self, title_trie: Trie, data: np.ndarray, indptr: np.ndarray, title_indices: np.ndarray):
         self._title_trie = title_trie
         self._data = data
         self._indptr = indptr
         self._title_indices = title_indices
 
-    def query(self, title: str, lang: str):
-        try:
-            key = "%s:%s" % (title, lang)
-            row = self._title_indices[self._title_trie[key]]
-            objs = [
-                KEY_RULE.match(self._title_trie.restore_key(ind))
-                for ind in self._data[self._indptr[row] : self._indptr[row + 1]]
-            ]
-            return [(o.group(1), o.group(2)) for o in objs]
+    def get_id(self, title: str, lang: str) -> int:
+        """Return the inter-language id in the database."""
+        key = f"{title}:{lang}"
+        return self._title_indices[self._title_trie[key]]
 
+    def get_titles_from_id(self, idx: str) -> List[Tuple[str, str]]:
+        objs = [
+            KEY_RULE.match(self._title_trie.restore_key(ind))
+            for ind in self._data[self._indptr[idx] : self._indptr[idx + 1]]
+        ]
+        return [(o.group(1), o.group(2)) for o in objs]
+
+    def query(self, title: str, lang: str) -> List[Tuple[str, str]]:
+        try:
+            idx = self.get_id(title, lang)
+            return self.get_titles_from_id(idx)
         except KeyError:
             return []
 

@@ -5,7 +5,7 @@
 ---
 
 **LUKE** (**L**anguage **U**nderstanding with **K**nowledge-based
-**E**mbeddings) is a new pre-trained contextualized representation of words and
+**E**mbeddings) is a new pretrained contextualized representation of words and
 entities based on transformer. It was proposed in our paper
 [LUKE: Deep Contextualized Entity Representations with Entity-aware Self-attention](https://arxiv.org/abs/2010.01057).
 It achieves state-of-the-art results on important NLP benchmarks including
@@ -19,10 +19,22 @@ classification), and
 **[Open Entity](https://www.cs.utexas.edu/~eunsol/html_pages/open_entity.html)**
 (entity typing).
 
-This repository contains the source code to pre-train the model and fine-tune it
+This repository contains the source code to pretrain the model and fine-tune it
 to solve downstream tasks.
 
 ## News
+
+**April 13, 2022: The mLUKE fine-tuning code is available**
+
+[The example code](examples) is updated.
+Now it is based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers).
+You can reproduce the experiments in the [LUKE](https://arxiv.org/abs/2010.01057) and [mLUKE](https://arxiv.org/abs/2110.08151) papers with this implementation.
+For the details, please see `README.md` under each example directory.
+The older code used in [the LUKE paper](https://arxiv.org/abs/2010.01057) has been moved to [`examples/legacy`](examples/legacy).
+
+**April 13, 2022: The detailed instructions for pretraining LUKE models are available**
+
+For those interested in pretraining LUKE models, we explain how to prepare datasets and run the pretraining code on [`pretraining.md`](pretraining.md).
 
 **November 24, 2021: Entity disambiguation example is available**
 
@@ -32,8 +44,8 @@ repository. This model was originally proposed in
 results on five standard entity disambiguation datasets: AIDA-CoNLL, MSNBC,
 AQUAINT, ACE2004, and WNED-WIKI.
 
-For further details, please refer to the
-[example directory](https://github.com/studio-ousia/luke/tree/master/examples/entity_disambiguation).
+For further details, please refer to
+[`examples/entity_disambiguation`](examples/entity_disambiguation).
 
 **August 3, 2021: New example code based on Hugging Face Transformers and
 AllenNLP is available**
@@ -43,8 +55,7 @@ classification_, and _entity typing_, have been added to LUKE. These examples
 are developed based on Hugging Face Transformers and AllenNLP. The fine-tuning
 models are defined using simple AllenNLP's Jsonnet config files!
 
-The example code is available in the
-[examples_allennlp directory](https://github.com/studio-ousia/luke/tree/master/examples_allennlp).
+The example code is available in [`examples`](examples).
 
 **May 5, 2021: LUKE is added to Hugging Face Transformers**
 
@@ -57,17 +68,17 @@ For example, the LUKE-large model fine-tuned on the TACRED dataset can be used
 as follows:
 
 ```python
->>> from transformers import LukeTokenizer, LukeForEntityPairClassification
->>> model = LukeForEntityPairClassification.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
->>> tokenizer = LukeTokenizer.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
->>> text = "Beyoncé lives in Los Angeles."
->>> entity_spans = [(0, 7), (17, 28)]  # character-based entity spans corresponding to "Beyoncé" and "Los Angeles"
->>> inputs = tokenizer(text, entity_spans=entity_spans, return_tensors="pt")
->>> outputs = model(**inputs)
->>> logits = outputs.logits
->>> predicted_class_idx = int(logits[0].argmax())
->>> print("Predicted class:", model.config.id2label[predicted_class_idx])
-Predicted class: per:cities_of_residence
+from transformers import LukeTokenizer, LukeForEntityPairClassification
+model = LukeForEntityPairClassification.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
+tokenizer = LukeTokenizer.from_pretrained("studio-ousia/luke-large-finetuned-tacred")
+text = "Beyoncé lives in Los Angeles."
+entity_spans = [(0, 7), (17, 28)]  # character-based entity spans corresponding to "Beyoncé" and "Los Angeles"
+inputs = tokenizer(text, entity_spans=entity_spans, return_tensors="pt")
+outputs = model(**inputs)
+logits = outputs.logits
+predicted_class_idx = int(logits[0].argmax())
+print("Predicted class:", model.config.id2label[predicted_class_idx])
+# Predicted class: per:cities_of_residence
 ```
 
 We also provide the following three Colab notebooks that show how to reproduce
@@ -117,15 +128,30 @@ These numbers are reported in
 LUKE can be installed using [Poetry](https://python-poetry.org/):
 
 ```bash
-$ poetry install
+poetry install
+
+# If you want to run pretraining for LUKE
+poetry install --extras "pretraining opennlp"
+# If you want to run pretraining for mLUKE
+poetry install --extras "pretraining icu"
 ```
 
 The virtual environment automatically created by Poetry can be activated by
 `poetry shell`.
 
+**A note on installing `torch`**
+
+The pytorch installed via `poetry install` does not necessarily match your hardware.
+In such case, see [the official site](https://pytorch.org/) and reinstall the correct version with the `pip` command.
+```bash
+poetry run pip3 uninstall torch torchvision torchaudio
+# Example for Linux with CUDA 11.3
+poetry run pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+```
+
 ## Released Models
 
-We initially release the pre-trained model with 500K entity vocabulary based on
+We initially release the pretrained model with 500K entity vocabulary based on
 the `roberta.large` model.
 
 | Name                  | Base Model                                                                                          | Entity Vocab Size | Params | Download                                                                                   |
@@ -133,213 +159,42 @@ the `roberta.large` model.
 | **LUKE-500K (base)**  | [roberta.base](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models)  | 500K              | 253 M  | [Link](https://drive.google.com/file/d/17JvBfXTMuXHX_00yq6kXUDB6OJStfSK_/view?usp=sharing) |
 | **LUKE-500K (large)** | [roberta.large](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models) | 500K              | 483 M  | [Link](https://drive.google.com/file/d/1S7smSBELcZWV7-slfrb94BKcSCCoxGfL/view?usp=sharing) |
 
-## Reproducing Experimental Results
+## Fine-tuning LUKE models
+We release the fine-tuning code based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers) under [`examples`](examples).
+You can run fine-tuning experiments very easily with pre-defined config files and the `allennlp train` command.
+For the details and example commands for each task, please see the task directory under [`examples`](examples). 
 
-The experiments were conducted using Python3.6 and PyTorch 1.2.0 installed on a
-server with a single or eight NVidia V100 GPUs. We used
-[NVidia's PyTorch Docker container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
-19.02. For computational efficiency, we used mixed precision training based on
-APEX library which can be installed as follows:
-
-```bash
-$ git clone https://github.com/NVIDIA/apex.git
-$ cd apex
-$ git checkout c3fad1ad120b23055f6630da0b029c8b626db78f
-$ pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
-```
-
-The APEX library is not needed if you do not use `--fp16` option or reproduce
-the results based on the trained checkpoint files.
-
-The commands that reproduce the experimental results are provided as follows:
-
-### Entity Typing on Open Entity Dataset
-
-**Dataset:** [Link](https://github.com/thunlp/ERNIE)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10F6tzx0oPG4g-PeB0O1dqpuYtfiHblZU/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    entity-typing run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    entity-typing run \
-    --data-dir=<DATA_DIR> \
-    --train-batch-size=2 \
-    --gradient-accumulation-steps=2 \
-    --learning-rate=1e-5 \
-    --num-train-epochs=3 \
-    --fp16
-```
-
-### Relation Classification on TACRED Dataset
-
-**Dataset:** [Link](https://nlp.stanford.edu/projects/tacred/)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10XSaQRtQHn13VB_6KALObvok6hdXw7yp/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    relation-classification run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    relation-classification run \
-    --data-dir=<DATA_DIR> \
-    --train-batch-size=4 \
-    --gradient-accumulation-steps=8 \
-    --learning-rate=1e-5 \
-    --num-train-epochs=5 \
-    --fp16
-```
-
-### Named Entity Recognition on CoNLL-2003 Dataset
-
-**Dataset:** [Link](https://www.clips.uantwerpen.be/conll2003/ner/)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10VFEHXMiJGQvD62QbHa8C8XYSeAIt_CP/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    ner run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli\
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    ner run \
-    --data-dir=<DATA_DIR> \
-    --train-batch-size=2 \
-    --gradient-accumulation-steps=4 \
-    --learning-rate=1e-5 \
-    --num-train-epochs=5 \
-    --fp16
-```
-
-### Cloze-style Question Answering on ReCoRD Dataset
-
-**Dataset:** [Link](https://sheng-z.github.io/ReCoRD-explorer/)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/10LuPIQi-HslZs_BgHxSnitGe2tw_anZp/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    entity-span-qa run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli \
-    --num-gpus=8 \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    entity-span-qa run \
-    --data-dir=<DATA_DIR> \
-    --train-batch-size=1 \
-    --gradient-accumulation-steps=4 \
-    --learning-rate=1e-5 \
-    --num-train-epochs=2 \
-    --fp16
-```
-
-### Extractive Question Answering on SQuAD 1.1 Dataset
-
-**Dataset:** [Link](https://rajpurkar.github.io/SQuAD-explorer/)\
-**Checkpoint file (compressed):** [Link](https://drive.google.com/file/d/1097QicHAVnroVVw54niPXoY-iylGNi0K/view?usp=sharing)\
-**Wikipedia data files (compressed):**
-[Link](https://drive.google.com/file/d/129tDJ3ev6IdbJiKOmO6GTgNANunhO_vt/view?usp=sharing)
-
-**Using the checkpoint file:**
-
-```bash
-$ python -m examples.cli \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    reading-comprehension run \
-    --data-dir=<DATA_DIR> \
-    --checkpoint-file=<CHECKPOINT_FILE> \
-    --no-negative \
-    --wiki-link-db-file=enwiki_20160305.pkl \
-    --model-redirects-file=enwiki_20181220_redirects.pkl \
-    --link-redirects-file=enwiki_20160305_redirects.pkl \
-    --no-train
-```
-
-**Fine-tuning the model:**
-
-```bash
-$ python -m examples.cli \
-    --num-gpus=8 \
-    --model-file=luke_large_500k.tar.gz \
-    --output-dir=<OUTPUT_DIR> \
-    reading-comprehension run \
-    --data-dir=<DATA_DIR> \
-    --no-negative \
-    --wiki-link-db-file=enwiki_20160305.pkl \
-    --model-redirects-file=enwiki_20181220_redirects.pkl \
-    --link-redirects-file=enwiki_20160305_redirects.pkl \
-    --train-batch-size=2 \
-    --gradient-accumulation-steps=3 \
-    --learning-rate=15e-6 \
-    --num-train-epochs=2 \
-    --fp16
-```
+## Pretraining LUKE models
+The detailed instructions for pretraining luke models can be found on [`pretraining.md`](pretraining.md).
 
 ## Citation
-
 If you use LUKE in your work, please cite the
-[original paper](https://arxiv.org/abs/2010.01057):
-
+[original paper](https://arxiv.org/abs/2010.01057).
 ```
-@inproceedings{yamada2020luke,
-  title={LUKE: Deep Contextualized Entity Representations with Entity-aware Self-attention},
-  author={Ikuya Yamada and Akari Asai and Hiroyuki Shindo and Hideaki Takeda and Yuji Matsumoto},
-  booktitle={EMNLP},
-  year={2020}
+@inproceedings{yamada-etal-2020-luke,
+    title = "{LUKE}: Deep Contextualized Entity Representations with Entity-aware Self-attention",
+    author = "Yamada, Ikuya  and
+      Asai, Akari  and
+      Shindo, Hiroyuki  and
+      Takeda, Hideaki  and
+      Matsumoto, Yuji",
+    booktitle = "Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP)",
+    year = "2020",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2020.emnlp-main.523",
+    doi = "10.18653/v1/2020.emnlp-main.523",
 }
 ```
+The full reference information can also be found [here](https://aclanthology.org/2020.emnlp-main.523/).
 
-## Contact Info
-
-Please submit a GitHub issue or send an e-mail to Ikuya Yamada
-(`ikuya@ousia.jp`) for help or issues using LUKE.
+For mLUKE, please cite [this paper](https://arxiv.org/abs/2110.08151).
+```
+@inproceedings{ri-etal-2022-mluke,
+    title = "m{LUKE}: {T}he Power of Entity Representations in Multilingual Pretrained Language Models",
+    author = "Ri, Ryokan  and
+      Yamada, Ikuya  and
+      Tsuruoka, Yoshimasa",
+    booktitle = "ACL 2022 (to appear)",
+    year = "2022",
+}
+```

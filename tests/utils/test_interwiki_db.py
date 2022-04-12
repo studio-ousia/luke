@@ -1,7 +1,8 @@
 import bz2
 import os
-import pytest
 import tempfile
+
+import pytest
 
 from luke.utils.interwiki_db import InterwikiDB
 

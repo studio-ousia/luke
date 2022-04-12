@@ -1,6 +1,7 @@
 import os
-import pytest
 import tempfile
+
+import pytest
 
 from luke.utils.entity_vocab import EntityVocab
 
@@ -46,7 +47,7 @@ def test_multilingual_entity_vocab(multilingual_entity_vocab):
 
 
 def test_save_and_load(multilingual_entity_vocab):
-    with tempfile.NamedTemporaryFile() as f:
+    with tempfile.NamedTemporaryFile(suffix=".jsonl") as f:
         multilingual_entity_vocab.save(f.name)
         entity_vocab2 = EntityVocab(f.name)
 

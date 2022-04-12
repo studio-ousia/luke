@@ -8,8 +8,8 @@ from torch import nn
 from transformers.models.bert.modeling_bert import (
     BertConfig,
     BertEmbeddings,
-    BertEncoder,
     BertIntermediate,
+    BertLayer,
     BertOutput,
     BertPooler,
     BertSelfOutput,
@@ -21,9 +21,15 @@ logger = logging.getLogger(__name__)
 
 class LukeConfig(BertConfig):
     def __init__(
-        self, vocab_size: int, entity_vocab_size: int, bert_model_name: str, entity_emb_size: int = None, **kwargs
+        self,
+        vocab_size: int,
+        entity_vocab_size: int,
+        bert_model_name: str,
+        entity_emb_size: int = None,
+        cls_entity_prediction: bool = False,
+        **kwargs,
     ):
-        super(LukeConfig, self).__init__(vocab_size, **kwargs)
+        super().__init__(vocab_size, **kwargs)
 
         self.entity_vocab_size = entity_vocab_size
         self.bert_model_name = bert_model_name
@@ -32,10 +38,15 @@ class LukeConfig(BertConfig):
         else:
             self.entity_emb_size = entity_emb_size
 
+        self.cls_entity_prediction = cls_entity_prediction
+
+    def __repr__(self):
+        return "{} {}".format(self.__class__.__name__, self.to_json_string(use_diff=False))
+
 
 class EntityEmbeddings(nn.Module):
     def __init__(self, config: LukeConfig):
-        super(EntityEmbeddings, self).__init__()
+        super().__init__()
         self.config = config
 
         self.entity_embeddings = nn.Embedding(config.entity_vocab_size, config.entity_emb_size, padding_idx=0)
@@ -73,13 +84,37 @@ class EntityEmbeddings(nn.Module):
         return embeddings
 
 
+class LukeEncoder(nn.Module):
+    def __init__(self, config: LukeConfig):
+        super().__init__()
+        self.output_hidden_states = config.output_hidden_states
+        self.layer = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
+
+    def forward(self, hidden_states, attention_mask=None):
+        all_hidden_states = ()
+        for i, layer_module in enumerate(self.layer):
+            if self.output_hidden_states:
+                all_hidden_states = all_hidden_states + (hidden_states,)
+
+            layer_outputs = layer_module(hidden_states, attention_mask)
+            hidden_states = layer_outputs[0]
+
+        if self.output_hidden_states:
+            all_hidden_states = all_hidden_states + (hidden_states,)
+
+        outputs = (hidden_states,)
+        if self.output_hidden_states:
+            outputs = outputs + (all_hidden_states,)
+        return outputs
+
+
 class LukeModel(nn.Module):
     def __init__(self, config: LukeConfig):
-        super(LukeModel, self).__init__()
+        super().__init__()
 
         self.config = config
 
-        self.encoder = BertEncoder(config)
+        self.encoder = LukeEncoder(config)
         self.pooler = BertPooler(config)
 
         if self.config.bert_model_name and "roberta" in self.config.bert_model_name:
@@ -108,7 +143,7 @@ class LukeModel(nn.Module):
             entity_embedding_output = self.entity_embeddings(entity_ids, entity_position_ids, entity_segment_ids)
             embedding_output = torch.cat([embedding_output, entity_embedding_output], dim=1)
 
-        encoder_outputs = self.encoder(embedding_output, attention_mask, [None] * self.config.num_hidden_layers)
+        encoder_outputs = self.encoder(embedding_output, attention_mask)
         sequence_output = encoder_outputs[0]
         word_sequence_output = sequence_output[:, :word_seq_size, :]
         pooled_output = self.pooler(sequence_output)
@@ -191,7 +226,7 @@ class LukeModel(nn.Module):
 
 class LukeEntityAwareAttentionModel(LukeModel):
     def __init__(self, config):
-        super(LukeEntityAwareAttentionModel, self).__init__(config)
+        super().__init__(config)
         self.config = config
         self.encoder = EntityAwareEncoder(config)
 
@@ -230,12 +265,12 @@ class LukeEntityAwareAttentionModel(LukeModel):
                     ]
 
         kwargs["strict"] = False
-        super(LukeEntityAwareAttentionModel, self).load_state_dict(new_state_dict, *args, **kwargs)
+        super().load_state_dict(new_state_dict, *args, **kwargs)
 
 
 class EntityAwareSelfAttention(nn.Module):
     def __init__(self, config):
-        super(EntityAwareSelfAttention, self).__init__()
+        super().__init__()
 
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
@@ -299,7 +334,7 @@ class EntityAwareSelfAttention(nn.Module):
 
 class EntityAwareAttention(nn.Module):
     def __init__(self, config):
-        super(EntityAwareAttention, self).__init__()
+        super().__init__()
         self.self = EntityAwareSelfAttention(config)
         self.output = BertSelfOutput(config)
 
@@ -313,7 +348,7 @@ class EntityAwareAttention(nn.Module):
 
 class EntityAwareLayer(nn.Module):
     def __init__(self, config):
-        super(EntityAwareLayer, self).__init__()
+        super().__init__()
 
         self.attention = EntityAwareAttention(config)
         self.intermediate = BertIntermediate(config)
@@ -332,7 +367,7 @@ class EntityAwareLayer(nn.Module):
 
 class EntityAwareEncoder(nn.Module):
     def __init__(self, config):
-        super(EntityAwareEncoder, self).__init__()
+        super().__init__()
         self.layer = nn.ModuleList([EntityAwareLayer(config) for _ in range(config.num_hidden_layers)])
 
     def forward(self, word_hidden_states, entity_hidden_states, attention_mask):

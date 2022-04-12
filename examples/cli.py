@@ -6,8 +6,6 @@ import subprocess
 import sys
 from argparse import Namespace
 
-from transformers import RobertaTokenizer
-
 logging.getLogger("transformers").setLevel(logging.WARNING)
 
 import click
@@ -15,7 +13,7 @@ import torch
 
 from luke.utils.model_utils import ModelArchive
 
-from .utils.experiment_logger import commet_logger_args, CometLogger, NullLogger
+from examples.legacy.utils.experiment_logger import commet_logger_args, CometLogger, NullLogger
 
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 
@@ -101,13 +99,9 @@ def cli(ctx, **kwargs):
 
         if args.model_file:
             model_archive = ModelArchive.load(args.model_file)
+            ctx.obj["tokenizer"] = model_archive.tokenizer
             ctx.obj["entity_vocab"] = model_archive.entity_vocab
             ctx.obj["bert_model_name"] = model_archive.bert_model_name
-            if model_archive.bert_model_name.startswith("roberta"):
-                # the current example code does not support the fast tokenizer
-                ctx.obj["tokenizer"] = RobertaTokenizer.from_pretrained(model_archive.bert_model_name)
-            else:
-                ctx.obj["tokenizer"] = model_archive.tokenizer
             ctx.obj["model_config"] = model_archive.config
             ctx.obj["max_mention_length"] = model_archive.max_mention_length
             ctx.obj["model_weights"] = model_archive.state_dict
@@ -115,28 +109,10 @@ def cli(ctx, **kwargs):
             experiment_logger.log_parameter("model_file_name", os.path.basename(args.model_file))
 
 
-from .entity_disambiguation.main import cli as entity_disambiguation_cli
+from examples.entity_disambiguation.main import cli as entity_disambiguation_cli
 
 cli.add_command(entity_disambiguation_cli)
 
-from .entity_typing.main import cli as entity_typing_cli
-
-cli.add_command(entity_typing_cli)
-from .ner.main import cli as ner_cli
-
-cli.add_command(ner_cli)
-from .reading_comprehension.main import cli as reading_comprehension_cli
-
-cli.add_command(reading_comprehension_cli)
-from .relation_classification.main import cli as relation_classification_cli
-
-cli.add_command(relation_classification_cli)
-from .utils.mention_db import cli as mention_db_cli
-
-cli.add_command(mention_db_cli)
-from .entity_span_qa.main import cli as entity_span_qa_cli
-
-cli.add_command(entity_span_qa_cli)
 
 if __name__ == "__main__":
     cli()
