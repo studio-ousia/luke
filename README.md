@@ -5,7 +5,7 @@
 ---
 
 **LUKE** (**L**anguage **U**nderstanding with **K**nowledge-based
-**E**mbeddings) is a new pre-trained contextualized representation of words and
+**E**mbeddings) is a new pretrained contextualized representation of words and
 entities based on transformer. It was proposed in our paper
 [LUKE: Deep Contextualized Entity Representations with Entity-aware Self-attention](https://arxiv.org/abs/2010.01057).
 It achieves state-of-the-art results on important NLP benchmarks including
@@ -19,12 +19,12 @@ classification), and
 **[Open Entity](https://www.cs.utexas.edu/~eunsol/html_pages/open_entity.html)**
 (entity typing).
 
-This repository contains the source code to pre-train the model and fine-tune it
+This repository contains the source code to pretrain the model and fine-tune it
 to solve downstream tasks.
 
 ## News
 
-**April xx, 2022: The mLUKE fine-tuning code is available**
+**April 12, 2022: The mLUKE fine-tuning code is available**
 
 [The example code](examples) is updated.
 Now it is based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers).
@@ -32,7 +32,7 @@ You can reproduce the experiments in the [LUKE](https://arxiv.org/abs/2010.01057
 For the details, please see `README.md` under each example directory.
 The older code used in [the LUKE paper](https://arxiv.org/abs/2010.01057) has been moved to [`examples/legacy`](examples/legacy).
 
-**April xx, 2022: The detailed instructions for pretraining LUKE models are available**
+**April 12, 2022: The detailed instructions for pretraining LUKE models are available**
 
 For those interested in pretraining LUKE models, we explain how to prepare datasets and run the pretraining code on [`pretraining.md`](pretraining.md).
 
@@ -143,7 +143,7 @@ The virtual environment automatically created by Poetry can be activated by
 
 ## Released Models
 
-We initially release the pre-trained model with 500K entity vocabulary based on
+We initially release the pretrained model with 500K entity vocabulary based on
 the `roberta.large` model.
 
 | Name                  | Base Model                                                                                          | Entity Vocab Size | Params | Download                                                                                   |
@@ -156,7 +156,7 @@ We release the fine-tuning code based on [allennlp](https://github.com/allenai/a
 You can run fine-tuning experiments very easily with pre-defined config files and the `allennlp train` command.
 For the details and example commands for each task, please see the task directory under [`examples`](examples). 
 
-## Pre-training LUKE models
+## Pretraining LUKE models
 The detailed instructions for pretraining luke models can be found on [`pretraining.md`](pretraining.md).
 
 ## Citation
