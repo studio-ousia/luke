@@ -11,7 +11,7 @@ In this code, you can experiment with the task of reading comprehension (extract
 * [MLQA](https://aclanthology.org/2020.acl-main.653/)
 
 ##### Download datasets
-Download the SQuAD dataset from [here](https://rajpurkar.github.io/SQuAD-explorer).
+Download the SQuAD 1.1 dataset from [here](https://deepai.org/dataset/squad).
 The XQuAD and MLQA can be obtained through the following commands.
 ```bash
 cd data
@@ -42,14 +42,15 @@ poetry run allennlp train examples/reading_comprehension/configs_squad/transform
 ```
 
 ## Evaluation
+We use `examples/reading_comprehension/evaluate_qa.py` to evaluate the model saved in the serialization directory instead of `allennlp evaluate`.
+
+
 To perform cross-lingual evaluation with entity representation, download the files of mention candidates from [here](https://drive.google.com/file/d/12m-mV8sud4F3yXtiVh5QXp3SBPLh_Eje/view?usp=sharing).
 The following examples assume the mention candidates are under `data` directory.
 
 ```bash
-poetry run allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples --output-file OUTPUT_FILE 
-
 # example of LUKE
-poetry run allennlp evaluate results/reading_comprehension/luke-large data/SQuAD/dev-v1.1.json --include-package examples --output-file results/reading_comprehension/luke-large/metrics_test.json --cuda 0
+poetry run python examples/reading_comprehension/evaluate_qa.py results/reading_comprehension/luke-large data/SQuAD/dev-v1.1.json --mention-candidate-files '{"en-en": "examples/reading_comprehension/mention_candidates/squad/train-dev-v1.1.json"}' --cuda-device 0
 
 # example of mLUKE with XQuAD
 poetry run python examples/reading_comprehension/evaluate_qa.py results/reading_comprehension/mluke-base data/xquad/xquad.ar.json --mention-candidate-files '{"en-ar": "data/squad_mention_candidates/xquad/dev-v1.1.ar.json"}' --cuda-device 0
