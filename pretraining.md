@@ -69,11 +69,9 @@ Download the latest wikidata dump from [here](https://dumps.wikimedia.org/wikida
 
 Example
 ```bash
-# this is the data used for our model
-# the link is out-of-date so please use the latest data instead
-wget https://dumps.wikimedia.org/wikidatawiki/entities/20201130/wikidata-20201130-all.json.bz2
+wget https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2
 
-python luke/cli.py build-interwiki-db wikidata-20201130-all.json.bz2 interwiki.db
+python luke/cli.py build-interwiki-db latest-all.json.bz2 interwiki.db
 ```
 
 Create entity vocabularies for each language and then combine them with the interwiki DB.
