@@ -46,7 +46,7 @@ def evaluate_qa(
 
     output_metric_file = str(Path(output_directory) / "metrics.json")
     command = (
-        f"poetry run allennlp evaluate {serialization_dir} '{test_file_path}' "
+        f"allennlp evaluate {serialization_dir} '{test_file_path}' "
         f"--output-file {output_metric_file} "
         f"--cuda-device {cuda_device} "
         f"-o '{json.dumps(overrides)}' "

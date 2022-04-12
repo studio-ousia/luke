@@ -25,7 +25,7 @@ We observe running the below commands with different environments (possibly with
 ### LUKE-large
 ```bash
 # Reproduce the result of studio-ousia/luke-large-finetuned-tacred.
-poetry run python examples/relation_classification/evaluate_transformers_checkpoint.py tacred data/tacred/test.json studio-ousia/luke-large-finetuned-tacred --cuda-device 0
+python examples/relation_classification/evaluate_transformers_checkpoint.py tacred data/tacred/test.json studio-ousia/luke-large-finetuned-tacred --cuda-device 0
 # Expected results are around (it depends on your environments):
 # {'accuracy': 0.888, 'macro_fscore': 0.588, 'micro_fscore': 0.726}.
 ```
@@ -33,7 +33,7 @@ poetry run python examples/relation_classification/evaluate_transformers_checkpo
 ### mLUKE-large
 ```bash
 # Reproduce the result of studio-ousia/mluke-large-lite-finetuned-kbp37
-poetry run python examples/relation_classification/evaluate_transformers_checkpoint.py kbp37 data/RELX/Datasets/RELX/RELX_es.txt studio-ousia/mluke-large-lite-finetuned-kbp37 --cuda-device 0
+python examples/relation_classification/evaluate_transformers_checkpoint.py kbp37 data/RELX/Datasets/RELX/RELX_es.txt studio-ousia/mluke-large-lite-finetuned-kbp37 --cuda-device 0
 # Expected results are around (it depends on your environments):
 # {'accuracy': 0.651, 'macro_fscore': 0.678, 'micro_fscore': 0.684}
 ```
@@ -50,11 +50,11 @@ export VALIDATION_DATA_PATH="data/tacred/dev.json";
 
 # train LUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/luke-large";
-poetry run allennlp train examples/relation_classification/configs/transformers_luke_with_entity_aware_attention.jsonnet -s results/relation_classification/luke-large --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
+allennlp train examples/relation_classification/configs/transformers_luke_with_entity_aware_attention.jsonnet -s results/relation_classification/luke-large --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # you can also fine-tune models from the BERT family
 export TRANSFORMERS_MODEL_NAME="roberta-base";
-poetry run allennlp train examples/relation_classification/configs/transformers.jsonnet  -s results/relation_classification/roberta-base --include-package examples
+allennlp train examples/relation_classification/configs/transformers.jsonnet  -s results/relation_classification/roberta-base --include-package examples
 ```
 
 ### Multilingual (KBP37)
@@ -65,29 +65,29 @@ export VALIDATION_DATA_PATH="data/kbp37/dev.txt";
 
 # train mLUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/mluke-base";
-poetry run allennlp train examples/relation_classification/configs/transformers_luke.jsonnet -s results/relation_classification/mluke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
+allennlp train examples/relation_classification/configs/transformers_luke.jsonnet -s results/relation_classification/mluke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # train other multilingual models
 export TRANSFORMERS_MODEL_NAME="xlm-roberta-base";
-poetry run allennlp train examples/relation_classification/configs/transformers.jsonnet  -s results/relation_classification/xlm-roberta-base --include-package examples
+allennlp train examples/relation_classification/configs/transformers.jsonnet  -s results/relation_classification/xlm-roberta-base --include-package examples
 ```
 
 ## Evaluation
 ```bash
-poetry run allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples --output-file OUTPUT_FILE 
+allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples --output-file OUTPUT_FILE 
 
 # example of LUKE
-poetry run allennlp evaluate results/relation_classification/luke-large data/tacred/test.json --include-package examples --output-file results/relation_classification/luke-large/metrics_test.json --cuda 0
+allennlp evaluate results/relation_classification/luke-large data/tacred/test.json --include-package examples --output-file results/relation_classification/luke-large/metrics_test.json --cuda 0
 
 # example of mLUKE
-poetry run allennlp evaluate results/relation_classification/mluke-base data/RELX/Datasets/RELX/RELX_es.txt --include-package examples --output-file results/relation_classification/mluke-base/metrics_relx_es.json --cuda 0
+allennlp evaluate results/relation_classification/mluke-base data/RELX/Datasets/RELX/RELX_es.txt --include-package examples --output-file results/relation_classification/mluke-base/metrics_relx_es.json --cuda 0
 ```
 
 ## Make Prediction
 ```bash
-poetry run allennlp predict RESULT_SAVE_DIR INPUT_FILE --use-dataset-reader --include-package examples --cuda-device CUDA_DEVICE --output-file OUTPUT_FILE
+allennlp predict RESULT_SAVE_DIR INPUT_FILE --use-dataset-reader --include-package examples --cuda-device CUDA_DEVICE --output-file OUTPUT_FILE
 
 # example of LUKE
-poetry run allennlp predict results/relation_classification/luke-large data/tacred/dev.json --use-dataset-reader --include-package examples --cuda-device 0 --output-file results/relation_classification/luke-large/prediction.json
+allennlp predict results/relation_classification/luke-large data/tacred/dev.json --use-dataset-reader --include-package examples --cuda-device 0 --output-file results/relation_classification/luke-large/prediction.json
 ```
 

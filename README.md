@@ -24,7 +24,7 @@ to solve downstream tasks.
 
 ## News
 
-**April 12, 2022: The mLUKE fine-tuning code is available**
+**April 13, 2022: The mLUKE fine-tuning code is available**
 
 [The example code](examples) is updated.
 Now it is based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers).
@@ -32,7 +32,7 @@ You can reproduce the experiments in the [LUKE](https://arxiv.org/abs/2010.01057
 For the details, please see `README.md` under each example directory.
 The older code used in [the LUKE paper](https://arxiv.org/abs/2010.01057) has been moved to [`examples/legacy`](examples/legacy).
 
-**April 12, 2022: The detailed instructions for pretraining LUKE models are available**
+**April 13, 2022: The detailed instructions for pretraining LUKE models are available**
 
 For those interested in pretraining LUKE models, we explain how to prepare datasets and run the pretraining code on [`pretraining.md`](pretraining.md).
 

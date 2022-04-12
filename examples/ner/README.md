@@ -11,7 +11,7 @@ We assume that the data files follow the CoNLL-2003 format.
 ### LUKE-large
 ```bash
 # Reproduce the result of studio-ousia/luke-large-finetuned-conll-2003.
-poetry run python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/en/test.txt studio-ousia/luke-large-finetuned-conll-2003 --cuda-device 0
+python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/en/test.txt studio-ousia/luke-large-finetuned-conll-2003 --cuda-device 0
 # Expected results (you may observe slightly different results due to environmental differences):
 # {'f1': 0.946, 'precision': 0.945, 'recall': 0.946}.
 ```
@@ -20,10 +20,10 @@ You may find the result a little higher than [the original paper of LUKE](https:
 ### mLUKE-large
 ```bash
 # Reproduce the result of studio-ousia/mluke-large-lite-finetuned-conll-2003
-poetry run python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/de/deu.testb.bio  studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0
+python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/de/deu.testb.bio  studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0
 
 # When the input file has a file encoding different from utf-8, you should specify it with --file-encoding.
-poetry run python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/es/esp.testb studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0 --file-encoding ISO-8859-1
+python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/es/esp.testb studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0 --file-encoding ISO-8859-1
 
 # Expected results for each language.
 # {"en": 94.1, "de": 78.8 "nl": 82.4 "es": 82.2", "average": 84.4}  
@@ -40,24 +40,24 @@ export VALIDATION_DATA_PATH="data/ner_conll/en/valid.txt";
 
 # train LUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/luke-large";
-poetry run allennlp train examples/ner/configs/transformers_luke_with_entity_aware_attention.jsonnet -s results/ner/luke-large --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
+allennlp train examples/ner/configs/transformers_luke_with_entity_aware_attention.jsonnet -s results/ner/luke-large --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # train mLUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/mluke-base";
-poetry run allennlp train examples/ner/configs/transformers_luke.jsonnet -s results/ner/mluke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
+allennlp train examples/ner/configs/transformers_luke.jsonnet -s results/ner/mluke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # you can also fine-tune models from the BERT family
 export TRANSFORMERS_MODEL_NAME="roberta-base";
-poetry run allennlp train examples/ner/configs/transformers.jsonnet  -s results/ner/roberta-base --include-package examples
+allennlp train examples/ner/configs/transformers.jsonnet  -s results/ner/roberta-base --include-package examples
 ```
 
 ## Evaluation
 ```bash
-poetry run allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples --output-file OUTPUT_FILE 
+allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples --output-file OUTPUT_FILE 
 
 # example of LUKE
-poetry run allennlp evaluate results/ner/luke-large /data/ner_conll/en/test.txt --include-package examples --output-file results/ner/luke-large/metrics_test.json --cuda 0
+allennlp evaluate results/ner/luke-large /data/ner_conll/en/test.txt --include-package examples --output-file results/ner/luke-large/metrics_test.json --cuda 0
 
 # example of mLUKE (cross-lingual transfer)
-poetry run allennlp evaluate results/ner/mluke-base data/ner_conll/de/deu.testb.bio --include-package examples --output-file results/ner/mluke-base/metrics_de_test.json --cuda 0
+allennlp evaluate results/ner/mluke-base data/ner_conll/de/deu.testb.bio --include-package examples --output-file results/ner/mluke-base/metrics_de_test.json --cuda 0
 ```
