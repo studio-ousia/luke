@@ -1,6 +1,6 @@
 # Fine-tuning for downstream tasks 
 
-We use the [allennlp](https://github.com/allenai/allennlp) library as the backbone of our fine-tuning code (except for `entity_disambiguation` and `legacy`). When you want to make modification with the code, we recommend referring to [the tutorial of allennlp](https://guide.allennlp.org/) to get a basic understanding of the library. 
+We use the [allennlp](https://github.com/allenai/allennlp) library as the backbone of our fine-tuning code (except for `entity_disambiguation` and `legacy`). When you want to modify the code, we recommend referring to [the tutorial of allennlp](https://guide.allennlp.org/) to get a basic understanding of the library. 
 
 For further details and examples, see the `README.md` under the directories of each task.
 
