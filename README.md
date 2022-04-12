@@ -130,16 +130,24 @@ LUKE can be installed using [Poetry](https://python-poetry.org/):
 ```bash
 $ poetry install
 
-# If you want to run pretraining
-$ poetry install -E pretraining
-$ poetry install -E icu
-
-# If you want to run the code under `examples`
-$ poetry install -E examples
+# If you want to run pretraining for LUKE
+$ poetry install --extras "pretraining opennlp"
+# If you want to run pretraining for mLUKE
+$ poetry install --extras "pretraining icu"
 ```
 
 The virtual environment automatically created by Poetry can be activated by
 `poetry shell`.
+
+**A note on installing `torch`**
+
+The pytorch installed via `poetry install` does not necessarily match your hardware.
+In such case, see [the official site](https://pytorch.org/) and reinstall the correct version with the `pip` command.
+```bash
+$ poetry run pip3 uninstall torch
+# Example for Linux with CUDA 11.3
+$ poetry run pip3 install torch --extra-index-url https://download.pytorch.org/whl/cu113
+```
 
 ## Released Models
 
