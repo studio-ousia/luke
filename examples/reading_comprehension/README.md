@@ -1,4 +1,4 @@
-# Relation Classification
+# Reading Comprehension
 In this code, you can experiment with the task of reading comprehension (extractive QA) with several datasets. Currently, we support the following datasets.
 
 ## Datasets 
@@ -29,8 +29,8 @@ export TRAIN_DATA_PATH="data/SQuAD/train-v1.1.json";
 export VALIDATION_DATA_PATH="data/SQuAD/dev-v1.1.json";
 
 # train LUKE
-export TRANSFORMERS_MODEL_NAME="studio-ousia/luke-base";
-poetry run allennlp train examples/reading_comprehension/configs_squad/transformers_luke_with_entity_aware_attention.jsonnet -s results/reading_comprehension/luke-base --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
+export TRANSFORMERS_MODEL_NAME="studio-ousia/luke-large";
+poetry run allennlp train examples/reading_comprehension/configs_squad/transformers_luke_with_entity_aware_attention.jsonnet -s results/reading_comprehension/luke-large --include-package examples -o '{"trainer.cuda_device": 0, "trainer.use_amp": true}'
 
 # train mLUKE
 export TRANSFORMERS_MODEL_NAME="studio-ousia/mluke-base";
@@ -49,7 +49,7 @@ The following examples assume the mention candidates are under `data` directory.
 poetry run allennlp evaluate RESULT_SAVE_DIR INPUT_FILE --include-package examples --output-file OUTPUT_FILE 
 
 # example of LUKE
-poetry run allennlp evaluate results/reading_comprehension/luke-base data/SQuAD/dev-v1.1.json --include-package examples --output-file results/reading_comprehension/luke-base/metrics_test.json --cuda 0
+poetry run allennlp evaluate results/reading_comprehension/luke-large data/SQuAD/dev-v1.1.json --include-package examples --output-file results/reading_comprehension/luke-large/metrics_test.json --cuda 0
 
 # example of mLUKE with XQuAD
 poetry run python examples/reading_comprehension/evaluate_qa.py results/reading_comprehension/mluke-base data/xquad/xquad.ar.json --mention-candidate-files '{"en-ar": "data/squad_mention_candidates/xquad/dev-v1.1.ar.json"}' --cuda-device 0
