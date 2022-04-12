@@ -19,7 +19,7 @@ datasets: AIDA-CoNLL, MSNBC, AQUAINT, ACE2004, and WNED-WIKI.
 **Zero-shot evaluation of the trained model:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_ed.tar.gz
     --output-dir=<OUTPUT_DIR> \
     entity-disambiguation run
@@ -31,7 +31,7 @@ $ python -m examples.cli \
 **Fine-tuning the model using the CoNLL dataset:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_ed.tar.gz \
     entity-disambiguation run \
     --data-dir=data/entity_disambiguation \

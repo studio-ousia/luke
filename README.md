@@ -128,12 +128,12 @@ These numbers are reported in
 LUKE can be installed using [Poetry](https://python-poetry.org/):
 
 ```bash
-$ poetry install
+poetry install
 
 # If you want to run pretraining for LUKE
-$ poetry install --extras "pretraining opennlp"
+poetry install --extras "pretraining opennlp"
 # If you want to run pretraining for mLUKE
-$ poetry install --extras "pretraining icu"
+poetry install --extras "pretraining icu"
 ```
 
 The virtual environment automatically created by Poetry can be activated by
@@ -144,9 +144,9 @@ The virtual environment automatically created by Poetry can be activated by
 The pytorch installed via `poetry install` does not necessarily match your hardware.
 In such case, see [the official site](https://pytorch.org/) and reinstall the correct version with the `pip` command.
 ```bash
-$ poetry run pip3 uninstall torch torchvision torchaudio
+poetry run pip3 uninstall torch torchvision torchaudio
 # Example for Linux with CUDA 11.3
-$ poetry run pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+poetry run pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
 ```
 
 ## Released Models

@@ -7,10 +7,10 @@ server with a single or eight NVidia V100 GPUs. We used
 APEX library which can be installed as follows:
 
 ```bash
-$ git clone https://github.com/NVIDIA/apex.git
-$ cd apex
-$ git checkout c3fad1ad120b23055f6630da0b029c8b626db78f
-$ pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
+git clone https://github.com/NVIDIA/apex.git
+cd apex
+git checkout c3fad1ad120b23055f6630da0b029c8b626db78f
+pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
 ```
 
 The APEX library is not needed if you do not use `--fp16` option or reproduce
@@ -25,14 +25,14 @@ The commands that reproduce the experimental results are provided as follows:
 
 **Prepare the dataset**
 ```Bash
-$ gdown --id 1HlWw7Q6-dFSm9jNSCh4VaBf1PlGqt9im
-$ tar xzf data.tar.gz
+gdown --id 1HlWw7Q6-dFSm9jNSCh4VaBf1PlGqt9im
+tar xzf data.tar.gz
 ```
 
 **Using the checkpoint file:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
     entity-typing run \
@@ -44,7 +44,7 @@ $ python -m examples.cli \
 **Fine-tuning the model:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
     entity-typing run \
@@ -64,7 +64,7 @@ $ python -m examples.cli \
 **Using the checkpoint file:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
     relation-classification run \
@@ -76,7 +76,7 @@ $ python -m examples.cli \
 **Fine-tuning the model:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
     relation-classification run \
@@ -96,7 +96,7 @@ $ python -m examples.cli \
 **Using the checkpoint file:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
     ner run \
@@ -108,7 +108,7 @@ $ python -m examples.cli \
 **Fine-tuning the model:**
 
 ```bash
-$ python -m examples.cli\
+python -m examples.cli\
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
     ner run \
@@ -128,7 +128,7 @@ $ python -m examples.cli\
 **Using the checkpoint file:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
     entity-span-qa run \
@@ -140,7 +140,7 @@ $ python -m examples.cli \
 **Fine-tuning the model:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --num-gpus=8 \
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
@@ -163,7 +163,7 @@ $ python -m examples.cli \
 **Using the checkpoint file:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
     reading-comprehension run \
@@ -179,7 +179,7 @@ $ python -m examples.cli \
 **Fine-tuning the model:**
 
 ```bash
-$ python -m examples.cli \
+python -m examples.cli \
     --num-gpus=8 \
     --model-file=luke_large_500k.tar.gz \
     --output-dir=<OUTPUT_DIR> \
