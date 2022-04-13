@@ -151,7 +151,10 @@ poetry run pip3 install torch torchvision torchaudio --extra-index-url https://d
 
 ## Released Models
 
-Our pretrained models are available in the [transformers](https://github.com/huggingface/transformers) library.
+Our pretrained models can be used with the [transformers](https://github.com/huggingface/transformers) library.
+The model documentations can be found in the following links: [LUKE](https://huggingface.co/docs/transformers/main/en/model_doc/luke) and [mLUKE](https://huggingface.co/docs/transformers/main/en/model_doc/mluke).
+
+Currently, the following models are available on [the Hugging Face Model Hub](https://huggingface.co/models).
 
 |       Name        |model_name|Entity Vocab Size| Params |
 |:-----------------:|:----:|:----:|:------:|
