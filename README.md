@@ -168,7 +168,7 @@ The entity embeddings cause a large memory footprint as they contain all the Wik
 However, in some downstream tasks (e.g., entity typing, named entity recognition, and relation classification), we only need special entity embeddings such as `[MASK]`.
 Also, you may want to only use the word representations.
 
-With such use-cases in mind, to make our models easier to use, we have uploaded lite models only with special entity tokens.
+With such use-cases in mind, to make our models easier to use, we have uploaded lite models only with special entity embeddings.
 These models perform exactly the same as the full models but have much fewer parameters, which enable fine-tuning the model with small GPUs.
 
 |Name|                                  model_name                                  |Params|
