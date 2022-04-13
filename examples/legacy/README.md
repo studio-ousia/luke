@@ -18,6 +18,15 @@ the results based on the trained checkpoint files.
 
 The commands that reproduce the experimental results are provided as follows:
 
+### Download model checkpoints
+
+To reproduce results based on this code, please download the model checkpoints from the links below.
+
+| Name                  | Base Model                                                                                          | Entity Vocab Size | Params | Download                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------- | ----------------- |--------| ------------------------------------------------------------------------------------------ |
+| **LUKE-500K (base)**  | [roberta.base](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models)  | 500K              | 253 M  | [Link](https://drive.google.com/file/d/17JvBfXTMuXHX_00yq6kXUDB6OJStfSK_/view?usp=sharing) |
+| **LUKE-500K (large)** | [roberta.large](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models) | 500K              | 484 M  | [Link](https://drive.google.com/file/d/1S7smSBELcZWV7-slfrb94BKcSCCoxGfL/view?usp=sharing) |
+
 ### Entity Typing on Open Entity Dataset
 
 **Dataset:** [Link](https://github.com/thunlp/ERNIE)\

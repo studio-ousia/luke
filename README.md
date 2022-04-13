@@ -151,13 +151,33 @@ poetry run pip3 install torch torchvision torchaudio --extra-index-url https://d
 
 ## Released Models
 
-We initially release the pretrained model with 500K entity vocabulary based on
-the `roberta.large` model.
+Our pretrained models can be used with the [transformers](https://github.com/huggingface/transformers) library.
+The model documentations can be found in the following links: [LUKE](https://huggingface.co/docs/transformers/main/en/model_doc/luke) and [mLUKE](https://huggingface.co/docs/transformers/main/en/model_doc/mluke).
 
-| Name                  | Base Model                                                                                          | Entity Vocab Size | Params | Download                                                                                   |
-| --------------------- | --------------------------------------------------------------------------------------------------- | ----------------- | ------ | ------------------------------------------------------------------------------------------ |
-| **LUKE-500K (base)**  | [roberta.base](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models)  | 500K              | 253 M  | [Link](https://drive.google.com/file/d/17JvBfXTMuXHX_00yq6kXUDB6OJStfSK_/view?usp=sharing) |
-| **LUKE-500K (large)** | [roberta.large](https://github.com/pytorch/fairseq/tree/master/examples/roberta#pre-trained-models) | 500K              | 483 M  | [Link](https://drive.google.com/file/d/1S7smSBELcZWV7-slfrb94BKcSCCoxGfL/view?usp=sharing) |
+Currently, the following models are available on [the Hugging Face Model Hub](https://huggingface.co/models).
+
+|       Name        |model_name|Entity Vocab Size| Params |
+|:-----------------:|:----:|:----:|:------:|
+|  **LUKE (base)**  |[studio-ousia/luke-base](https://huggingface.co/studio-ousia/luke-base)|500K| 253 M  |
+| **LUKE (large)**  |[studio-ousia/luke-large](https://huggingface.co/studio-ousia/luke-large)|500K| 484 M  |
+| **mLUKE (base)**  |[studio-ousia/mluke-base](https://huggingface.co/studio-ousia/mluke-base)|1.2M| 586 M  |
+| **mLUKE (large)** |[studio-ousia/mluke-large](https://huggingface.co/studio-ousia/mluke-large)|1.2M| 868 M  |
+
+### Lite Models
+The entity embeddings cause a large memory footprint as they contain all the Wikipedia entities that we used in pretraining.
+However, in some downstream tasks (e.g., entity typing, named entity recognition, and relation classification), we only need special entity embeddings such as `[MASK]`.
+Also, you may want to only use the word representations.
+
+With such use-cases in mind, to make our models easier to use, we have uploaded lite models only with special entity embeddings.
+These models perform exactly the same as the full models but have much fewer parameters, which enable fine-tuning the model with small GPUs.
+
+|Name|                                  model_name                                  |Params|
+|:----:|:----------------------------------------------------------------------------:|:----:|
+|**LUKE (base)** | [studio-ousia/luke-base-lite](https://huggingface.co/studio-ousia/luke-base-lite) |125 M|
+|**LUKE (large)** |  [studio-ousia/luke-large-lite](https://huggingface.co/studio-ousia/luke-large-lite)   |356 M|
+|**mLUKE (base)** |  [studio-ousia/mluke-base-lite](https://huggingface.co/studio-ousia/mluke-base-lite)   |279 M|
+|**mLUKE (large)** | [studio-ousia/mluke-large-lite](https://huggingface.co/studio-ousia/mluke-large-lite)  |561 M|
+
 
 ## Fine-tuning LUKE models
 We release the fine-tuning code based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers) under [`examples`](examples).
