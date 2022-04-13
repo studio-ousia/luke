@@ -161,11 +161,11 @@ Our pretrained models are available in the [transformers](https://github.com/hug
 | **mLUKE (large)** |[studio-ousia/mluke-large](https://huggingface.co/studio-ousia/mluke-large)|1.2M| 868 M  |
 
 ### Lite Models
-The entity embeddings cause a memory footprint as it contains all the Wikipedia entities we used in pretraining.
+The entity embeddings cause a large memory footprint as they contain all the Wikipedia entities that we used in pretraining.
 However, in some downstream tasks (e.g., entity typing, named entity recognition, and relation classification), we only need special entity embeddings such as `[MASK]`.
 Also, you may want to only use the word representations.
 
-With such use-cases in mind, to make our models easier to use, we also offer models only with special entity tokens.
+With such use-cases in mind, to make our models easier to use, we have uploaded lite models only with special entity tokens.
 These models perform exactly the same as the full models but have much fewer parameters, which enable fine-tuning the model with small GPUs.
 
 |Name|                                  model_name                                  |Params|
