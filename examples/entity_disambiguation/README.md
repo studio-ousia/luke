@@ -1,4 +1,4 @@
-# Global Entity Disambiguation with Pretrained Contextualized Embeddings of Words and Entities
+# Global Entity Disambiguation with BERT
 
 This directory contains the source code for our paper
 [Global Entity Disambiguation with BERT](https://arxiv.org/abs/1909.00426).
