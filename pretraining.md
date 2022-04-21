@@ -225,6 +225,8 @@ deepspeed \
 The pretrained model can be used with the [transformers](https://github.com/huggingface/transformers) library after converting the checkpoint weights and metadata to the appropriate format.
 Specify the saved files and choose the appropriate tokenizer class (`--tokenizer-class`) from `LukeTokenizer` or `MLukeTokenizer`.
 
+The option `--set-entity-aware-attention-default` specifies whether the weights for the entity-aware attention is used by default when later loading the model from Transformers. 
+Note that even when you didn't use the entity-aware attention during pretraining, the weights are copied from the standard attention, and you can still use the entity-aware attention during fine-tuning.
 ```bash
 python luke/cli.py \
     convert-luke-to-huggingface-model \ 
@@ -232,10 +234,11 @@ python luke/cli.py \
     --metadata-path=<OUTPUT_DIR>/metadata.json  \
     --entity-vocab-path=<OUTPUT_DIR>/entity_vocab.jsonl \ 
     --transformers-model-save-path=<TRANSFORMER_MODEL_SAVE_PATH> \ 
-    --tokenizer-class=<TOKENIZER_CLASS> 
+    --tokenizer-class=<TOKENIZER_CLASS> \
+    --set-entity-aware-attention-default=false
 ```
 
-Then you can load the model with transformers library.
+Then you can load the model with the Transformers library.
 
 ```python
 from transformers import AutoModel
