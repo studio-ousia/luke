@@ -11,7 +11,7 @@ from allennlp.data.data_loaders import MultiProcessDataLoader
 from allennlp.nn import util as nn_util
 from transformers import AutoModelForMaskedLM
 
-from .reader import MultilingualLAMAReader
+from examples.mlama.reader import MultilingualLAMAReader
 
 
 @click.command()
