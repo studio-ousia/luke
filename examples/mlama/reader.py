@@ -55,11 +55,11 @@ class MultilingualLAMAReader(DatasetReader):
         use_subject_entity_mask: bool = False,
         use_subject_entity: bool = False,
         use_object_entity: bool = False,
-        entity_vocab_path: str = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.mlama_path = mlama_path
+        self.transformers_model_name = transformers_model_name
 
         self.tokenizer = PretrainedTransformerTokenizer(
             model_name=transformers_model_name, add_special_tokens=False, tokenizer_kwargs={"use_fast": False}
@@ -71,13 +71,11 @@ class MultilingualLAMAReader(DatasetReader):
         self.use_subject_entity = use_subject_entity
         self.use_object_entity = use_object_entity
 
+        self.entity_vocab = None
         if use_subject_entity_mask or use_subject_entity or use_object_entity:
-            assert entity_vocab_path is not None
-
-        if entity_vocab_path is not None:
-            self.entity_vocab = EntityVocab(entity_vocab_path)
-        else:
-            self.entity_vocab = None
+            if "luke" not in transformers_model_name:
+                raise ValueError("The model must be LUKE if you want to use entity..")
+            self.entity_vocab = EntityVocab(transformers_model_name)
 
     def text_to_instances(self, template: str, subject: str, object: str, candidates: List[str], language: str):
         segments = re.search(f"(.*)(\[X\])(.*)(\[Y\])(.*)", template).groups()
@@ -157,7 +155,11 @@ class MultilingualLAMAReader(DatasetReader):
                     "entity_position_ids": ListField(
                         # + 1 for CLS token
                         [
-                            TensorField(np.array(pos_ids) + 1, padding_value=-1, dtype=np.int64,)
+                            TensorField(
+                                np.array(pos_ids) + 1,
+                                padding_value=-1,
+                                dtype=np.int64,
+                            )
                             for pos_ids in entity_position_ids
                         ]
                     ),
@@ -188,5 +190,7 @@ class MultilingualLAMAReader(DatasetReader):
 
     def _read(self, language: str):
         for example in parse_mlama_data(self.mlama_path, language):
-
+            # hard-coding to make it compatible with the LUKE entity vocabulary where the language is None
+            if "luke" in self.transformers_model_name and "mluke" not in self.transformers_model_name:
+                example["language"] = None
             yield from self.text_to_instances(**example)
