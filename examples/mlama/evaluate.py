@@ -25,7 +25,6 @@ from examples.mlama.reader import MultilingualLAMAReader
 @click.option("--use-subject-entity-mask", is_flag=True)
 @click.option("--use-subject-entity", is_flag=True)
 @click.option("--use-object-entity", is_flag=True)
-@click.option("--entity-vocab-file", type=click.Path(exists=True))
 @click.option("--num-workers", type=int, default=0)
 @click.option("--max-instances-in-memory", type=int, default=None)
 @torch.no_grad()
@@ -40,7 +39,6 @@ def evaluate_mlama(
     use_subject_entity_mask: bool,
     use_subject_entity: bool,
     use_object_entity: bool,
-    entity_vocab_file: str,
     num_workers: int,
     max_instances_in_memory: int,
 ):
@@ -62,7 +60,7 @@ def evaluate_mlama(
             use_subject_entity_mask=use_subject_entity_mask,
             use_subject_entity=use_subject_entity,
             use_object_entity=use_object_entity,
-            entity_vocab_path=entity_vocab_file,
+            entity_vocab_path=transformers_model_name,
         ),
         data_path=language,
         batch_size=batch_size,
