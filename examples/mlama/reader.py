@@ -115,7 +115,7 @@ class MultilingualLAMAReader(DatasetReader):
             if self.entity_vocab is not None:
                 entity_ids = []
                 entity_attention_mask = []
-                entity_segment_ids = []
+                entity_token_type_ids = []
                 entity_position_ids = []
 
                 if self.use_subject_entity_mask or self.use_subject_entity:
@@ -131,7 +131,7 @@ class MultilingualLAMAReader(DatasetReader):
                             entity_attention_mask.append(0)
 
                     entity_ids.append(subject_entity_id)
-                    entity_segment_ids.append(0)
+                    entity_token_type_ids.append(0)
                     start_position = len(tokenized_segments[0])
                     end_position = start_position + len(tokenized_segments[1])
                     entity_position_ids.append([i for i in range(start_position, end_position)])
@@ -141,7 +141,7 @@ class MultilingualLAMAReader(DatasetReader):
 
                     entity_ids.append(object_entity_id)
                     entity_attention_mask.append(1)
-                    entity_segment_ids.append(0)
+                    entity_token_type_ids.append(0)
                     start_position = (
                         len(tokenized_segments[0]) + len(tokenized_segments[1]) + len(tokenized_segments[2])
                     )
@@ -151,7 +151,7 @@ class MultilingualLAMAReader(DatasetReader):
                 entity_features = {
                     "entity_ids": TensorField(np.array(entity_ids), dtype=np.int64),
                     "entity_attention_mask": TensorField(np.array(entity_attention_mask), dtype=np.int64),
-                    "entity_segment_ids": TensorField(np.array(entity_segment_ids), dtype=np.int64),
+                    "entity_token_type_ids": TensorField(np.array(entity_token_type_ids), dtype=np.int64),
                     "entity_position_ids": ListField(
                         # + 1 for CLS token
                         [
