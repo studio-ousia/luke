@@ -188,8 +188,7 @@ For the details and example commands for each task, please see the task director
 The detailed instructions for pretraining luke models can be found on [`pretraining.md`](pretraining.md).
 
 ## Citation
-If you use LUKE in your work, please cite the
-[original paper](https://arxiv.org/abs/2010.01057).
+If you use LUKE in your work, please cite the [original paper](https://aclanthology.org/2020.emnlp-main.523/).
 ```
 @inproceedings{yamada-etal-2020-luke,
     title = "{LUKE}: Deep Contextualized Entity Representations with Entity-aware Self-attention",
@@ -205,16 +204,18 @@ If you use LUKE in your work, please cite the
     doi = "10.18653/v1/2020.emnlp-main.523",
 }
 ```
-The full reference information can also be found [here](https://aclanthology.org/2020.emnlp-main.523/).
 
-For mLUKE, please cite [this paper](https://arxiv.org/abs/2110.08151).
+
+For mLUKE, please cite [this paper](https://aclanthology.org/2022.acl-long.505/).
 ```
 @inproceedings{ri-etal-2022-mluke,
     title = "m{LUKE}: {T}he Power of Entity Representations in Multilingual Pretrained Language Models",
     author = "Ri, Ryokan  and
       Yamada, Ikuya  and
       Tsuruoka, Yoshimasa",
-    booktitle = "ACL 2022 (to appear)",
+    booktitle = "Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
     year = "2022",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2022.acl-long.505",
 }
 ```
