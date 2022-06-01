@@ -60,7 +60,6 @@ def evaluate_mlama(
             use_subject_entity_mask=use_subject_entity_mask,
             use_subject_entity=use_subject_entity,
             use_object_entity=use_object_entity,
-            entity_vocab_path=transformers_model_name,
         ),
         data_path=language,
         batch_size=batch_size,
