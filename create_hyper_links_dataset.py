@@ -1,6 +1,7 @@
 from typing import List, Tuple
 import os
 
+import tqdm
 import click
 from transformers import AutoTokenizer, PreTrainedTokenizer
 from wikipedia2vec.dump_db import DumpDB
@@ -81,7 +82,7 @@ def process_page(
 
             word_ids = sentence
             if len(word_ids) > max_segment_length:
-                word_ids, (link_start, link_end) = extract_span_and_context(sentence, link_start, link_end)
+                word_ids, (link_start, link_end) = extract_span_and_context(sentence, link_start, link_end, max_segment_length)
             assert len(word_ids) <= max_segment_length
 
             entity_position_ids = list(range(link_start, link_end))
@@ -123,7 +124,7 @@ def build_wikipedia_pretraining_dataset(
         if not (":" in title and title.lower().split(":")[0] in ("image", "file", "category"))
     ]
 
-    for title in target_titles:
+    for title in tqdm.tqdm(target_titles):
         for item in process_page(
             title,
             dump_db,
@@ -134,4 +135,7 @@ def build_wikipedia_pretraining_dataset(
             max_segment_length=max_segment_length,
             max_mention_length=max_mention_length,
         ):
-            breakpoint()
+            pass
+
+if __name__ == '__main__':
+    build_wikipedia_pretraining_dataset()
