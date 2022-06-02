@@ -216,7 +216,7 @@ def build_wikipedia_pretraining_dataset(
             for item in items:
                 # pad arrays to the max length
                 item["entity_position_ids"] = pad_array_to_length(item["entity_position_ids"], max_mention_length)
-                item["word_ids"] = pad_array_to_length(item["word_ids"], max_mention_length)
+                item["word_ids"] = pad_array_to_length(item["word_ids"], max_segment_length)
                 entity_name = entity_vocab.get_title_by_id(item.pop("entity_id"), dump_db.language)
                 write_to_hdf(f, entity_name, item)
                 pbar.update()
