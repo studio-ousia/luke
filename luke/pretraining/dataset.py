@@ -40,7 +40,7 @@ _abstract_only = _language = None
 @click.command()
 @click.argument("dump_db_file", type=click.Path(exists=True))
 @click.argument("tokenizer_name")
-@click.argument("entity_vocab_file", type=click.Path(exists=True))
+@click.argument("entity_vocab_file", type=str)
 @click.argument("output_dir", type=click.Path(file_okay=False))
 @click.option("--sentence-splitter", default="en")
 @click.option("--max-seq-length", default=512)
