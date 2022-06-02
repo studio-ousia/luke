@@ -190,7 +190,4 @@ class MultilingualLAMAReader(DatasetReader):
 
     def _read(self, language: str):
         for example in parse_mlama_data(self.mlama_path, language):
-            # hard-coding to make it compatible with the LUKE entity vocabulary where the language is None
-            if "luke" in self.transformers_model_name and "mluke" not in self.transformers_model_name:
-                example["language"] = None
             yield from self.text_to_instances(**example)

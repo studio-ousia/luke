@@ -92,7 +92,7 @@ class EntityVocab:
         luke_tokenizer = LukeTokenizer.from_pretrained(transformer_model_name)
         title_to_idx = luke_tokenizer.entity_vocab
         for title, idx in title_to_idx.items():
-            entity = Entity(title, None)
+            entity = Entity(title, "en")
             self.vocab[entity] = idx
             self.counter[entity] = None
             self.inv_vocab[idx].append(entity)
