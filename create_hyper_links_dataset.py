@@ -4,6 +4,7 @@ import numpy as np
 from contextlib import closing
 from multiprocessing.pool import Pool
 import h5py
+import itertools
 
 import tqdm
 import click
@@ -170,7 +171,7 @@ def pad_array_to_length(array: np.ndarray, length: int, padding_value: int = -1)
 @click.option("--max-segment-length", default=50)
 @click.option("--max-mention-length", default=16)
 @click.option("--min-segment-length", default=10)
-@click.option("--pool-size", default=1)
+@click.option("--pool-size", default=64)
 def build_wikipedia_pretraining_dataset(
     dump_db_file: str,
     tokenizer_name: str,
@@ -210,7 +211,7 @@ def build_wikipedia_pretraining_dataset(
                 max_mention_length,
             )
             with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool:
-                for item in pool.imap(_process_page, target_titles, chunksize=100):
+                for item in itertools.chain(pool.imap(_process_page, target_titles, chunksize=100)):
                     # pad arrays to the max length
                     item["entity_position_ids"] = pad_array_to_length(item["entity_position_ids"], max_mention_length)
                     item["word_ids"] = pad_array_to_length(item["word_ids"], max_mention_length)
