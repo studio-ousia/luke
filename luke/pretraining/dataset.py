@@ -49,6 +49,7 @@ _abstract_only = _language = None
 @click.option("--min-sentence-length", default=5)
 @click.option("--abstract-only", is_flag=True)
 @click.option("--include-sentences-without-entities", is_flag=True)
+@click.option("--build-sentence-dataset", is_flag=True)
 @click.option("--include-unk-entities/--skip-unk-entities", default=False)
 @click.option("--pool-size", default=multiprocessing.cpu_count())
 @click.option("--chunk-size", default=100)
@@ -167,6 +168,7 @@ class WikipediaPretrainingDataset:
         max_mention_length: int,
         min_sentence_length: int,
         abstract_only: bool,
+        build_sentence_dataset: bool,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
         pool_size: int,
@@ -210,6 +212,7 @@ class WikipediaPretrainingDataset:
                     max_mention_length,
                     min_sentence_length,
                     abstract_only,
+                    build_sentence_dataset,
                     include_sentences_without_entities,
                     include_unk_entities,
                 )
@@ -250,12 +253,13 @@ class WikipediaPretrainingDataset:
         max_mention_length: int,
         min_sentence_length: int,
         abstract_only: bool,
+        build_sentence_dataset: bool,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
     ):
         global _dump_db, _tokenizer, _sentence_splitter, _entity_vocab, _max_num_tokens, _max_entity_length
         global _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
-        global _abstract_only
+        global _abstract_only, _build_sentence_dataset
         global _language
 
         _dump_db = dump_db
@@ -269,6 +273,7 @@ class WikipediaPretrainingDataset:
         _include_sentences_without_entities = include_sentences_without_entities
         _include_unk_entities = include_unk_entities
         _abstract_only = abstract_only
+        _build_sentence_dataset = build_sentence_dataset
         _language = dump_db.language
 
     @staticmethod
@@ -344,7 +349,11 @@ class WikipediaPretrainingDataset:
         for i, (sent_words, sent_links) in enumerate(sentences):
             links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
             words += sent_words
-            if i == len(sentences) - 1 or len(words) + len(sentences[i + 1][0]) > _max_num_tokens:
+            if (
+                i == len(sentences) - 1
+                or len(words) + len(sentences[i + 1][0]) > _max_num_tokens
+                or _build_sentence_dataset
+            ):
                 if links or _include_sentences_without_entities:
                     links = links[:_max_entity_length]
                     word_ids = _tokenizer.convert_tokens_to_ids(words)
