@@ -3,6 +3,7 @@ import os
 import numpy as np
 from contextlib import closing
 from multiprocessing.pool import Pool
+import h5py
 
 import tqdm
 import click
@@ -92,11 +93,16 @@ def process_page(
             assert len(word_ids) <= max_segment_length
 
             entity_position_ids = list(range(link_start, link_end))
-            item = {"word_ids": word_ids, "entity_id": entity_id, "entity_position_ids": entity_position_ids}
+            item = {
+                "word_ids": word_ids,
+                "entity": entity_vocab.get_title_by_id(entity_id, dump_db.language),
+                "entity_position_ids": entity_position_ids,
+            }
             items.append(item)
     return items
 
 
+# Used for the initializer argument to Pool so each worker process sets up their state
 def _initialize_worker(
     dump_db: DumpDB,
     entity_vocab: EntityVocab,
@@ -118,6 +124,7 @@ def _initialize_worker(
     _max_mention_length = max_mention_length
 
 
+# Used for pool.imap
 def _process_page(page_title: str) -> List[Dict[str, np.ndarray]]:
     return process_page(
         page_title=page_title,
@@ -129,6 +136,29 @@ def _process_page(page_title: str) -> List[Dict[str, np.ndarray]]:
         max_segment_length=_max_segment_length,
         max_mention_length=_max_mention_length,
     )
+
+
+def write_to_hdf(hdf: h5py.File, dataset_name: str, item: Dict[str, np.ndarray]):
+    if dataset_name not in hdf:
+        hdf.create_group(dataset_name)
+
+    for key, array in item.items():
+        path = f"/{dataset_name}/{key}"
+        if path not in hdf:
+            hdf.create_dataset(
+                path,
+                data=array,
+                dtype="int",
+                maxshape=(None, len(array)),
+            )
+        else:
+            dataset = hdf[f"/{dataset_name}/{key}"]
+            dataset.resize(size=len(dataset) + 1, axis=0)
+            hdf[path][len(dataset) - 1] = array
+
+
+def pad_array_to_length(array: np.ndarray, length: int, padding_value: int = -1) -> np.ndarray:
+    return np.pad(array(0, length - len(array)), constant_values=padding_value)
 
 
 @click.command()
@@ -168,19 +198,25 @@ def build_wikipedia_pretraining_dataset(
         if not (":" in title and title.lower().split(":")[0] in ("image", "file", "category"))
     ]
 
-    with tqdm.tqdm(total=len(target_titles)) as pbar:
-        initargs = (
-            dump_db,
-            entity_vocab,
-            tokenizer,
-            sentence_splitter,
-            min_segment_length,
-            max_segment_length,
-            max_mention_length,
-        )
-        with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool:
-            for ret in pool.imap(_process_page, target_titles, chunksize=100):
-                pbar.update()
+    with h5py.File(os.path.join(output_dir, "dataset.h5"), "w") as f:
+        with tqdm.tqdm(total=len(target_titles)) as pbar:
+            initargs = (
+                dump_db,
+                entity_vocab,
+                tokenizer,
+                sentence_splitter,
+                min_segment_length,
+                max_segment_length,
+                max_mention_length,
+            )
+            with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool:
+                for item in pool.imap(_process_page, target_titles, chunksize=100):
+                    # pad arrays to the max length
+                    item["entity_position_ids"] = pad_array_to_length(item["entity_position_ids"], max_mention_length)
+                    item["word_ids"] = pad_array_to_length(item["word_ids"], max_mention_length)
+                    entity_name = entity_vocab.get_title_by_id(item.pop("entity_id"), dump_db.language)
+                    write_to_hdf(f, entity_name, item)
+                    pbar.update()
 
 
 if __name__ == "__main__":
