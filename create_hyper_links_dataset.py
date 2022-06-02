@@ -172,7 +172,7 @@ def pad_array_to_length(array: np.ndarray, length: int, padding_value: int = -1)
 @click.option("--max-segment-length", default=50)
 @click.option("--max-mention-length", default=16)
 @click.option("--min-segment-length", default=10)
-@click.option("--pool-size", default=64)
+@click.option("--pool-size", default=1)
 def build_wikipedia_pretraining_dataset(
     dump_db_file: str,
     tokenizer_name: str,
@@ -220,7 +220,7 @@ def build_wikipedia_pretraining_dataset(
                 item["word_ids"] = pad_array_to_length(item["word_ids"], max_segment_length)
                 entity_name = entity_vocab.get_title_by_id(item.pop("entity_id"), dump_db.language)
                 write_to_hdf(f, entity_name, item)
-                pbar.update()
+        pbar.update()
 
 
 if __name__ == "__main__":
