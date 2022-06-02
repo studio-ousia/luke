@@ -1,5 +1,9 @@
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import os
+import numpy as np
+from contextlib import closing
+from multiprocessing.pool import Pool
+import functools
 
 import tqdm
 import click
@@ -47,7 +51,7 @@ def process_page(
     min_segment_length: int,
     max_segment_length: int,
     max_mention_length: int,
-):
+) -> List[Dict[str, np.ndarray]]:
     sentence_words_and_links = []
     for paragraph in dump_db.get_paragraphs(page_title):
 
@@ -65,6 +69,7 @@ def process_page(
             max_num_tokens=512,
         )
 
+    items = []
     for words, links in sentence_words_and_links:
         links_ids = links_to_link_ids(
             links, entity_vocab=entity_vocab, include_unk_entities=False, language=dump_db.language
@@ -82,11 +87,15 @@ def process_page(
 
             word_ids = sentence
             if len(word_ids) > max_segment_length:
-                word_ids, (link_start, link_end) = extract_span_and_context(sentence, link_start, link_end, max_segment_length)
+                word_ids, (link_start, link_end) = extract_span_and_context(
+                    sentence, link_start, link_end, max_segment_length
+                )
             assert len(word_ids) <= max_segment_length
 
             entity_position_ids = list(range(link_start, link_end))
-            yield {"word_ids": word_ids, "entity_id": entity_id, "entity_position_ids": entity_position_ids}
+            item = {"word_ids": word_ids, "entity_id": entity_id, "entity_position_ids": entity_position_ids}
+            items.append(item)
+    return items
 
 
 @click.command()
@@ -98,6 +107,7 @@ def process_page(
 @click.option("--max-segment-length", default=50)
 @click.option("--max-mention-length", default=16)
 @click.option("--min-segment-length", default=10)
+@click.option("--pool-size", default=1)
 def build_wikipedia_pretraining_dataset(
     dump_db_file: str,
     tokenizer_name: str,
@@ -107,6 +117,7 @@ def build_wikipedia_pretraining_dataset(
     max_segment_length: int,
     max_mention_length: int,
     min_segment_length: int,
+    pool_size: int,
 ):
     dump_db = DumpDB(dump_db_file)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=False)
@@ -124,18 +135,24 @@ def build_wikipedia_pretraining_dataset(
         if not (":" in title and title.lower().split(":")[0] in ("image", "file", "category"))
     ]
 
-    for title in tqdm.tqdm(target_titles):
-        for item in process_page(
-            title,
-            dump_db,
-            entity_vocab=entity_vocab,
-            tokenizer=tokenizer,
-            sentence_splitter=sentence_splitter,
-            min_segment_length=min_segment_length,
-            max_segment_length=max_segment_length,
-            max_mention_length=max_mention_length,
-        ):
-            pass
+    with tqdm(total=len(target_titles)) as pbar:
+        with closing(Pool(pool_size)) as pool:
+            for ret in pool.imap(
+                functools.partial(
+                    process_page,
+                    dump_db=dump_db,
+                    entity_vocab=entity_vocab,
+                    tokenizer=tokenizer,
+                    sentence_splitter=sentence_splitter,
+                    min_segment_length=min_segment_length,
+                    max_segment_length=max_segment_length,
+                    max_mention_length=max_mention_length,
+                ),
+                target_titles,
+                chunksize=100,
+            ):
+                pbar.update()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     build_wikipedia_pretraining_dataset()
