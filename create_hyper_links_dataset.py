@@ -148,7 +148,7 @@ def write_to_hdf(hdf: h5py.File, dataset_name: str, item: Dict[str, np.ndarray])
         if path not in hdf:
             hdf.create_dataset(
                 path,
-                data=array,
+                data=array[np.newaxis],
                 dtype="int",
                 maxshape=(None, len(array)),
             )
