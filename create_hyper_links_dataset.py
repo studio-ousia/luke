@@ -135,7 +135,7 @@ def build_wikipedia_pretraining_dataset(
         if not (":" in title and title.lower().split(":")[0] in ("image", "file", "category"))
     ]
 
-    with tqdm(total=len(target_titles)) as pbar:
+    with tqdm.tqdm(total=len(target_titles)) as pbar:
         with closing(Pool(pool_size)) as pool:
             for ret in pool.imap(
                 functools.partial(
