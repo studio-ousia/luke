@@ -96,7 +96,7 @@ def process_page(
             entity_position_ids = list(range(link_start, link_end))
             item = {
                 "word_ids": word_ids,
-                "entity": entity_vocab.get_title_by_id(entity_id, dump_db.language),
+                "entity_id": entity_id,
                 "entity_position_ids": entity_position_ids,
             }
             items.append(item)
