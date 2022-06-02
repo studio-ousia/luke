@@ -3,7 +3,6 @@ import os
 import numpy as np
 from contextlib import closing
 from multiprocessing.pool import Pool
-import functools
 
 import tqdm
 import click
@@ -98,6 +97,40 @@ def process_page(
     return items
 
 
+def _initialize_worker(
+    dump_db: DumpDB,
+    entity_vocab: EntityVocab,
+    tokenizer: PreTrainedTokenizer,
+    sentence_splitter: SentenceSplitter,
+    min_segment_length: int,
+    max_segment_length: int,
+    max_mention_length: int,
+):
+    global _dump_db, _entity_vocab, _tokenizer, _sentence_splitter
+    global _min_segment_length, _min_segment_length, _max_segment_length, _max_mention_length
+
+    _dump_db = dump_db
+    _entity_vocab = entity_vocab
+    _tokenizer = tokenizer
+    _sentence_splitter = sentence_splitter
+    _min_segment_length = min_segment_length
+    _max_segment_length = max_segment_length
+    _max_mention_length = max_mention_length
+
+
+def _process_page(page_title: str) -> List[Dict[str, np.ndarray]]:
+    return process_page(
+        page_title=page_title,
+        dump_db=_dump_db,
+        entity_vocab=_entity_vocab,
+        tokenizer=_tokenizer,
+        sentence_splitter=_sentence_splitter,
+        min_segment_length=_min_segment_length,
+        max_segment_length=_max_segment_length,
+        max_mention_length=_max_mention_length,
+    )
+
+
 @click.command()
 @click.argument("dump_db_file", type=click.Path(exists=True))
 @click.argument("tokenizer_name")
@@ -136,21 +169,17 @@ def build_wikipedia_pretraining_dataset(
     ]
 
     with tqdm.tqdm(total=len(target_titles)) as pbar:
-        with closing(Pool(pool_size)) as pool:
-            for ret in pool.imap(
-                functools.partial(
-                    process_page,
-                    dump_db=dump_db,
-                    entity_vocab=entity_vocab,
-                    tokenizer=tokenizer,
-                    sentence_splitter=sentence_splitter,
-                    min_segment_length=min_segment_length,
-                    max_segment_length=max_segment_length,
-                    max_mention_length=max_mention_length,
-                ),
-                target_titles,
-                chunksize=100,
-            ):
+        initargs = (
+            dump_db,
+            entity_vocab,
+            tokenizer,
+            sentence_splitter,
+            min_segment_length,
+            max_segment_length,
+            max_mention_length,
+        )
+        with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool:
+            for ret in pool.imap(_process_page, target_titles, chunksize=100):
                 pbar.update()
 
 
