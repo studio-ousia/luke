@@ -159,7 +159,7 @@ def write_to_hdf(hdf: h5py.File, dataset_name: str, item: Dict[str, np.ndarray])
 
 
 def pad_array_to_length(array: np.ndarray, length: int, padding_value: int = -1) -> np.ndarray:
-    return np.pad(array(0, length - len(array)), constant_values=padding_value)
+    return np.pad(array, (0, length - len(array)), constant_values=padding_value)
 
 
 @click.command()
