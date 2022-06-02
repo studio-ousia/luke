@@ -35,7 +35,7 @@ DATASET_FILE = "dataset.tf"
 # global variables used in pool workers
 _dump_db = _tokenizer = _sentence_splitter = _entity_vocab = _max_num_tokens = _max_entity_length = None
 _max_mention_length = _min_sentence_length = _include_sentences_without_entities = _include_unk_entities = None
-_abstract_only = _language = _build_sentence_dataset = None
+_abstract_only = _language = None
 
 
 @click.command()
@@ -169,7 +169,6 @@ class WikipediaPretrainingDataset:
         max_mention_length: int,
         min_sentence_length: int,
         abstract_only: bool,
-        build_sentence_dataset: bool,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
         pool_size: int,
@@ -213,7 +212,6 @@ class WikipediaPretrainingDataset:
                     max_mention_length,
                     min_sentence_length,
                     abstract_only,
-                    build_sentence_dataset,
                     include_sentences_without_entities,
                     include_unk_entities,
                 )
@@ -254,13 +252,12 @@ class WikipediaPretrainingDataset:
         max_mention_length: int,
         min_sentence_length: int,
         abstract_only: bool,
-        build_sentence_dataset: bool,
         include_sentences_without_entities: bool,
         include_unk_entities: bool,
     ):
         global _dump_db, _tokenizer, _sentence_splitter, _entity_vocab, _max_num_tokens, _max_entity_length
         global _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
-        global _abstract_only, _build_sentence_dataset
+        global _abstract_only
         global _language
 
         _dump_db = dump_db
@@ -274,7 +271,6 @@ class WikipediaPretrainingDataset:
         _include_sentences_without_entities = include_sentences_without_entities
         _include_unk_entities = include_unk_entities
         _abstract_only = abstract_only
-        _build_sentence_dataset = build_sentence_dataset
         _language = dump_db.language
 
     @staticmethod
@@ -302,11 +298,7 @@ class WikipediaPretrainingDataset:
 
         ret = []
 
-        for words, links in generate_concatenated_sentences(
-            sentence_words_and_links,
-            max_num_tokens=_max_num_tokens,
-            build_sentence_dataset=_build_sentence_dataset,
-        ):
+        for words, links in generate_concatenated_sentences(sentence_words_and_links, max_num_tokens=_max_num_tokens):
             links_ids = links_to_link_ids(
                 links, entity_vocab=_entity_vocab, include_unk_entities=_include_unk_entities, language=_language
             )
@@ -419,9 +411,7 @@ def get_sentence_words_and_links(
 
 
 def generate_concatenated_sentences(
-    sentence_words_and_links: List[Tuple[List[str], List[Tuple[str, int, int]]]],
-    max_num_tokens: int,
-    build_sentence_dataset: bool,
+    sentence_words_and_links: List[Tuple[List[str], List[Tuple[str, int, int]]]], max_num_tokens: int
 ) -> Iterator[Tuple[List[str], List[Tuple[str, int, int]]]]:
     words = []
     links = []
@@ -431,7 +421,6 @@ def generate_concatenated_sentences(
         if (
             i == len(sentence_words_and_links) - 1
             or len(words) + len(sentence_words_and_links[i + 1][0]) > max_num_tokens
-            or build_sentence_dataset
         ):
             yield words, links
 
