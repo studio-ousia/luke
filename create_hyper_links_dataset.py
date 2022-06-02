@@ -199,25 +199,27 @@ def build_wikipedia_pretraining_dataset(
         if not (":" in title and title.lower().split(":")[0] in ("image", "file", "category"))
     ]
 
-    with h5py.File(os.path.join(output_dir, "dataset.h5"), "w") as f:
-        with tqdm.tqdm(total=len(target_titles)) as pbar:
-            initargs = (
-                dump_db,
-                entity_vocab,
-                tokenizer,
-                sentence_splitter,
-                min_segment_length,
-                max_segment_length,
-                max_mention_length,
-            )
-            with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool:
-                for item in itertools.chain(pool.imap(_process_page, target_titles, chunksize=100)):
-                    # pad arrays to the max length
-                    item["entity_position_ids"] = pad_array_to_length(item["entity_position_ids"], max_mention_length)
-                    item["word_ids"] = pad_array_to_length(item["word_ids"], max_mention_length)
-                    entity_name = entity_vocab.get_title_by_id(item.pop("entity_id"), dump_db.language)
-                    write_to_hdf(f, entity_name, item)
-                    pbar.update()
+    initargs = (
+        dump_db,
+        entity_vocab,
+        tokenizer,
+        sentence_splitter,
+        min_segment_length,
+        max_segment_length,
+        max_mention_length,
+    )
+    with h5py.File(os.path.join(output_dir, "dataset.h5"), "w") as f, closing(
+        Pool(pool_size, initializer=_initialize_worker, initargs=initargs)
+    ) as pool, tqdm.tqdm(total=len(target_titles)) as pbar:
+
+        for items in pool.imap(_process_page, target_titles, chunksize=100):
+            for item in items:
+                # pad arrays to the max length
+                item["entity_position_ids"] = pad_array_to_length(item["entity_position_ids"], max_mention_length)
+                item["word_ids"] = pad_array_to_length(item["word_ids"], max_mention_length)
+                entity_name = entity_vocab.get_title_by_id(item.pop("entity_id"), dump_db.language)
+                write_to_hdf(f, entity_name, item)
+                pbar.update()
 
 
 if __name__ == "__main__":
