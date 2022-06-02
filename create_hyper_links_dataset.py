@@ -143,13 +143,14 @@ def write_to_hdf(hdf: h5py.File, dataset_name: str, item: Dict[str, np.ndarray])
     if dataset_name not in hdf:
         hdf.create_group(dataset_name)
 
+    dtype_dict = {"word_ids": "int32", "entity_position_ids": "int16"}
     for key, array in item.items():
         path = f"/{dataset_name}/{key}"
         if path not in hdf:
             hdf.create_dataset(
                 path,
                 data=array[np.newaxis],
-                dtype="int",
+                dtype=dtype_dict[key],
                 maxshape=(None, len(array)),
             )
         else:
