@@ -1,3 +1,4 @@
+from typing import List, Tuple, Iterator
 import functools
 import itertools
 import json
@@ -16,7 +17,7 @@ from tensorflow.io import TFRecordWriter
 from tensorflow.train import Int64List
 from tqdm import tqdm
 from transformers import AutoTokenizer, PreTrainedTokenizer
-from wikipedia2vec.dump_db import DumpDB
+from wikipedia2vec.dump_db import DumpDB, Paragraph
 
 from luke.pretraining.tokenization import tokenize, tokenize_segments
 from luke.utils.entity_vocab import UNK_TOKEN, EntityVocab
@@ -34,7 +35,7 @@ DATASET_FILE = "dataset.tf"
 # global variables used in pool workers
 _dump_db = _tokenizer = _sentence_splitter = _entity_vocab = _max_num_tokens = _max_entity_length = None
 _max_mention_length = _min_sentence_length = _include_sentences_without_entities = _include_unk_entities = None
-_abstract_only = _language = None
+_abstract_only = _language = _build_sentence_dataset = None
 
 
 @click.command()
@@ -278,107 +279,161 @@ class WikipediaPretrainingDataset:
 
     @staticmethod
     def _process_page(page_title: str):
-        if _entity_vocab.contains(page_title, _language):
-            page_id = _entity_vocab.get_id(page_title, _language)
-        else:
-            page_id = -1
 
-        sentences = []
-
+        sentence_words_and_links = []
         for paragraph in _dump_db.get_paragraphs(page_title):
 
             if _abstract_only and not paragraph.abstract:
                 continue
 
-            paragraph_text = paragraph.text
-
             # First, get paragraph links.
-            # Parapraph links are represented its form (link_title) and the start/end positions of strings
+            # Paragraph links are represented its form (link_title) and the start/end positions of strings
             # (link_start, link_end).
-            paragraph_links = []
-            for link in paragraph.wiki_links:
-                link_title = _dump_db.resolve_redirect(link.title)
-                # remove category links
-                if link_title.startswith("Category:") and link.text.lower().startswith("category:"):
-                    paragraph_text = (
-                        paragraph_text[: link.start] + " " * (link.end - link.start) + paragraph_text[link.end :]
-                    )
-                else:
-                    if _entity_vocab.contains(link_title, _language):
-                        paragraph_links.append((link_title, link.start, link.end))
-                    elif _include_unk_entities:
-                        paragraph_links.append((UNK_TOKEN, link.start, link.end))
+            paragraph_text, paragraph_links = get_paragraph_links(_dump_db, paragraph)
 
-            sent_spans = _sentence_splitter.get_sentence_spans(paragraph_text.rstrip())
-            for sent_start, sent_end in sent_spans:
-                cur = sent_start
-                sent_words = []
-                sent_links = []
-                # Look for links that are within the tokenized sentence.
-                # If a link is found, we separate the sentences across the link and tokenize them.
-                for link_title, link_start, link_end in paragraph_links:
-                    if not (sent_start <= link_start < sent_end and link_end <= sent_end):
-                        continue
-                    entity_id = _entity_vocab.get_id(link_title, _language)
-
-                    sent_tokenized, link_words = tokenize_segments(
-                        [paragraph_text[cur:link_start], paragraph_text[link_start:link_end]],
-                        tokenizer=_tokenizer,
-                        add_prefix_space=cur == 0 or paragraph_text[cur - 1] == " ",
-                    )
-
-                    sent_words += sent_tokenized
-
-                    sent_links.append((entity_id, len(sent_words), len(sent_words) + len(link_words)))
-                    sent_words += link_words
-                    cur = link_end
-
-                sent_words += tokenize(
-                    text=paragraph_text[cur:sent_end],
-                    tokenizer=_tokenizer,
-                    add_prefix_space=cur == 0 or paragraph_text[cur - 1] == " ",
-                )
-
-                if len(sent_words) < _min_sentence_length or len(sent_words) > _max_num_tokens:
-                    continue
-                sentences.append((sent_words, sent_links))
+            sentence_words_and_links += get_sentence_words_and_links(
+                paragraph_text=paragraph_text,
+                paragraph_links=paragraph_links,
+                sentence_splitter=_sentence_splitter,
+                tokenizer=_tokenizer,
+                min_sentence_length=_min_sentence_length,
+                max_num_tokens=_max_num_tokens,
+            )
 
         ret = []
-        words = []
-        links = []
-        for i, (sent_words, sent_links) in enumerate(sentences):
-            links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
-            words += sent_words
-            if (
-                i == len(sentences) - 1
-                or len(words) + len(sentences[i + 1][0]) > _max_num_tokens
-                or _build_sentence_dataset
-            ):
-                if links or _include_sentences_without_entities:
-                    links = links[:_max_entity_length]
-                    word_ids = _tokenizer.convert_tokens_to_ids(words)
-                    assert _min_sentence_length <= len(word_ids) <= _max_num_tokens
-                    entity_ids = [id_ for id_, _, _, in links]
-                    assert len(entity_ids) <= _max_entity_length
-                    entity_position_ids = itertools.chain(
-                        *[
-                            (list(range(start, end)) + [-1] * (_max_mention_length - end + start))[:_max_mention_length]
-                            for _, start, end in links
-                        ]
-                    )
 
-                    example = tf.train.Example(
-                        features=tf.train.Features(
-                            feature=dict(
-                                page_id=tf.train.Feature(int64_list=tf.train.Int64List(value=[page_id])),
-                                word_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=word_ids)),
-                                entity_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=entity_ids)),
-                                entity_position_ids=tf.train.Feature(int64_list=Int64List(value=entity_position_ids)),
-                            )
-                        )
-                    )
-                    ret.append((example.SerializeToString()))
+        for words, links in generate_concatenated_sentences(
+            sentence_words_and_links,
+            max_num_tokens=_max_num_tokens,
+            build_sentence_dataset=_build_sentence_dataset,
+        ):
+            links_ids = links_to_link_ids(
+                links, entity_vocab=_entity_vocab, include_unk_entities=_include_unk_entities, language=_language
+            )
 
-                words = []
-                links = []
+            if not links_ids and not _include_sentences_without_entities:
+                continue
+
+            word_ids = _tokenizer.convert_tokens_to_ids(words)
+            assert _min_sentence_length <= len(word_ids) <= _max_num_tokens
+
+            links_ids = links_ids[:_max_entity_length]
+            entity_ids = [id_ for id_, _, _, in links_ids]
+            assert len(entity_ids) <= _max_entity_length
+            entity_position_ids = itertools.chain(
+                *[
+                    (list(range(start, end)) + [-1] * (_max_mention_length - end + start))[:_max_mention_length]
+                    for _, start, end in links_ids
+                ]
+            )
+
+            if _entity_vocab.contains(page_title, _language):
+                page_id = _entity_vocab.get_id(page_title, _language)
+            else:
+                page_id = -1
+            example = tf.train.Example(
+                features=tf.train.Features(
+                    feature=dict(
+                        page_id=tf.train.Feature(int64_list=tf.train.Int64List(value=[page_id])),
+                        word_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=word_ids)),
+                        entity_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=entity_ids)),
+                        entity_position_ids=tf.train.Feature(int64_list=Int64List(value=entity_position_ids)),
+                    )
+                )
+            )
+            ret.append((example.SerializeToString()))
+
         return ret
+
+
+def get_paragraph_links(dump_db: DumpDB, paragraph: Paragraph) -> Tuple[str, List[Tuple[str, int, int]]]:
+    # First, get paragraph links.
+    # Parapraph links are represented its form (link_title) and the start/end positions of strings
+    # (link_start, link_end).
+
+    paragraph_links = []
+    paragraph_text = paragraph.text
+    for link in paragraph.wiki_links:
+        link_title = dump_db.resolve_redirect(link.title)
+        # remove category links
+        if link_title.startswith("Category:") and link.text.lower().startswith("category:"):
+            paragraph_text = paragraph_text[: link.start] + " " * (link.end - link.start) + paragraph_text[link.end :]
+        else:
+            paragraph_links.append((link_title, link.start, link.end))
+    return paragraph_text, paragraph_links
+
+
+def links_to_link_ids(
+    links: List[Tuple[str, int, int]], entity_vocab: EntityVocab, include_unk_entities: bool, language: str
+) -> List[Tuple[int, int, int]]:
+    link_ids = []
+    for link_title, link_start, link_end in links:
+        if entity_vocab.contains(link_title, language):
+            link_ids.append((entity_vocab.get_id(link_title, language), link_start, link_end))
+        elif include_unk_entities:
+            link_ids.append((entity_vocab.get_id(UNK_TOKEN, language), link_start, link_end))
+    return link_ids
+
+
+def get_sentence_words_and_links(
+    paragraph_text: str,
+    paragraph_links: List[Tuple[str, int, int]],
+    sentence_splitter: SentenceSplitter,
+    tokenizer: PreTrainedTokenizer,
+    min_sentence_length: int,
+    max_num_tokens: int,
+) -> List[Tuple[List[str], List[Tuple[str, int, int]]]]:
+    sentence_words_and_links = []
+    for sent_start, sent_end in sentence_splitter.get_sentence_spans(paragraph_text.rstrip()):
+        cur = sent_start
+        sent_words = []
+        sent_links = []
+        # Look for links that are within the tokenized sentence.
+        # If a link is found, we separate the sentences across the link and tokenize them.
+        for link_title, link_start, link_end in paragraph_links:
+            if not (sent_start <= link_start < sent_end and link_end <= sent_end):
+                continue
+
+            sent_tokenized, link_words = tokenize_segments(
+                [paragraph_text[cur:link_start], paragraph_text[link_start:link_end]],
+                tokenizer=tokenizer,
+                add_prefix_space=cur == 0 or paragraph_text[cur - 1] == " ",
+            )
+
+            sent_words += sent_tokenized
+
+            sent_links.append((link_title, len(sent_words), len(sent_words) + len(link_words)))
+            sent_words += link_words
+            cur = link_end
+
+        sent_words += tokenize(
+            text=paragraph_text[cur:sent_end],
+            tokenizer=tokenizer,
+            add_prefix_space=cur == 0 or paragraph_text[cur - 1] == " ",
+        )
+
+        if len(sent_words) < min_sentence_length or len(sent_words) > max_num_tokens:
+            continue
+        sentence_words_and_links.append((sent_words, sent_links))
+    return sentence_words_and_links
+
+
+def generate_concatenated_sentences(
+    sentence_words_and_links: List[Tuple[List[str], List[Tuple[str, int, int]]]],
+    max_num_tokens: int,
+    build_sentence_dataset: bool,
+) -> Iterator[Tuple[List[str], List[Tuple[str, int, int]]]]:
+    words = []
+    links = []
+    for i, (sent_words, sent_links) in enumerate(sentence_words_and_links):
+        links += [(id_, start + len(words), end + len(words)) for id_, start, end in sent_links]
+        words += sent_words
+        if (
+            i == len(sentence_words_and_links) - 1
+            or len(words) + len(sentence_words_and_links[i + 1][0]) > max_num_tokens
+            or build_sentence_dataset
+        ):
+            yield words, links
+
+            words = []
+            links = []
