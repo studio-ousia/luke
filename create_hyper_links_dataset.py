@@ -220,7 +220,7 @@ def build_wikipedia_pretraining_dataset(
                 item["word_ids"] = pad_array_to_length(item["word_ids"], max_segment_length)
                 entity_name = entity_vocab.get_title_by_id(item.pop("entity_id"), dump_db.language)
                 write_to_hdf(f, entity_name, item)
-        pbar.update()
+            pbar.update()
 
 
 if __name__ == "__main__":
