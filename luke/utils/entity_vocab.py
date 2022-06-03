@@ -101,7 +101,8 @@ class EntityVocab:
         with open(vocab_file, "r") as f:
             for (index, line) in enumerate(f):
                 title, count = line.rstrip().split("\t")
-                entity = Entity(title, None)
+                # this is for a legacy vocab file, so we always assume that is English
+                entity = Entity(title, "en")
                 self.vocab[entity] = index
                 self.counter[entity] = int(count)
                 self.inv_vocab[index] = [entity]
