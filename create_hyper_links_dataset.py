@@ -3,7 +3,6 @@ import os
 import numpy as np
 from contextlib import closing
 from multiprocessing.pool import Pool
-import h5py
 from collections import defaultdict
 
 import tqdm
@@ -208,12 +207,11 @@ def build_hyperlink_dataset(
     )
     for i, target_titles_shard in enumerate(sharding(target_titles, num_shards)):
         print(f"Processing shard {i}...")
+        entity_to_sentence = defaultdict(list)
+        entity_to_entity_position_ids = defaultdict(list)
         with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool, tqdm.tqdm(
             total=len(target_titles_shard)
         ) as pbar:
-
-            entity_to_sentence = defaultdict(list)
-            entity_to_entity_position_ids = defaultdict(list)
 
             print("Extracting entity data...")
             for items in pool.imap(_process_page, target_titles_shard, chunksize=100):

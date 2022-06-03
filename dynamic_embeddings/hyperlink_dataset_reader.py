@@ -1,5 +1,4 @@
 from typing import Dict, Any, Iterable
-import h5py
 
 import numpy as np
 import torch
@@ -10,7 +9,6 @@ from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from allennlp.data.fields import TensorField
 
-from .util import h5py_safe_name_to_original
 
 from .hyperlink_dataset import HyperlinkDataset
 
