@@ -194,6 +194,8 @@ def build_wikipedia_pretraining_dataset(
         for title in dump_db.titles()
         if not (":" in title and title.lower().split(":")[0] in ("image", "file", "category"))
     ]
+    if max_num_articles is not None:
+        target_titles = target_titles[:max_num_articles]
 
     initargs = (
         dump_db,
@@ -205,8 +207,9 @@ def build_wikipedia_pretraining_dataset(
         max_mention_length,
     )
     for i, target_titles_shard in enumerate(sharding(target_titles, num_shards)):
+        print(f"Processing shard {i}...")
         with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool, tqdm.tqdm(
-            total=max_num_articles or len(target_titles)
+            total=len(target_titles_shard)
         ) as pbar:
 
             entity_to_sentence = defaultdict(list)
@@ -222,8 +225,6 @@ def build_wikipedia_pretraining_dataset(
                         pad_array_to_length(item["entity_position_ids"], max_mention_length)
                     )
                 pbar.update()
-                if pbar.n == max_num_articles:
-                    break
 
         dataset_file = os.path.join(output_dir, f"dataset-{i}.h5")
         print(f"Writing data to {dataset_file}")
