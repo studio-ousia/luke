@@ -10,6 +10,7 @@ def split_entity_vocab(entity_vocab_path: str, output_directory: str):
     with open(entity_vocab_path, "r") as f:
         lines = f.read().strip().split("\n")
 
+    special_token_lines = lines[:4]
     Path(output_directory).mkdir(parents=True, exist_ok=True)
 
     filename_stem = Path(entity_vocab_path).stem
@@ -28,7 +29,10 @@ def split_entity_vocab(entity_vocab_path: str, output_directory: str):
 
         print(f"Write vocab to {output_file_path}....")
         with open(output_file_path, "w") as f:
-            f.write("\n".join(lines[start:end]))
+            entries = lines[start:end]
+            if start > 0:
+                entries = special_token_lines + entries
+            f.write("\n".join(entries))
 
 
 if __name__ == "__main__":
