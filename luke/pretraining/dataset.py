@@ -214,12 +214,8 @@ class WikipediaPretrainingDataset:
                     include_sentences_without_entities,
                     include_unk_entities,
                 )
-                with closing(
-                    Pool(pool_size, initializer=WikipediaPretrainingDataset._initialize_worker, initargs=initargs)
-                ) as pool:
-                    for ret in pool.imap(
-                        WikipediaPretrainingDataset._process_page, target_titles, chunksize=chunk_size
-                    ):
+                with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool:
+                    for ret in pool.imap(_process_page, target_titles, chunksize=chunk_size):
                         for data in ret:
                             writer.write(data)
                             number_of_items += 1
@@ -240,101 +236,101 @@ class WikipediaPretrainingDataset:
                 indent=2,
             )
 
-    @staticmethod
-    def _initialize_worker(
-        dump_db: DumpDB,
-        tokenizer: PreTrainedTokenizer,
-        sentence_splitter: SentenceSplitter,
-        entity_vocab: EntityVocab,
-        max_num_tokens: int,
-        max_entity_length: int,
-        max_mention_length: int,
-        min_sentence_length: int,
-        abstract_only: bool,
-        include_sentences_without_entities: bool,
-        include_unk_entities: bool,
-    ):
-        global _dump_db, _tokenizer, _sentence_splitter, _entity_vocab, _max_num_tokens, _max_entity_length
-        global _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
-        global _abstract_only
-        global _language
 
-        _dump_db = dump_db
-        _tokenizer = tokenizer
-        _sentence_splitter = sentence_splitter
-        _entity_vocab = entity_vocab
-        _max_num_tokens = max_num_tokens
-        _max_entity_length = max_entity_length
-        _max_mention_length = max_mention_length
-        _min_sentence_length = min_sentence_length
-        _include_sentences_without_entities = include_sentences_without_entities
-        _include_unk_entities = include_unk_entities
-        _abstract_only = abstract_only
-        _language = dump_db.language
+def _initialize_worker(
+    dump_db: DumpDB,
+    tokenizer: PreTrainedTokenizer,
+    sentence_splitter: SentenceSplitter,
+    entity_vocab: EntityVocab,
+    max_num_tokens: int,
+    max_entity_length: int,
+    max_mention_length: int,
+    min_sentence_length: int,
+    abstract_only: bool,
+    include_sentences_without_entities: bool,
+    include_unk_entities: bool,
+):
+    global _dump_db, _tokenizer, _sentence_splitter, _entity_vocab, _max_num_tokens, _max_entity_length
+    global _max_mention_length, _min_sentence_length, _include_sentences_without_entities, _include_unk_entities
+    global _abstract_only
+    global _language
 
-    @staticmethod
-    def _process_page(page_title: str):
+    _dump_db = dump_db
+    _tokenizer = tokenizer
+    _sentence_splitter = sentence_splitter
+    _entity_vocab = entity_vocab
+    _max_num_tokens = max_num_tokens
+    _max_entity_length = max_entity_length
+    _max_mention_length = max_mention_length
+    _min_sentence_length = min_sentence_length
+    _include_sentences_without_entities = include_sentences_without_entities
+    _include_unk_entities = include_unk_entities
+    _abstract_only = abstract_only
+    _language = dump_db.language
 
-        sentence_words_and_links = []
-        for paragraph in _dump_db.get_paragraphs(page_title):
 
-            if _abstract_only and not paragraph.abstract:
-                continue
+def _process_page(page_title: str):
 
-            # First, get paragraph links.
-            # Paragraph links are represented its form (link_title) and the start/end positions of strings
-            # (link_start, link_end).
-            paragraph_text, paragraph_links = get_paragraph_links(_dump_db, paragraph)
+    sentence_words_and_links = []
+    for paragraph in _dump_db.get_paragraphs(page_title):
 
-            sentence_words_and_links += get_sentence_words_and_links(
-                paragraph_text=paragraph_text,
-                paragraph_links=paragraph_links,
-                sentence_splitter=_sentence_splitter,
-                tokenizer=_tokenizer,
-                min_sentence_length=_min_sentence_length,
-                max_num_tokens=_max_num_tokens,
-            )
+        if _abstract_only and not paragraph.abstract:
+            continue
 
-        ret = []
+        # First, get paragraph links.
+        # Paragraph links are represented its form (link_title) and the start/end positions of strings
+        # (link_start, link_end).
+        paragraph_text, paragraph_links = get_paragraph_links(_dump_db, paragraph)
 
-        for words, links in generate_concatenated_sentences(sentence_words_and_links, max_num_tokens=_max_num_tokens):
-            links_ids = links_to_link_ids(
-                links, entity_vocab=_entity_vocab, include_unk_entities=_include_unk_entities, language=_language
-            )
+        sentence_words_and_links += get_sentence_words_and_links(
+            paragraph_text=paragraph_text,
+            paragraph_links=paragraph_links,
+            sentence_splitter=_sentence_splitter,
+            tokenizer=_tokenizer,
+            min_sentence_length=_min_sentence_length,
+            max_num_tokens=_max_num_tokens,
+        )
 
-            if not links_ids and not _include_sentences_without_entities:
-                continue
+    ret = []
 
-            word_ids = _tokenizer.convert_tokens_to_ids(words)
-            assert _min_sentence_length <= len(word_ids) <= _max_num_tokens
+    for words, links in generate_concatenated_sentences(sentence_words_and_links, max_num_tokens=_max_num_tokens):
+        links_ids = links_to_link_ids(
+            links, entity_vocab=_entity_vocab, include_unk_entities=_include_unk_entities, language=_language
+        )
 
-            links_ids = links_ids[:_max_entity_length]
-            entity_ids = [id_ for id_, _, _, in links_ids]
-            assert len(entity_ids) <= _max_entity_length
-            entity_position_ids = itertools.chain(
-                *[
-                    (list(range(start, end)) + [-1] * (_max_mention_length - end + start))[:_max_mention_length]
-                    for _, start, end in links_ids
-                ]
-            )
+        if not links_ids and not _include_sentences_without_entities:
+            continue
 
-            if _entity_vocab.contains(page_title, _language):
-                page_id = _entity_vocab.get_id(page_title, _language)
-            else:
-                page_id = -1
-            example = tf.train.Example(
-                features=tf.train.Features(
-                    feature=dict(
-                        page_id=tf.train.Feature(int64_list=tf.train.Int64List(value=[page_id])),
-                        word_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=word_ids)),
-                        entity_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=entity_ids)),
-                        entity_position_ids=tf.train.Feature(int64_list=Int64List(value=entity_position_ids)),
-                    )
+        word_ids = _tokenizer.convert_tokens_to_ids(words)
+        assert _min_sentence_length <= len(word_ids) <= _max_num_tokens
+
+        links_ids = links_ids[:_max_entity_length]
+        entity_ids = [id_ for id_, _, _, in links_ids]
+        assert len(entity_ids) <= _max_entity_length
+        entity_position_ids = itertools.chain(
+            *[
+                (list(range(start, end)) + [-1] * (_max_mention_length - end + start))[:_max_mention_length]
+                for _, start, end in links_ids
+            ]
+        )
+
+        if _entity_vocab.contains(page_title, _language):
+            page_id = _entity_vocab.get_id(page_title, _language)
+        else:
+            page_id = -1
+        example = tf.train.Example(
+            features=tf.train.Features(
+                feature=dict(
+                    page_id=tf.train.Feature(int64_list=tf.train.Int64List(value=[page_id])),
+                    word_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=word_ids)),
+                    entity_ids=tf.train.Feature(int64_list=tf.train.Int64List(value=entity_ids)),
+                    entity_position_ids=tf.train.Feature(int64_list=Int64List(value=entity_position_ids)),
                 )
             )
-            ret.append((example.SerializeToString()))
+        )
+        ret.append((example.SerializeToString()))
 
-        return ret
+    return ret
 
 
 def get_paragraph_links(dump_db: DumpDB, paragraph: Paragraph) -> Tuple[str, List[Tuple[str, int, int]]]:
