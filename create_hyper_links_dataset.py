@@ -235,6 +235,9 @@ def build_wikipedia_pretraining_dataset(
     print(f"Writing data to {dataset_file}")
     with h5py.File(dataset_file, "w") as hdf:
         for entity_name in tqdm.tqdm(entity_to_sentence.keys()):
+            # some entity names (e.g., ".hack") cause bugs
+            if entity_name in hdf:
+                continue
             hdf.create_group(entity_name)
             word_ids = np.stack(entity_to_sentence[entity_name])
             position_ids = np.stack(entity_to_entity_position_ids[entity_name])
