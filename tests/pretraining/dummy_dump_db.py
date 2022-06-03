@@ -50,7 +50,7 @@ SAMPLE_PARAGRAPHS = {
 
 class DummyDumpDB(DumpDB):
 
-    language = None
+    language = "en"
 
     def __init__(self):
         pass
