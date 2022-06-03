@@ -32,11 +32,9 @@ class HyperlinkDatasetReader(DatasetReader):
         }
         self.max_sequence_length = max_sequence_length
 
-    def sample_data(self, word_ids: np.ndarray, entity_position_ids: np.ndarray):
-        batch_size = word_ids.shape[0]
-        sentence_lengths = (word_ids != -1).sum(axis=-1)
+    def sample_data(self, sentence_lengths: np.ndarray):
 
-        indices = list(range(batch_size))
+        indices = list(range(len(sentence_lengths)))
         np.random.shuffle(indices)
 
         sampled_indices = []
@@ -88,8 +86,9 @@ class HyperlinkDatasetReader(DatasetReader):
         for entity_name in hf.keys():
             word_ids = np.array(hf[f"/{entity_name}/word_ids"])
             entity_position_ids = np.array(hf[f"/{entity_name}/entity_position_ids"])
+            sentence_lengths = (word_ids != -1).sum(axis=-1)
 
-            sampled_indices = self.sample_data(word_ids, entity_position_ids)
+            sampled_indices = self.sample_data(sentence_lengths)
             word_ids = word_ids[sampled_indices]
             entity_position_ids = entity_position_ids[sampled_indices]
             yield self.text_to_instance(
