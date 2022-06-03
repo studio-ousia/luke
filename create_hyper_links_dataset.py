@@ -172,7 +172,7 @@ def pad_array_to_length(array: np.ndarray, length: int, padding_value: int = -1)
 @click.option("--max-segment-length", default=50)
 @click.option("--max-mention-length", default=16)
 @click.option("--min-segment-length", default=10)
-@click.option("--max-num-entities", default=None)
+@click.option("--max-num-articles", default=None)
 @click.option("--pool-size", default=1)
 def build_wikipedia_pretraining_dataset(
     dump_db_file: str,
@@ -183,7 +183,7 @@ def build_wikipedia_pretraining_dataset(
     max_segment_length: int,
     max_mention_length: int,
     min_segment_length: int,
-    max_num_entities: int,
+    max_num_articles: int,
     pool_size: int,
 ):
     dump_db = DumpDB(dump_db_file)
@@ -201,8 +201,6 @@ def build_wikipedia_pretraining_dataset(
         for title in dump_db.titles()
         if not (":" in title and title.lower().split(":")[0] in ("image", "file", "category"))
     ]
-    if max_num_entities is not None:
-        target_titles = target_titles[:max_num_entities]
 
     initargs = (
         dump_db,
@@ -214,7 +212,7 @@ def build_wikipedia_pretraining_dataset(
         max_mention_length,
     )
     with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool, tqdm.tqdm(
-        total=len(target_titles)
+        total=max_num_articles or len(target_titles)
     ) as pbar:
 
         entity_to_sentence = defaultdict(list)
@@ -230,6 +228,8 @@ def build_wikipedia_pretraining_dataset(
                     pad_array_to_length(item["entity_position_ids"], max_mention_length)
                 )
             pbar.update()
+            if pbar.n == max_num_articles:
+                break
 
     with h5py.File(os.path.join(output_dir, "dataset.h5"), "w") as hdf:
         for entity_name in entity_to_sentence.keys():
