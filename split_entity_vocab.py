@@ -6,6 +6,7 @@ from pathlib import Path
 @click.argument("entity-vocab-path", type=click.Path(exists=True))
 @click.argument("output-directory", type=click.Path(exists=True))
 def split_entity_vocab(entity_vocab_path: str, output_directory: str):
+    print(f"Read vocab from {entity_vocab_path}....")
     with open(entity_vocab_path, "r") as f:
         lines = f.read().strip().split("\n")
 
@@ -23,5 +24,10 @@ def split_entity_vocab(entity_vocab_path: str, output_directory: str):
     ]:
         output_file_path = Path(output_directory) / f"{filename_stem}-{start}_{end}{suffix}"
 
+        print(f"Write vocab to {output_file_path}....")
         with open(output_file_path, "w") as f:
             f.write("\n".join(lines[start:end]))
+
+
+if __name__ == "__main__":
+    split_entity_vocab()
