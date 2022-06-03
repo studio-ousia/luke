@@ -32,7 +32,7 @@ class HyperlinkDatasetReader(DatasetReader):
         }
         self.max_sequence_length = max_sequence_length
 
-    def text_to_instance(self, entity_name: str, word_ids: np.ndarray, entity_position_ids: np.ndarray) -> Instance:
+    def sample_data(self, word_ids: np.ndarray, entity_position_ids: np.ndarray):
         batch_size = word_ids.shape[0]
         sentence_lengths = (word_ids != -1).sum(axis=-1)
 
@@ -47,20 +47,24 @@ class HyperlinkDatasetReader(DatasetReader):
                 break
             current_sequence_length = next_sentence_length
             sampled_indices.append(i)
+        return sampled_indices
 
-        entity_position_offsets = np.cumsum((1 + sentence_lengths[sampled_indices][:-1]))  # +1 for the SEP token
+    def text_to_instance(self, entity_name: str, word_ids: np.ndarray, entity_position_ids: np.ndarray) -> Instance:
+        sentence_lengths = (word_ids != -1).sum(axis=-1)
+
+        entity_position_offsets = np.cumsum((1 + sentence_lengths[:-1]))  # +1 for the SEP token
         entity_position_offsets = np.insert(entity_position_offsets, 0, 0)
         entity_position_offsets += 1  # +1 for the CLS token
         new_word_ids = []
         new_entity_position_ids = []
-        for i, position_offset in zip(sampled_indices, entity_position_offsets):
+        for ws, es, position_offset in zip(word_ids, entity_position_ids, entity_position_offsets):
             if new_word_ids:
                 new_word_ids.append(np.array([self.transformers_tokenizer.sep_token_id]))
             else:
                 new_word_ids.append(np.array([self.transformers_tokenizer.cls_token_id]))
-            new_word_ids.append(word_ids[i][word_ids[i] > -1])
+            new_word_ids.append(ws[ws > -1])
 
-            new_position_ids = entity_position_ids[i]
+            new_position_ids = es
             new_position_ids[new_position_ids > -1] += position_offset
             new_entity_position_ids.append(new_position_ids)
 
@@ -82,8 +86,14 @@ class HyperlinkDatasetReader(DatasetReader):
         hf = h5py.File(file_path, "r")
 
         for entity_name in hf.keys():
+            word_ids = np.array(hf[f"/{entity_name}/word_ids"])
+            entity_position_ids = np.array(hf[f"/{entity_name}/entity_position_ids"])
+
+            sampled_indices = self.sample_data(word_ids, entity_position_ids)
+            word_ids = word_ids[sampled_indices]
+            entity_position_ids = entity_position_ids[sampled_indices]
             yield self.text_to_instance(
                 entity_name,
-                np.array(hf[f"/{entity_name}/word_ids"]),
-                np.array(hf[f"/{entity_name}/entity_position_ids"]),
+                word_ids=word_ids[sampled_indices],
+                entity_position_ids=entity_position_ids[sampled_indices],
             )
