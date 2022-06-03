@@ -20,6 +20,10 @@ from luke.pretraining.dataset import (
     get_sentence_words_and_links,
 )
 
+# global variables used in pool workers
+_dump_db = _entity_vocab = _tokenizer = _sentence_splitter = None
+_min_segment_length = _max_segment_length = _max_mention_length = None
+
 
 def extract_span_and_context(
     word_ids: List[int], span_start: int, span_end: int, max_segment_length: int
@@ -93,7 +97,7 @@ def process_page(
                 )
             assert len(word_ids) <= max_segment_length
 
-            entity_position_ids = list(range(link_start, link_end))
+            entity_position_ids = np.arange(link_start, link_end)
             item = {
                 "word_ids": word_ids,
                 "entity_id": entity_id,
@@ -114,7 +118,7 @@ def _initialize_worker(
     max_mention_length: int,
 ):
     global _dump_db, _entity_vocab, _tokenizer, _sentence_splitter
-    global _min_segment_length, _min_segment_length, _max_segment_length, _max_mention_length
+    global _min_segment_length, _max_segment_length, _max_mention_length
 
     _dump_db = dump_db
     _entity_vocab = entity_vocab
@@ -137,26 +141,6 @@ def _process_page(page_title: str) -> List[Dict[str, np.ndarray]]:
         max_segment_length=_max_segment_length,
         max_mention_length=_max_mention_length,
     )
-
-
-def write_to_hdf(hdf: h5py.File, dataset_name: str, item: Dict[str, np.ndarray]):
-    if dataset_name not in hdf:
-        hdf.create_group(dataset_name)
-
-    dtype_dict = {"word_ids": "int32", "entity_position_ids": "int16"}
-    for key, array in item.items():
-        path = f"/{dataset_name}/{key}"
-        if path not in hdf:
-            hdf.create_dataset(
-                path,
-                data=array[np.newaxis],
-                dtype=dtype_dict[key],
-                maxshape=(None, len(array)),
-            )
-        else:
-            dataset = hdf[f"/{dataset_name}/{key}"]
-            dataset.resize(size=len(dataset) + 1, axis=0)
-            hdf[path][len(dataset) - 1] = array
 
 
 def pad_array_to_length(array: np.ndarray, length: int, padding_value: int = -1) -> np.ndarray:
