@@ -10,6 +10,8 @@ from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from allennlp.data.fields import TensorField
 
+from .util import h5py_safe_name_to_original
+
 
 @DatasetReader.register("hyperlink")
 class HyperlinkDatasetReader(DatasetReader):
@@ -92,7 +94,7 @@ class HyperlinkDatasetReader(DatasetReader):
             word_ids = word_ids[sampled_indices]
             entity_position_ids = entity_position_ids[sampled_indices]
             yield self.text_to_instance(
-                entity_name,
+                h5py_safe_name_to_original(entity_name),
                 word_ids=word_ids[sampled_indices],
                 entity_position_ids=entity_position_ids[sampled_indices],
             )

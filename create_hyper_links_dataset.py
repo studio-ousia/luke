@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, TypeVar
 import os
 import numpy as np
 from contextlib import closing
@@ -20,9 +20,9 @@ from luke.pretraining.dataset import (
     get_sentence_words_and_links,
 )
 
-# global variables used in pool workers
-_dump_db = _entity_vocab = _tokenizer = _sentence_splitter = None
-_min_segment_length = _max_segment_length = _max_mention_length = None
+from dynamic_embeddings.util import get_h5py_safe_name
+
+T = TypeVar("T")
 
 
 def extract_span_and_context(
@@ -147,6 +147,13 @@ def pad_array_to_length(array: np.ndarray, length: int, padding_value: int = -1)
     return np.pad(array, (0, length - len(array)), constant_values=padding_value)
 
 
+def sharding(lst: List[T], num_shards: int) -> List[T]:
+    """Yield successive similar-sized chunks from lst."""
+    shard_size = int(len(lst) // num_shards) + 1
+    for i in range(0, len(lst), shard_size):
+        yield lst[i : i + shard_size]
+
+
 @click.command()
 @click.argument("dump_db_file", type=click.Path(exists=True))
 @click.argument("tokenizer_name")
@@ -158,6 +165,7 @@ def pad_array_to_length(array: np.ndarray, length: int, padding_value: int = -1)
 @click.option("--min-segment-length", default=10)
 @click.option("--max-num-articles", default=None, type=int)
 @click.option("--pool-size", default=1)
+@click.option("--num-shards", default=10)
 def build_wikipedia_pretraining_dataset(
     dump_db_file: str,
     tokenizer_name: str,
@@ -169,6 +177,7 @@ def build_wikipedia_pretraining_dataset(
     min_segment_length: int,
     max_num_articles: int,
     pool_size: int,
+    num_shards: int,
 ):
     dump_db = DumpDB(dump_db_file)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=False)
@@ -195,38 +204,38 @@ def build_wikipedia_pretraining_dataset(
         max_segment_length,
         max_mention_length,
     )
-    with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool, tqdm.tqdm(
-        total=max_num_articles or len(target_titles)
-    ) as pbar:
+    for i, target_titles_shard in enumerate(sharding(target_titles, num_shards)):
+        with closing(Pool(pool_size, initializer=_initialize_worker, initargs=initargs)) as pool, tqdm.tqdm(
+            total=max_num_articles or len(target_titles)
+        ) as pbar:
 
-        entity_to_sentence = defaultdict(list)
-        entity_to_entity_position_ids = defaultdict(list)
+            entity_to_sentence = defaultdict(list)
+            entity_to_entity_position_ids = defaultdict(list)
 
-        print("Extracting entity data...")
-        for items in pool.imap(_process_page, target_titles, chunksize=100):
-            for item in items:
-                # pad arrays to the max length
-                entity_name = entity_vocab.get_title_by_id(item.pop("entity_id"), dump_db.language)
-                entity_to_sentence[entity_name].append(pad_array_to_length(item["word_ids"], max_segment_length))
-                entity_to_entity_position_ids[entity_name].append(
-                    pad_array_to_length(item["entity_position_ids"], max_mention_length)
-                )
-            pbar.update()
-            if pbar.n == max_num_articles:
-                break
+            print("Extracting entity data...")
+            for items in pool.imap(_process_page, target_titles_shard, chunksize=100):
+                for item in items:
+                    # pad arrays to the max length
+                    entity_name = entity_vocab.get_title_by_id(item.pop("entity_id"), dump_db.language)
+                    entity_to_sentence[entity_name].append(pad_array_to_length(item["word_ids"], max_segment_length))
+                    entity_to_entity_position_ids[entity_name].append(
+                        pad_array_to_length(item["entity_position_ids"], max_mention_length)
+                    )
+                pbar.update()
+                if pbar.n == max_num_articles:
+                    break
 
-    dataset_file = os.path.join(output_dir, "dataset.h5")
-    print(f"Writing data to {dataset_file}")
-    with h5py.File(dataset_file, "w") as hdf:
-        for entity_name in tqdm.tqdm(entity_to_sentence.keys()):
-            # some entity names (e.g., ".hack") cause bugs
-            if entity_name in hdf:
-                continue
-            hdf.create_group(entity_name)
-            word_ids = np.stack(entity_to_sentence[entity_name])
-            position_ids = np.stack(entity_to_entity_position_ids[entity_name])
-            hdf.create_dataset(f"/{entity_name}/word_ids", data=word_ids, dtype="int32")
-            hdf.create_dataset(f"/{entity_name}/entity_position_ids", data=position_ids, dtype="int16")
+        dataset_file = os.path.join(output_dir, f"dataset-{i}.h5")
+        print(f"Writing data to {dataset_file}")
+        with h5py.File(dataset_file, "w") as hdf:
+            for entity_name in tqdm.tqdm(entity_to_sentence.keys()):
+                # some entity names (e.g., ".hack") cause bugs
+                entity_name = get_h5py_safe_name(entity_name)
+                hdf.create_group(entity_name)
+                word_ids = np.stack(entity_to_sentence[entity_name])
+                position_ids = np.stack(entity_to_entity_position_ids[entity_name])
+                hdf.create_dataset(f"/{entity_name}/word_ids", data=word_ids, dtype="int32")
+                hdf.create_dataset(f"/{entity_name}/entity_position_ids", data=position_ids, dtype="int16")
 
 
 if __name__ == "__main__":
