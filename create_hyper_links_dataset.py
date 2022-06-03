@@ -231,11 +231,13 @@ def build_wikipedia_pretraining_dataset(
             if pbar.n == max_num_articles:
                 break
 
-    with h5py.File(os.path.join(output_dir, "dataset.h5"), "w") as hdf:
-        for entity_name in entity_to_sentence.keys():
+    dataset_file = os.path.join(output_dir, "dataset.h5")
+    print(f"Writing data to {dataset_file}")
+    with h5py.File(dataset_file, "w") as hdf:
+        for entity_name in tqdm.tqdm(entity_to_sentence.keys()):
+            hdf.create_group(entity_name)
             word_ids = np.stack(entity_to_sentence[entity_name])
             position_ids = np.stack(entity_to_entity_position_ids[entity_name])
-            hdf.create_group(entity_name)
             hdf.create_dataset(f"/{entity_name}/word_ids", data=word_ids, dtype="int32")
             hdf.create_dataset(f"/{entity_name}/entity_position_ids", data=position_ids, dtype="int16")
 
