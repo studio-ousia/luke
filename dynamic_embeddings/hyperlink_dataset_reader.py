@@ -48,8 +48,9 @@ class HyperlinkDatasetReader(DatasetReader):
             current_sequence_length = next_sentence_length
             sampled_indices.append(i)
 
-        entity_position_offsets = np.cumsum((1 + sentence_lengths[sampled_indices][:-1]))
+        entity_position_offsets = np.cumsum((1 + sentence_lengths[sampled_indices][:-1]))  # +1 for the SEP token
         entity_position_offsets = np.insert(entity_position_offsets, 0, 0)
+        entity_position_offsets += 1  # +1 for the CLS token
         new_word_ids = []
         new_entity_position_ids = []
         for i, position_offset in zip(sampled_indices, entity_position_offsets):
