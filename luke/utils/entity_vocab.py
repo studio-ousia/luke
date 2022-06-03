@@ -128,30 +128,24 @@ class EntityVocab:
     def __len__(self):
         return len(self.inv_vocab)
 
-    def __contains__(self, item: str):
-        return self.contains(item, language=None)
-
-    def __getitem__(self, key: str):
-        return self.get_id(key, language=None)
-
     def __iter__(self):
         return iter(self.vocab)
 
-    def contains(self, title: str, language: str = None):
+    def contains(self, title: str, language: str):
         return Entity(title, language) in self.vocab
 
-    def get_id(self, title: str, language: str = None, default: int = None) -> int:
+    def get_id(self, title: str, language: str, default: int = None) -> int:
         try:
             return self.vocab[Entity(title, language)]
         except KeyError:
             return default
 
-    def get_title_by_id(self, id_: int, language: str = None) -> str:
+    def get_title_by_id(self, id_: int, language: str) -> str:
         for entity in self.inv_vocab[id_]:
             if entity.language == language:
                 return entity.title
 
-    def get_count_by_title(self, title: str, language: str = None) -> int:
+    def get_count_by_title(self, title: str, language: str) -> int:
         entity = Entity(title, language)
         return self.counter.get(entity, 0)
 

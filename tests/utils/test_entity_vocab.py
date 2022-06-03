@@ -27,12 +27,11 @@ def multilingual_entity_vocab():
 def test_entity_vocab(entity_vocab):
     assert len(entity_vocab) == 103
     assert len(list(entity_vocab)) == 103
-    assert "United States" in entity_vocab
-    assert entity_vocab["[PAD]"] == 0
-    assert entity_vocab["United States"] == 4
-    assert entity_vocab.get_id("United States") == 4
-    assert entity_vocab.get_title_by_id(4) == "United States"
-    assert entity_vocab.get_count_by_title("United States") == 261500
+    assert entity_vocab.contains("United States", "en")
+    assert entity_vocab.get_id("[PAD]", "en") == 0
+    assert entity_vocab.get_id("United States", "en") == 4
+    assert entity_vocab.get_title_by_id(4, "en") == "United States"
+    assert entity_vocab.get_count_by_title("United States", "en") == 261500
 
 
 def test_multilingual_entity_vocab(multilingual_entity_vocab):
