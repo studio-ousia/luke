@@ -66,13 +66,17 @@ class HyperlinkDatasetReader(DatasetReader):
         return Instance(
             {
                 "word_ids": TensorField(
-                    np.concatenate(new_word_ids), padding_value=self.transformers_tokenizer.pad_token_id
+                    np.concatenate(new_word_ids),
+                    padding_value=self.transformers_tokenizer.pad_token_id,
+                    dtype=torch.long,
                 ),
-                "entity_position_ids": TensorField(np.stack(new_entity_position_ids)),
+                "entity_position_ids": TensorField(np.stack(new_entity_position_ids), dtype=torch.long),
                 "entity_mask_tokens": TensorField(
-                    np.stack(new_entity_position_ids), padding_value=self.entity_vocab["[PAD]"]
+                    torch.tensor([self.entity_vocab["[MASK]"]]),
+                    padding_value=self.entity_vocab["[PAD]"],
+                    dtype=torch.long,
                 ),
-                "entity_id": TensorField(torch.tensor([self.entity_vocab[entity_name]])),
+                "entity_id": TensorField(torch.tensor([self.entity_vocab[entity_name]]), dtype=torch.long),
             }
         )
 
