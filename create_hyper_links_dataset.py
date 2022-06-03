@@ -172,7 +172,7 @@ def pad_array_to_length(array: np.ndarray, length: int, padding_value: int = -1)
 @click.option("--max-segment-length", default=50)
 @click.option("--max-mention-length", default=16)
 @click.option("--min-segment-length", default=10)
-@click.option("--max-num-articles", default=None)
+@click.option("--max-num-articles", default=None, type=int)
 @click.option("--pool-size", default=1)
 def build_wikipedia_pretraining_dataset(
     dump_db_file: str,
