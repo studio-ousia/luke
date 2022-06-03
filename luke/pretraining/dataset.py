@@ -50,7 +50,6 @@ _abstract_only = _language = None
 @click.option("--min-sentence-length", default=5)
 @click.option("--abstract-only", is_flag=True)
 @click.option("--include-sentences-without-entities", is_flag=True)
-@click.option("--build-sentence-dataset", is_flag=True)
 @click.option("--include-unk-entities/--skip-unk-entities", default=False)
 @click.option("--pool-size", default=multiprocessing.cpu_count())
 @click.option("--chunk-size", default=100)
