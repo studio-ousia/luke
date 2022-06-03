@@ -20,7 +20,7 @@ from luke.pretraining.dataset import (
     get_sentence_words_and_links,
 )
 
-from dynamic_embeddings.util import get_h5py_safe_name
+from dynamic_embeddings.hyperlink_dataset import HyperlinkDataset
 
 T = TypeVar("T")
 
@@ -164,9 +164,9 @@ def sharding(lst: List[T], num_shards: int) -> List[T]:
 @click.option("--max-mention-length", default=16)
 @click.option("--min-segment-length", default=10)
 @click.option("--max-num-articles", default=None, type=int)
-@click.option("--pool-size", default=1)
+@click.option("--pool-size", default=8)
 @click.option("--num-shards", default=10)
-def build_wikipedia_pretraining_dataset(
+def build_hyperlink_dataset(
     dump_db_file: str,
     tokenizer_name: str,
     entity_vocab_file: str,
@@ -228,16 +228,12 @@ def build_wikipedia_pretraining_dataset(
 
         dataset_file = os.path.join(output_dir, f"dataset-{i}.h5")
         print(f"Writing data to {dataset_file}")
-        with h5py.File(dataset_file, "w") as hdf:
+        with HyperlinkDataset(dataset_file, "w") as f:
             for entity_name in tqdm.tqdm(entity_to_sentence.keys()):
-                # some entity names (e.g., ".hack") cause bugs
-                entity_name = get_h5py_safe_name(entity_name)
-                hdf.create_group(entity_name)
                 word_ids = np.stack(entity_to_sentence[entity_name])
                 position_ids = np.stack(entity_to_entity_position_ids[entity_name])
-                hdf.create_dataset(f"/{entity_name}/word_ids", data=word_ids, dtype="int32")
-                hdf.create_dataset(f"/{entity_name}/entity_position_ids", data=position_ids, dtype="int16")
+                f.add_entity_data(entity_name, word_ids, position_ids)
 
 
 if __name__ == "__main__":
-    build_wikipedia_pretraining_dataset()
+    build_hyperlink_dataset()

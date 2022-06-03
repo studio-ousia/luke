@@ -12,6 +12,8 @@ from allennlp.data.fields import TensorField
 
 from .util import h5py_safe_name_to_original
 
+from .hyperlink_dataset import HyperlinkDataset
+
 
 @DatasetReader.register("hyperlink")
 class HyperlinkDatasetReader(DatasetReader):
@@ -83,18 +85,12 @@ class HyperlinkDatasetReader(DatasetReader):
         )
 
     def _read(self, file_path) -> Iterable[Instance]:
-        hf = h5py.File(file_path, "r")
 
-        for entity_name in hf.keys():
-            word_ids = np.array(hf[f"/{entity_name}/word_ids"])
-            entity_position_ids = np.array(hf[f"/{entity_name}/entity_position_ids"])
-            sentence_lengths = (word_ids != -1).sum(axis=-1)
-
-            sampled_indices = self.sample_data(sentence_lengths)
-            word_ids = word_ids[sampled_indices]
-            entity_position_ids = entity_position_ids[sampled_indices]
-            yield self.text_to_instance(
-                h5py_safe_name_to_original(entity_name),
-                word_ids=word_ids[sampled_indices],
-                entity_position_ids=entity_position_ids[sampled_indices],
-            )
+        with HyperlinkDataset(file_path, "r") as f:
+            for entity_name, word_ids, entity_position_ids in f.generate_entity_data():
+                sampled_indices = self.sample_data(sentence_lengths=(word_ids != -1).sum(axis=-1))
+                yield self.text_to_instance(
+                    entity_name,
+                    word_ids=word_ids[sampled_indices],
+                    entity_position_ids=entity_position_ids[sampled_indices],
+                )
