@@ -51,7 +51,7 @@ def test_build_and_read_dataset():
         items = sorted(items, key=lambda x: x["page_id"])
 
         item = items[0]
-        assert entity_vocab.get_title_by_id(item["page_id"]) == "Japan"
+        assert entity_vocab.get_title_by_id(item["page_id"], dummy_dump_db.language) == "Japan"
         assert (
             tokenizer.decode(item["word_ids"]).strip()
             == "Japan is an island country in East Asia. It is situated in the northwest Pacific Ocean."
@@ -62,14 +62,14 @@ def test_build_and_read_dataset():
             ["Japan", "East Asia", "Pacific Ocean"],
             ["Japan", "East Asia", "Pacific Ocean"],
         ):
-            assert entity_vocab.get_title_by_id(entity_id) == expected_title
+            assert entity_vocab.get_title_by_id(entity_id, dummy_dump_db.language) == expected_title
             assert (
                 tokenizer.decode(item["word_ids"][[i for i in entity_position_ids if i > -1]]).strip()
                 == expected_mention
             )
 
         item = items[1]
-        assert entity_vocab.get_title_by_id(item["page_id"]) == "Studio Ousia"
+        assert entity_vocab.get_title_by_id(item["page_id"], dummy_dump_db.language) == "Studio Ousia"
         assert (
             tokenizer.decode(item["word_ids"]).strip()
             == "Studio Ousia develops advanced multilingual natural language AI. Our award-winning AI will accelerate your business."
@@ -80,7 +80,7 @@ def test_build_and_read_dataset():
             ["Studio Ousia", "Artificial Intelligence", "Artificial Intelligence"],
             ["Studio Ousia", "AI", "AI"],
         ):
-            assert entity_vocab.get_title_by_id(entity_id) == expected_title
+            assert entity_vocab.get_title_by_id(entity_id, dummy_dump_db.language) == expected_title
             assert (
                 tokenizer.decode(item["word_ids"][[i for i in entity_position_ids if i > -1]]).strip()
                 == expected_mention
