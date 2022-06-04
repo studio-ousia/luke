@@ -33,26 +33,26 @@ class EntityEmbeddingPredictor(Model):
         word_ids: torch.LongTensor,
         entity_mask_tokens: torch.LongTensor,
         entity_position_ids: torch.LongTensor,
-        gold_entity_ids: torch.LongTensor = None,
-        **kwargs,
+        gold_entity_id: torch.LongTensor = None
     ):
 
+        entity_attention_mask = entity_mask_tokens != self.entity_pad_token_id
         model_output = self.luke_model.forward(
             word_ids,
             attention_mask=word_ids != self.pad_token_id,
             entity_ids=entity_mask_tokens,
-            entity_attention_mask=entity_mask_tokens != self.entity_pad_token_id,
+            entity_attention_mask=entity_attention_mask,
             entity_position_ids=entity_position_ids,
             return_dict=True,
         )
         entity_last_hidden_state = model_output.entity_last_hidden_state
-
-        predicted_entity_embeddings = self.linear(entity_last_hidden_state)
+        averaged_mask_embeddings = (entity_last_hidden_state * entity_attention_mask.unsqueeze(-1)).sum(dim=1) / entity_attention_mask.sum(dim=1, keepdim=True)
+        predicted_entity_embeddings = self.linear(averaged_mask_embeddings)
 
         output_dict = {"predicted_entity_embeddings": predicted_entity_embeddings}
 
-        if gold_entity_ids is not None:
-            gold_entity_embeddings = self.static_entity_embeddings[gold_entity_ids]
+        if gold_entity_id is not None:
+            gold_entity_embeddings = self.static_entity_embeddings[gold_entity_id].to(predicted_entity_embeddings.device)
             loss = self.criterion(gold_entity_embeddings, predicted_entity_embeddings)
             output_dict["loss"] = loss
         return output_dict

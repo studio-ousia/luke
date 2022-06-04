@@ -76,9 +76,9 @@ class HyperlinkDatasetReader(DatasetReader):
                 ),
                 "entity_position_ids": TensorField(torch.LongTensor(np.stack(new_entity_position_ids))),
                 "entity_mask_tokens": TensorField(
-                    torch.LongTensor([self.entity_vocab["[MASK]"]]), padding_value=self.entity_vocab["[PAD]"]
+                    torch.LongTensor([self.entity_vocab["[MASK]"]] * len(new_entity_position_ids)), padding_value=self.entity_vocab["[PAD]"]
                 ),
-                "entity_id": TensorField(torch.LongTensor([self.entity_vocab[entity_name]])),
+                "gold_entity_id": TensorField(torch.LongTensor([self.entity_vocab[entity_name]])),
             }
         )
 

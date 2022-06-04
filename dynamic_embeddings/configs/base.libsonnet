@@ -44,7 +44,7 @@ local luke_model_name = std.extVar("LUKE_MODEL_NAME");
         patience: 2,
         validation_metric: "-loss"
     },
-    data_loader: {batch_size: 4, shuffle: true},
+    data_loader: {batch_size: 8, shuffle: true},
     random_seed: 0,
     numpy_seed: 0,
     pytorch_seed: 0

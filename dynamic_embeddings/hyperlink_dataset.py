@@ -22,7 +22,7 @@ class HyperlinkDataset:
         return name.replace("/", self.SLASH_ALTERNATIVE)
 
     def h5py_safe_name_to_original(self, name: str) -> str:
-        return name.replace(self.SLASH_ALTERNATIVE, "-")
+        return name.replace(self.SLASH_ALTERNATIVE, "/")
 
     def add_entity_data(self, entity_name: str, word_ids: np.ndarray, entity_position_ids: np.ndarray):
         entity_name = self.get_h5py_safe_name(entity_name)
