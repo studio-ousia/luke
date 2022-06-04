@@ -1,4 +1,5 @@
 from typing import Dict, Any, Iterable
+import glob
 
 import numpy as np
 import torch
@@ -7,7 +8,7 @@ from allennlp.data import DatasetReader
 from allennlp.data.instance import Instance
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
-from allennlp.data.fields import TensorField
+from allennlp.data.fields import TensorField, LabelField
 
 
 from .hyperlink_dataset import HyperlinkDataset
@@ -78,17 +79,22 @@ class HyperlinkDatasetReader(DatasetReader):
                 "entity_mask_tokens": TensorField(
                     torch.LongTensor([self.entity_vocab["[MASK]"]] * len(new_entity_position_ids)), padding_value=self.entity_vocab["[PAD]"]
                 ),
-                "gold_entity_id": TensorField(torch.LongTensor([self.entity_vocab[entity_name]])),
+                "gold_entity_id": LabelField(self.entity_vocab[entity_name], skip_indexing=True),
             }
         )
 
-    def _read(self, file_path) -> Iterable[Instance]:
+    def _read(self, file_path_regex: str) -> Iterable[Instance]:
+        file_path_list = glob.glob(file_path_regex)
+        if not file_path_list:
+            raise ValueError(f"{file_path_regex} does not match any files")
 
-        with HyperlinkDataset(file_path, "r") as f:
-            for entity_name, word_ids, entity_position_ids in f.generate_entity_data():
-                sampled_indices = self.sample_data(sentence_lengths=(word_ids != -1).sum(axis=-1))
-                yield self.text_to_instance(
-                    entity_name,
-                    word_ids=word_ids[sampled_indices],
-                    entity_position_ids=entity_position_ids[sampled_indices],
-                )
+        for file_path in file_path_list:
+
+            with HyperlinkDataset(file_path, "r") as f:
+                for entity_name, word_ids, entity_position_ids in f.generate_entity_data():
+                    sampled_indices = self.sample_data(sentence_lengths=(word_ids != -1).sum(axis=-1))
+                    yield self.text_to_instance(
+                        entity_name,
+                        word_ids=word_ids[sampled_indices],
+                        entity_position_ids=entity_position_ids[sampled_indices],
+                    )

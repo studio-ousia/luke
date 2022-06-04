@@ -40,11 +40,13 @@ local luke_model_name = std.extVar("LUKE_MODEL_NAME");
             type: "custom_linear_with_warmup",
             warmup_ratio: 0.06
         },
-        num_gradient_accumulation_steps: 1,
+        num_gradient_accumulation_steps: 16,
         patience: 2,
         validation_metric: "-loss"
     },
-    data_loader: {batch_size: 8, shuffle: true},
+    data_loader: {batch_size: 8, shuffle: true, batches_per_epoch: 50000, max_instances_in_memory: 32768, num_workers: 1},
+    validation_data_loader: {batch_size: 8, shuffle: false},
+    vocabulary: {type: "empty"},
     random_seed: 0,
     numpy_seed: 0,
     pytorch_seed: 0
