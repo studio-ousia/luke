@@ -13,7 +13,7 @@ joblib = "^1.1.0"
 marisa-trie = "^0.7.7"
 sentencepiece = "^0.1.96"
 tqdm = "^4.63.0"
-ujson = "^5.1.0"
+ujson = "^5.4.0"
 wikipedia2vec = "^1.0.5"
 transformers = "4.13.0"
 allennlp = {extras = ["checklist"], version = "^2.9.2"}
