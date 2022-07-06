@@ -200,8 +200,7 @@ class EntityVocab:
         title_dict[MASK_TOKEN] = 0
 
         for title in white_list:
-            if counter[title] != 0:
-                title_dict[title] = counter[title]
+            title_dict[title] = counter[title]
 
         if not white_list_only:
             valid_titles = frozenset(dump_db.titles())
