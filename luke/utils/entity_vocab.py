@@ -212,6 +212,7 @@ class EntityVocab:
                     if len(title_dict) == vocab_size:
                         break
 
+        Path(out_file).parent.mkdir(exist_ok=True, parents=True)
         with open(out_file, "w") as f:
             for ent_id, (title, count) in enumerate(title_dict.items()):
                 if 0 < count < min_count:
