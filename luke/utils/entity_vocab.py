@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 @click.argument("dump_db_file", type=click.Path())
 @click.argument("out_file", type=click.Path())
 @click.option("--vocab-size", default=1000000)
+@click.option("--min-count", default=0)
 @click.option("-w", "--white-list", type=click.File(), multiple=True)
 @click.option("--white-list-only", is_flag=True)
 @click.option("--pool-size", default=multiprocessing.cpu_count())
@@ -181,6 +182,7 @@ class EntityVocab:
         dump_db: DumpDB,
         out_file: str,
         vocab_size: int,
+        min_count: int,
         white_list: List[str],
         white_list_only: bool,
         pool_size: int,
@@ -212,6 +214,8 @@ class EntityVocab:
 
         with open(out_file, "w") as f:
             for ent_id, (title, count) in enumerate(title_dict.items()):
+                if 0 < count < min_count:
+                    continue
                 json.dump({"id": ent_id, "entities": [[title, language]], "count": count}, f, ensure_ascii=False)
                 f.write("\n")
 
