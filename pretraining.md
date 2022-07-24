@@ -203,6 +203,7 @@ deepspeed \
     --dataset-dir=mluke_pretraining_dataset/* \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
+    --subword-masking　 \
     --fix-bert-weights
 ```
 
@@ -218,6 +219,7 @@ deepspeed \
     --bert-model-name=<BASE_MODEL_NAME> \
     --num-epochs=<NUM_EPOCHS> \
     --reset-optimization-states \
+    --subword-masking　 \
     --resume-checkpoint-id=<STAGE1_LAST_CHECKPOINT_DIR>
 ```
 
