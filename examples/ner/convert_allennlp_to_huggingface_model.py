@@ -1,15 +1,23 @@
-from pathlib import Path
-from transformers.models.luke.modeling_luke import LukeForEntitySpanClassification
-import torch
-from transformers import AutoTokenizer, AutoConfig
 import json
+import logging
+from pathlib import Path
+
 import click
+import torch
+from transformers import AutoConfig, AutoTokenizer
+from transformers.models.luke.modeling_luke import LukeForEntitySpanClassification
+
+logging.basicConfig(
+    format="[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 
 @click.command()
 @click.argument("serialization-dir", type=click.Path(exists=True))
 @click.argument("save-dir", type=click.Path())
 def convert_allennlp_to_huggingface_model(serialization_dir: str, save_dir: str):
+    logger.info(f"Loading allennlp data from {serialization_dir}...")
     model_weights_path = Path(serialization_dir) / "best.th"
     config_path = Path(serialization_dir) / "config.json"
     vocabulary_path = Path(serialization_dir) / "vocabulary/labels.txt"
@@ -48,6 +56,7 @@ def convert_allennlp_to_huggingface_model(serialization_dir: str, save_dir: str)
     downstream_luke_model.load_state_dict(huggingface_model_weights, strict=True)
     downstream_luke_model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)
+    logger.info(f"Saved hugging face model in {save_dir}.")
 
 
 if __name__ == "__main__":
