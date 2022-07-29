@@ -61,3 +61,9 @@ allennlp evaluate results/ner/luke-large /data/ner_conll/en/test.txt --include-p
 # example of mLUKE (cross-lingual transfer)
 allennlp evaluate results/ner/mluke-base data/ner_conll/de/deu.testb.bio --include-package examples --output-file results/ner/mluke-base/metrics_de_test.json --cuda 0
 ```
+
+
+## Conversion from Allennlp to HuggingFace Model
+```bash
+python examples/ner/convert_allennlp_to_huggingface_model.py SERIALIZATION-DIR SAVE-DIR
+```
