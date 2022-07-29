@@ -7,9 +7,7 @@ import torch
 from transformers import AutoConfig, AutoTokenizer
 from transformers.models.luke.modeling_luke import LukeForEntitySpanClassification
 
-logging.basicConfig(
-    format="[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)", level=logging.INFO
-)
+logging.basicConfig(format="[%(asctime)s] [%(levelname)s] %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
