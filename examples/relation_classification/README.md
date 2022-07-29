@@ -91,3 +91,8 @@ allennlp predict RESULT_SAVE_DIR INPUT_FILE --use-dataset-reader --include-packa
 allennlp predict results/relation_classification/luke-large data/tacred/dev.json --use-dataset-reader --include-package examples --cuda-device 0 --output-file results/relation_classification/luke-large/prediction.json
 ```
 
+
+## Conversion from Allennlp to HuggingFace Model
+```bash
+python examples/relation_classification/convert_allennlp_to_huggingface_model.py SERIALIZATION-DIR SAVE-DIR
+```
