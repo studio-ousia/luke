@@ -48,3 +48,7 @@ def convert_allennlp_to_huggingface_model(serialization_dir: str, save_dir: str)
     downstream_luke_model.load_state_dict(huggingface_model_weights, strict=True)
     downstream_luke_model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)
+
+
+if __name__ == "__main__":
+    convert_allennlp_to_huggingface_model()
