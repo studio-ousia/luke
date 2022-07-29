@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 import torch
 from transformers import AutoConfig, AutoTokenizer
-from .luke_for_entity_pair_classification import LukeForEntityPairClassification
+from examples.relation_classification.luke_for_entity_pair_classification import LukeForEntityPairClassification
 
 logging.basicConfig(format="[%(asctime)s] [%(levelname)s] %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
