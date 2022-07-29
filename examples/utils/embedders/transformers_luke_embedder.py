@@ -4,6 +4,7 @@ import torch
 from allennlp.modules.token_embedders.token_embedder import TokenEmbedder
 from transformers.models.luke.modeling_luke import LukeModel
 
+
 @TokenEmbedder.register("transformers-luke")
 class TransformersLukeEmbedder(TokenEmbedder):
     def __init__(
