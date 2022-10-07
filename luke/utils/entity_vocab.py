@@ -32,14 +32,15 @@ logger = logging.getLogger(__name__)
 @click.argument("out_file", type=click.Path())
 @click.option("--vocab-size", default=1000000)
 @click.option("--min-count", default=0)
+@click.option("--language", type=str)
 @click.option("-w", "--white-list", type=click.File(), multiple=True)
 @click.option("--white-list-only", is_flag=True)
 @click.option("--pool-size", default=multiprocessing.cpu_count())
 @click.option("--chunk-size", default=100)
-def build_entity_vocab(dump_db_file: str, white_list: List[TextIO], **kwargs):
+def build_entity_vocab(dump_db_file: str, white_list: List[TextIO], language: str, **kwargs):
     dump_db = DumpDB(dump_db_file)
     white_list = [line.rstrip() for f in white_list for line in f]
-    EntityVocab.build(dump_db, white_list=white_list, language=dump_db.language, **kwargs)
+    EntityVocab.build(dump_db, white_list=white_list, language=language, **kwargs)
 
 
 class EntityVocab:
