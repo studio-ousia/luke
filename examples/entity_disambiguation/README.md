@@ -161,7 +161,9 @@ python luke/cli.py \
     --dataset-dir=pretraining_dataset_for_ed \
     --train-batch-size=2048 \
     --num-epochs=6
+```
 
+```bash
 deepspeed \
     --num_gpus=<NUM_GPUS> \
     luke/pretraining/train.py \
@@ -179,6 +181,7 @@ deepspeed \
 ### 6. Create Wikipedia data files
 
 ```bash
+export PYTHONPATH=examples/entity_disambiguation
 python examples/entity_disambiguation/scripts/create_title_data.py \
   --db-file=enwiki.db \
   --output-file=titles.txt
@@ -188,11 +191,22 @@ python examples/entity_disambiguation/scripts/create_redirect_data.py \
   --output-file=redirects.tsv
 ```
 
-### 7. Evaluate model
+### 7. Convert checkpoint file
+
+```bash
+export PYTHONPATH=examples/entity_disambiguation
+python examples/entity_disambiguation/scripts/convert_checkpoint.py \
+    --checkpoint-file=<OUTPUT_DIR>/checkpoints/epoch6/mp_rank_00_model_states.pt \
+    --metadata-file=<OUTPUT_DIR>/metadata.json \
+    --entity-vocab-file=<OUTPUT_DIR>/entity_vocab.jsonl \
+    --output-dir=<MODEL_DIR>
+```
+
+### 8. Evaluate model
 
 ```bash
 python examples/entity_disambiguation/evaluate.py
-  --model-dir=<OUTPUT_DIR> \
+  --model-dir=<MODEL_DIR> \
   --dataset-dir=<DATASET_DIR> \
   --titles-file=titles.txt \
   --redirects-file=redirects.txt \
