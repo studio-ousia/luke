@@ -18,12 +18,12 @@ from model import LukeForEntityDisambiguation
 @click.option("--output-dir", type=click.Path(), required=True)
 def convert_checkpoint(checkpoint_file, metadata_file, entity_vocab_file, output_dir):
     metadata = json.load(metadata_file)
-    config = LukeConfig(
-        entity_emb_size=metadata["model_config"].get("entity_emb_size", metadata["model_config"]["hidden_size"]),
-        use_entity_aware_attention=False,
-        pad_token_id=0,
-        **metadata["model_config"],
-    )
+    if "entity_emb_size" not in metadata["model_config"]:
+        metadata["model_config"]["entity_emb_size"] = metadata["model_config"]["hidden_size"]
+    if "pad_token_id" not in metadata["model_config"]:
+        metadata["model_config"]["pad_token_id"] = 0
+
+    config = LukeConfig(use_entity_aware_attention=False, **metadata["model_config"],)
     model = LukeForEntityDisambiguation(config=config).eval()
 
     state_dict = torch.load(checkpoint_file, map_location="cpu")
@@ -44,7 +44,7 @@ def convert_checkpoint(checkpoint_file, metadata_file, entity_vocab_file, output
     new_state_dict["luke.entity_embeddings.mask_embedding"] = entity_embeddings[entity_vocab["[MASK]"]]
 
     missing_keys, unexpected_keys = model.load_state_dict(new_state_dict, strict=False)
-    assert missing_keys == ["luke.embeddings.position_ids"]
+    assert not missing_keys or missing_keys == ["luke.embeddings.position_ids"]
     assert not unexpected_keys
 
     model.tie_weights()
