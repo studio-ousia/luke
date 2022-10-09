@@ -104,7 +104,8 @@ python luke/cli.py build-entity-vocab \
   enwiki.db \
   entity_vocab.jsonl \
   --white-list=candidates.txt \
-  --white-list-only
+  --white-list-only \
+  --language=en
 ```
 
 **4. Create training dataset**
