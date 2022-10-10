@@ -6,7 +6,7 @@ from collections import Counter, OrderedDict, defaultdict, namedtuple
 from contextlib import closing
 from multiprocessing.pool import Pool
 from pathlib import Path
-from typing import Dict, List, TextIO
+from typing import Dict, List, TextIO, Optional
 
 import click
 from tqdm import tqdm
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 @click.option("--white-list-only", is_flag=True)
 @click.option("--pool-size", default=multiprocessing.cpu_count())
 @click.option("--chunk-size", default=100)
-def build_entity_vocab(dump_db_file: str, white_list: List[TextIO], language: str, **kwargs):
+def build_entity_vocab(dump_db_file: str, white_list: List[TextIO], language: Optional[str], **kwargs):
     dump_db = DumpDB(dump_db_file)
     white_list = [line.rstrip() for f in white_list for line in f]
     EntityVocab.build(dump_db, white_list=white_list, language=language, **kwargs)
@@ -138,21 +138,21 @@ class EntityVocab:
     def __iter__(self):
         return iter(self.vocab)
 
-    def contains(self, title: str, language: str = None):
+    def contains(self, title: str, language: Optional[str] = None):
         return Entity(title, language) in self.vocab
 
-    def get_id(self, title: str, language: str = None, default: int = None) -> int:
+    def get_id(self, title: str, language: Optional[str] = None, default: int = None) -> int:
         try:
             return self.vocab[Entity(title, language)]
         except KeyError:
             return default
 
-    def get_title_by_id(self, id_: int, language: str = None) -> str:
+    def get_title_by_id(self, id_: int, language: Optional[str] = None) -> str:
         for entity in self.inv_vocab[id_]:
             if entity.language == language:
                 return entity.title
 
-    def get_count_by_title(self, title: str, language: str = None) -> int:
+    def get_count_by_title(self, title: str, language: Optional[str] = None) -> int:
         entity = Entity(title, language)
         return self.counter.get(entity, 0)
 
@@ -188,7 +188,7 @@ class EntityVocab:
         white_list_only: bool,
         pool_size: int,
         chunk_size: int,
-        language: str,
+        language: Optional[str],
     ):
         counter = Counter()
         with tqdm(total=dump_db.page_size(), mininterval=0.5) as pbar:

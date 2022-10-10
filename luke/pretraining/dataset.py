@@ -60,7 +60,7 @@ def build_wikipedia_pretraining_dataset(
     tokenizer_name: str,
     entity_vocab_file: str,
     output_dir: str,
-    language: str,
+    language: Optional[str],
     sentence_splitter: str,
     **kwargs
 ):
@@ -171,7 +171,7 @@ class WikipediaPretrainingDataset:
         sentence_splitter: SentenceSplitter,
         entity_vocab: EntityVocab,
         output_dir: str,
-        language: str,
+        language: Optional[str],
         max_seq_length: int,
         max_entity_length: int,
         max_mention_length: int,
@@ -255,7 +255,7 @@ class WikipediaPretrainingDataset:
         tokenizer: PreTrainedTokenizer,
         sentence_splitter: SentenceSplitter,
         entity_vocab: EntityVocab,
-        language: str,
+        language: Optional[str],
         max_num_tokens: int,
         max_entity_length: int,
         max_mention_length: int,
