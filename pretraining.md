@@ -116,7 +116,8 @@ python luke/cli.py \
     <BASE_MODEL_NAME> \
     mluke_entity_vocab.jsonl \
     "mluke_pretraining_dataset/${l}" \
-    --sentence-splitter=$l
+    --sentence-splitter=$l \
+    --language $l 
 ```
 
 ## 5. Compute the number of training steps

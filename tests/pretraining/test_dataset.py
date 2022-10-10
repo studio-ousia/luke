@@ -29,6 +29,7 @@ def test_build_and_read_dataset():
             sentence_tokenizer,
             entity_vocab,
             temp_directory_path,
+            language=None,
             max_seq_length=512,
             max_entity_length=128,
             max_mention_length=30,

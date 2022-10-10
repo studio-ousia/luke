@@ -42,6 +42,7 @@ _abstract_only = _language = None
 @click.argument("tokenizer_name")
 @click.argument("entity_vocab_file", type=click.Path(exists=True))
 @click.argument("output_dir", type=click.Path(file_okay=False))
+@click.option("--language", type=str)
 @click.option("--sentence-splitter", default="en")
 @click.option("--max-seq-length", default=512)
 @click.option("--max-entity-length", default=128)
@@ -55,7 +56,13 @@ _abstract_only = _language = None
 @click.option("--max-num-documents", default=None, type=int)
 @click.option("--predefined-entities-only", is_flag=True)
 def build_wikipedia_pretraining_dataset(
-    dump_db_file: str, tokenizer_name: str, entity_vocab_file: str, output_dir: str, sentence_splitter: str, **kwargs
+    dump_db_file: str,
+    tokenizer_name: str,
+    entity_vocab_file: str,
+    output_dir: str,
+    language: Optional[str],
+    sentence_splitter: str,
+    **kwargs
 ):
     dump_db = DumpDB(dump_db_file)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=False)
@@ -65,7 +72,9 @@ def build_wikipedia_pretraining_dataset(
         os.makedirs(output_dir)
 
     entity_vocab = EntityVocab(entity_vocab_file)
-    WikipediaPretrainingDataset.build(dump_db, tokenizer, sentence_splitter, entity_vocab, output_dir, **kwargs)
+    WikipediaPretrainingDataset.build(
+        dump_db, tokenizer, sentence_splitter, entity_vocab, output_dir, language, **kwargs
+    )
 
 
 class WikipediaPretrainingDataset:
@@ -162,6 +171,7 @@ class WikipediaPretrainingDataset:
         sentence_splitter: SentenceSplitter,
         entity_vocab: EntityVocab,
         output_dir: str,
+        language: Optional[str],
         max_seq_length: int,
         max_entity_length: int,
         max_mention_length: int,
@@ -182,8 +192,7 @@ class WikipediaPretrainingDataset:
         ]
 
         if predefined_entities_only:
-            lang = dump_db.language  # None <- entity_vocab の parse に合わせる
-            target_titles = [title for title in target_titles if entity_vocab.contains(title, lang)]
+            target_titles = [title for title in target_titles if entity_vocab.contains(title, language)]
 
         random.shuffle(target_titles)
 
@@ -205,6 +214,7 @@ class WikipediaPretrainingDataset:
                     tokenizer,
                     sentence_splitter,
                     entity_vocab,
+                    language,
                     max_num_tokens,
                     max_entity_length,
                     max_mention_length,
@@ -233,7 +243,7 @@ class WikipediaPretrainingDataset:
                     max_mention_length=max_mention_length,
                     min_sentence_length=min_sentence_length,
                     tokenizer_class=tokenizer.__class__.__name__,
-                    language=dump_db.language,
+                    language=language,
                 ),
                 metadata_file,
                 indent=2,
@@ -245,6 +255,7 @@ class WikipediaPretrainingDataset:
         tokenizer: PreTrainedTokenizer,
         sentence_splitter: SentenceSplitter,
         entity_vocab: EntityVocab,
+        language: Optional[str],
         max_num_tokens: int,
         max_entity_length: int,
         max_mention_length: int,
@@ -269,7 +280,7 @@ class WikipediaPretrainingDataset:
         _include_sentences_without_entities = include_sentences_without_entities
         _include_unk_entities = include_unk_entities
         _abstract_only = abstract_only
-        _language = dump_db.language
+        _language = language
 
     @staticmethod
     def _process_page(page_title: str):
