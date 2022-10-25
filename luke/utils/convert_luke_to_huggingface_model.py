@@ -1,11 +1,57 @@
+from typing import Union, Tuple, TypeVar
 import json
 import os
 from collections import OrderedDict
 
 import click
 import torch
-from transformers import LukeConfig, LukeForMaskedLM, AutoTokenizer
+from transformers import LukeConfig, LukeForMaskedLM, AutoTokenizer, LukeTokenizer, MLukeTokenizer
 from transformers.tokenization_utils_base import AddedToken
+
+LukeTokenizerType = TypeVar("LukeTokenizerType", bound=Union[LukeTokenizer, MLukeTokenizer])
+
+
+def remove_entity_embeddings_from_luke(
+    model: LukeForMaskedLM, tokenizer: LukeTokenizerType
+) -> Tuple[LukeForMaskedLM, LukeTokenizerType]:
+    """
+    This script modifies the Luke model into one without entity embeddings.
+    """
+
+    if model.entity_predictions.decoder.bias:
+        raise ValueError(
+            "The bias paramter should not present at 'model.entity_predictions.decoder.bias'."
+            "We assume the bias weight is at 'model.entity_predictions.bias'."
+        )
+
+    if not (model.entity_predictions.decoder.weight == model.luke.entity_embeddings.entity_embeddings.weight).all():
+        raise ValueError("Currently this script only supports model with tied entity embeddings.")
+
+    entity_vocab = tokenizer.entity_vocab
+    old_special_token_indices = [
+        entity_vocab["[MASK]"],
+        entity_vocab["[UNK]"],
+        entity_vocab["[PAD]"],
+        entity_vocab["[MASK2]"],
+    ]
+
+    new_entity_embeddings = model.luke.entity_embeddings.entity_embeddings.weight.data[old_special_token_indices]
+    new_entity_prediction_bias = model.entity_predictions.bias.data[old_special_token_indices]
+
+    new_entity_vocab = {"[MASK]": 0, "[UNK]": 1, "[PAD]": 2, "[MASK2]": 3}
+
+    model.luke.entity_embeddings.entity_embeddings.weight.data = new_entity_embeddings
+    model.luke.entity_embeddings.entity_embeddings.num_embeddings = len(new_entity_vocab)
+
+    model.entity_predictions.decoder.weight.data = new_entity_embeddings
+    model.entity_predictions.decoder.out_features = len(new_entity_vocab)
+
+    model.entity_predictions.bias.data = new_entity_prediction_bias
+
+    tokenizer.entity_vocab = new_entity_vocab
+
+    model.config.entity_vocab_size = len(new_entity_vocab)
+    return model, tokenizer
 
 
 @click.command()
@@ -42,6 +88,11 @@ from transformers.tokenization_utils_base import AddedToken
     help="If true, use_entity_aware_attention is set to true in the model config.",
     required=True,
 )
+@click.option(
+    "--remove-entity-embeddings",
+    is_flag=True,
+    help="If true, the entity embeddings will be removed to make a lite-weight model.",
+)
 def convert_luke_to_huggingface_model(
     checkpoint_path: str,
     metadata_path: str,
@@ -49,6 +100,7 @@ def convert_luke_to_huggingface_model(
     transformers_model_save_path: str,
     tokenizer_class: str,
     set_entity_aware_attention_default: bool,
+    remove_entity_embeddings: bool,
 ):
     # Load configuration defined in the metadata file
     with open(metadata_path) as metadata_file:
@@ -146,6 +198,9 @@ def convert_luke_to_huggingface_model(
     model.tie_weights()
     assert (model.luke.embeddings.word_embeddings.weight == model.lm_head.decoder.weight).all()
     assert (model.luke.entity_embeddings.entity_embeddings.weight == model.entity_predictions.decoder.weight).all()
+
+    if remove_entity_embeddings:
+        model, tokenizer = remove_entity_embeddings_from_luke(model, tokenizer)
 
     # Finally, save our PyTorch model and tokenizer
     print(f"Saving PyTorch model to {transformers_model_save_path}")
