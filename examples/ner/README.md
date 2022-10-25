@@ -22,6 +22,10 @@ You may find the result a little higher than [the original paper of LUKE](https:
 # Reproduce the result of studio-ousia/mluke-large-lite-finetuned-conll-2003
 python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/de/deu.testb.bio  studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0
 
+poetry run python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/en/test.txt  studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0
+
+
+
 # When the input file has a file encoding different from utf-8, you should specify it with --file-encoding.
 python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/es/esp.testb studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0 --file-encoding ISO-8859-1
 
