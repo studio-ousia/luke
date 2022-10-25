@@ -92,7 +92,6 @@ def remove_entity_embeddings_from_luke(
     "--remove-entity-embeddings",
     type=bool,
     help="If true, the entity embeddings will be removed to make a lite-weight model.",
-    required=True,
 )
 def convert_luke_to_huggingface_model(
     checkpoint_path: str,
