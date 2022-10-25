@@ -230,6 +230,8 @@ Specify the saved files and choose the appropriate tokenizer class (`--tokenizer
 
 The option `--set-entity-aware-attention-default` specifies whether the weights for the entity-aware attention is used by default when later loading the model from Transformers. 
 Note that even when you didn't use the entity-aware attention during pretraining, the weights are copied from the standard attention, and you can still use the entity-aware attention during fine-tuning.
+
+You can also specify `--remove-entity-embeddings` option to make a lite-weight model without entity embeddings but still with knowledge-enhanced word representations.
 ```bash
 python luke/cli.py \
     convert-luke-to-huggingface-model \ 
