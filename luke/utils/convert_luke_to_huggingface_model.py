@@ -90,7 +90,7 @@ def remove_entity_embeddings_from_luke(
 )
 @click.option(
     "--remove-entity-embeddings",
-    type=bool,
+    is_flag=True,
     help="If true, the entity embeddings will be removed to make a lite-weight model.",
 )
 def convert_luke_to_huggingface_model(
