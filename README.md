@@ -24,17 +24,42 @@ to solve downstream tasks.
 
 ## News
 
+**October 27, 2022: The Japanese version of LUKE is available**
+
+The Japanese version of LUKE is now available on the Hugging Face Model Hub:
+
+- [luke-japanese-base](https://huggingface.co/studio-ousia/luke-japanese-base)
+- [luke-japanese-base-lite](https://huggingface.co/studio-ousia/luke-japanese-base-lite)
+
+This model outperforms other base-sized models on four datasets in
+[JGLUE](https://github.com/yahoojapan/JGLUE).
+
+| Model                  | MARC-ja   | JSTS                | JNLI      | JCommonsenseQA |
+| ---------------------- | --------- | ------------------- | --------- | -------------- |
+|                        | acc       | Pearson/Spearman    | acc       | acc            |
+| **LUKE Japanese base** | **0.965** | **0.912**/**0.875** | **0.912** | **0.842**      |
+| _Baselines:_           |           |
+| Tohoku BERT base       | 0.958     | 0.899/0.859         | 0.899     | 0.808          |
+| NICT BERT base         | 0.958     | 0.903/0.867         | 0.902     | 0.823          |
+| Waseda RoBERTa base    | 0.962     | 0.901/0.865         | 0.895     | 0.840          |
+| XLM RoBERTa base       | 0.961     | 0.870/0.825         | 0.893     | 0.687          |
+
 **April 13, 2022: The mLUKE fine-tuning code is available**
 
-[The example code](examples) is updated.
-Now it is based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers).
-You can reproduce the experiments in the [LUKE](https://arxiv.org/abs/2010.01057) and [mLUKE](https://arxiv.org/abs/2110.08151) papers with this implementation.
-For the details, please see `README.md` under each example directory.
-The older code used in [the LUKE paper](https://arxiv.org/abs/2010.01057) has been moved to [`examples/legacy`](examples/legacy).
+[The example code](examples) is updated. Now it is based on
+[allennlp](https://github.com/allenai/allennlp) and
+[transformers](https://github.com/huggingface/transformers). You can reproduce
+the experiments in the [LUKE](https://arxiv.org/abs/2010.01057) and
+[mLUKE](https://arxiv.org/abs/2110.08151) papers with this implementation. For
+the details, please see `README.md` under each example directory. The older code
+used in [the LUKE paper](https://arxiv.org/abs/2010.01057) has been moved to
+[`examples/legacy`](examples/legacy).
 
-**April 13, 2022: The detailed instructions for pretraining LUKE models are available**
+**April 13, 2022: The detailed instructions for pretraining LUKE models are
+available**
 
-For those interested in pretraining LUKE models, we explain how to prepare datasets and run the pretraining code on [`pretraining.md`](pretraining.md).
+For those interested in pretraining LUKE models, we explain how to prepare
+datasets and run the pretraining code on [`pretraining.md`](pretraining.md).
 
 **November 24, 2021: Entity disambiguation example is available**
 
@@ -141,8 +166,10 @@ The virtual environment automatically created by Poetry can be activated by
 
 **A note on installing `torch`**
 
-The pytorch installed via `poetry install` does not necessarily match your hardware.
-In such case, see [the official site](https://pytorch.org/) and reinstall the correct version with the `pip` command.
+The pytorch installed via `poetry install` does not necessarily match your
+hardware. In such case, see [the official site](https://pytorch.org/) and
+reinstall the correct version with the `pip` command.
+
 ```bash
 poetry run pip3 uninstall torch torchvision torchaudio
 # Example for Linux with CUDA 11.3
@@ -151,44 +178,64 @@ poetry run pip3 install torch torchvision torchaudio --extra-index-url https://d
 
 ## Released Models
 
-Our pretrained models can be used with the [transformers](https://github.com/huggingface/transformers) library.
-The model documentations can be found in the following links: [LUKE](https://huggingface.co/docs/transformers/main/en/model_doc/luke) and [mLUKE](https://huggingface.co/docs/transformers/main/en/model_doc/mluke).
+Our pretrained models can be used with the
+[transformers](https://github.com/huggingface/transformers) library. The model
+documentations can be found in the following links:
+[LUKE](https://huggingface.co/docs/transformers/main/en/model_doc/luke) and
+[mLUKE](https://huggingface.co/docs/transformers/main/en/model_doc/mluke).
 
-Currently, the following models are available on [the Hugging Face Model Hub](https://huggingface.co/models).
+Currently, the following models are available on
+[the Hugging Face Model Hub](https://huggingface.co/models).
 
-|       Name        |model_name|Entity Vocab Size| Params |
-|:-----------------:|:----:|:----:|:------:|
-|  **LUKE (base)**  |[studio-ousia/luke-base](https://huggingface.co/studio-ousia/luke-base)|500K| 253 M  |
-| **LUKE (large)**  |[studio-ousia/luke-large](https://huggingface.co/studio-ousia/luke-large)|500K| 484 M  |
-| **mLUKE (base)**  |[studio-ousia/mluke-base](https://huggingface.co/studio-ousia/mluke-base)|1.2M| 586 M  |
-| **mLUKE (large)** |[studio-ousia/mluke-large](https://huggingface.co/studio-ousia/mluke-large)|1.2M| 868 M  |
+|           Name           |                                        model_name                                         | Entity Vocab Size | Params |
+| :----------------------: | :---------------------------------------------------------------------------------------: | :---------------: | :----: |
+|     **LUKE (base)**      |          [studio-ousia/luke-base](https://huggingface.co/studio-ousia/luke-base)          |       500K        | 253 M  |
+|     **LUKE (large)**     |         [studio-ousia/luke-large](https://huggingface.co/studio-ousia/luke-large)         |       500K        | 484 M  |
+|     **mLUKE (base)**     |         [studio-ousia/mluke-base](https://huggingface.co/studio-ousia/mluke-base)         |       1.2M        | 586 M  |
+|    **mLUKE (large)**     |        [studio-ousia/mluke-large](https://huggingface.co/studio-ousia/mluke-large)        |       1.2M        | 868 M  |
+| **LUKE Japanese (base)** | [studio-ousia/luke-japanese-base](https://huggingface.co/studio-ousia/luke-japanese-base) |       570K        | 281 M  |
 
 ### Lite Models
-The entity embeddings cause a large memory footprint as they contain all the Wikipedia entities that we used in pretraining.
-However, in some downstream tasks (e.g., entity typing, named entity recognition, and relation classification), we only need special entity embeddings such as `[MASK]`.
-Also, you may want to only use the word representations.
 
-With such use-cases in mind, to make our models easier to use, we have uploaded lite models only with special entity embeddings.
-These models perform exactly the same as the full models but have much fewer parameters, which enable fine-tuning the model with small GPUs.
+The entity embeddings cause a large memory footprint as they contain all the
+Wikipedia entities that we used in pretraining. However, in some downstream
+tasks (e.g., entity typing, named entity recognition, and relation
+classification), we only need special entity embeddings such as `[MASK]`. Also,
+you may want to only use the word representations.
 
-|Name|                                  model_name                                  |Params|
-|:----:|:----------------------------------------------------------------------------:|:----:|
-|**LUKE (base)** | [studio-ousia/luke-base-lite](https://huggingface.co/studio-ousia/luke-base-lite) |125 M|
-|**LUKE (large)** |  [studio-ousia/luke-large-lite](https://huggingface.co/studio-ousia/luke-large-lite)   |356 M|
-|**mLUKE (base)** |  [studio-ousia/mluke-base-lite](https://huggingface.co/studio-ousia/mluke-base-lite)   |279 M|
-|**mLUKE (large)** | [studio-ousia/mluke-large-lite](https://huggingface.co/studio-ousia/mluke-large-lite)  |561 M|
+With such use-cases in mind, to make our models easier to use, we have uploaded
+lite models only with special entity embeddings. These models perform exactly
+the same as the full models but have much fewer parameters, which enable
+fine-tuning the model with small GPUs.
 
+|           Name           |                                             model_name                                              | Params |
+| :----------------------: | :-------------------------------------------------------------------------------------------------: | :----: |
+|     **LUKE (base)**      |          [studio-ousia/luke-base-lite](https://huggingface.co/studio-ousia/luke-base-lite)          | 125 M  |
+|     **LUKE (large)**     |         [studio-ousia/luke-large-lite](https://huggingface.co/studio-ousia/luke-large-lite)         | 356 M  |
+|     **mLUKE (base)**     |         [studio-ousia/mluke-base-lite](https://huggingface.co/studio-ousia/mluke-base-lite)         | 279 M  |
+|    **mLUKE (large)**     |        [studio-ousia/mluke-large-lite](https://huggingface.co/studio-ousia/mluke-large-lite)        | 561 M  |
+| **LUKE Japanese (base)** | [studio-ousia/luke-japanese-base-lite](https://huggingface.co/studio-ousia/luke-japanese-base-lite) | 134 M  |
 
 ## Fine-tuning LUKE models
-We release the fine-tuning code based on [allennlp](https://github.com/allenai/allennlp) and [transformers](https://github.com/huggingface/transformers) under [`examples`](examples).
-You can run fine-tuning experiments very easily with pre-defined config files and the `allennlp train` command.
-For the details and example commands for each task, please see the task directory under [`examples`](examples). 
+
+We release the fine-tuning code based on
+[allennlp](https://github.com/allenai/allennlp) and
+[transformers](https://github.com/huggingface/transformers) under
+[`examples`](examples). You can run fine-tuning experiments very easily with
+pre-defined config files and the `allennlp train` command. For the details and
+example commands for each task, please see the task directory under
+[`examples`](examples).
 
 ## Pretraining LUKE models
-The detailed instructions for pretraining luke models can be found on [`pretraining.md`](pretraining.md).
+
+The detailed instructions for pretraining luke models can be found on
+[`pretraining.md`](pretraining.md).
 
 ## Citation
-If you use LUKE in your work, please cite the [original paper](https://aclanthology.org/2020.emnlp-main.523/).
+
+If you use LUKE in your work, please cite the
+[original paper](https://aclanthology.org/2020.emnlp-main.523/).
+
 ```
 @inproceedings{yamada-etal-2020-luke,
     title = "{LUKE}: Deep Contextualized Entity Representations with Entity-aware Self-attention",
@@ -205,8 +252,9 @@ If you use LUKE in your work, please cite the [original paper](https://aclanthol
 }
 ```
 
+For mLUKE, please cite
+[this paper](https://aclanthology.org/2022.acl-long.505/).
 
-For mLUKE, please cite [this paper](https://aclanthology.org/2022.acl-long.505/).
 ```
 @inproceedings{ri-etal-2022-mluke,
     title = "m{LUKE}: {T}he Power of Entity Representations in Multilingual Pretrained Language Models",
