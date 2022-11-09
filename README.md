@@ -24,6 +24,26 @@ to solve downstream tasks.
 
 ## News
 
+**November 9, 2022: The large version of LUKE-Japanese is available**
+
+The large version of LUKE-Japanese is available on the Hugging Face Model Hub:
+
+- [luke-japanese-large](https://huggingface.co/studio-ousia/luke-japanese-large)
+- [luke-japanese-large-lite](https://huggingface.co/studio-ousia/luke-japanese-large-lite)
+
+This model achieves state-of-the-art results on three datasets in
+[JGLUE](https://github.com/yahoojapan/JGLUE).
+
+| Model                         | MARC-ja   | JSTS                | JNLI      | JCommonsenseQA |
+| ----------------------------- | --------- | ------------------- | --------- | -------------- |
+|                               | acc       | Pearson/Spearman    | acc       | acc            |
+| **LUKE Japanese large**       | **0.965** | **0.932**/**0.902** | **0.927** | 0.893          |
+| _Baselines:_                  |           |
+| Tohoku BERT large             | 0.955     | 0.913/0.872         | 0.900     | 0.816          |
+| Waseda RoBERTa large (seq128) | 0.954     | 0.930/0.896         | 0.924     | **0.907**      |
+| Waseda RoBERTa large (seq512) | 0.961     | 0.926/0.892         | 0.926     | 0.891          |
+| XLM RoBERTa large             | 0.964     | 0.918/0.884         | 0.919     | 0.840          |
+
 **October 27, 2022: The Japanese version of LUKE is available**
 
 The Japanese version of LUKE is now available on the Hugging Face Model Hub:
@@ -37,12 +57,12 @@ This model outperforms other base-sized models on four datasets in
 | Model                  | MARC-ja   | JSTS                | JNLI      | JCommonsenseQA |
 | ---------------------- | --------- | ------------------- | --------- | -------------- |
 |                        | acc       | Pearson/Spearman    | acc       | acc            |
-| **LUKE Japanese base** | **0.965** | **0.912**/**0.875** | **0.912** | **0.842**      |
+| **LUKE Japanese base** | **0.965** | **0.916**/**0.877** | **0.912** | **0.842**      |
 | _Baselines:_           |           |
-| Tohoku BERT base       | 0.958     | 0.899/0.859         | 0.899     | 0.808          |
-| NICT BERT base         | 0.958     | 0.903/0.867         | 0.902     | 0.823          |
-| Waseda RoBERTa base    | 0.962     | 0.901/0.865         | 0.895     | 0.840          |
-| XLM RoBERTa base       | 0.961     | 0.870/0.825         | 0.893     | 0.687          |
+| Tohoku BERT base       | 0.958     | 0.909/0.868         | 0.899     | 0.808          |
+| NICT BERT base         | 0.958     | 0.910/0.871         | 0.902     | 0.823          |
+| Waseda RoBERTa base    | 0.962     | 0.913/0.873         | 0.895     | 0.840          |
+| XLM RoBERTa base       | 0.961     | 0.877/0.831         | 0.893     | 0.687          |
 
 **April 13, 2022: The mLUKE fine-tuning code is available**
 
@@ -187,13 +207,14 @@ documentations can be found in the following links:
 Currently, the following models are available on
 [the Hugging Face Model Hub](https://huggingface.co/models).
 
-|           Name           |                                        model_name                                         | Entity Vocab Size | Params |
-| :----------------------: | :---------------------------------------------------------------------------------------: | :---------------: | :----: |
-|     **LUKE (base)**      |          [studio-ousia/luke-base](https://huggingface.co/studio-ousia/luke-base)          |       500K        | 253 M  |
-|     **LUKE (large)**     |         [studio-ousia/luke-large](https://huggingface.co/studio-ousia/luke-large)         |       500K        | 484 M  |
-|     **mLUKE (base)**     |         [studio-ousia/mluke-base](https://huggingface.co/studio-ousia/mluke-base)         |       1.2M        | 586 M  |
-|    **mLUKE (large)**     |        [studio-ousia/mluke-large](https://huggingface.co/studio-ousia/mluke-large)        |       1.2M        | 868 M  |
-| **LUKE Japanese (base)** | [studio-ousia/luke-japanese-base](https://huggingface.co/studio-ousia/luke-japanese-base) |       570K        | 281 M  |
+|           Name            |                                         model_name                                          | Entity Vocab Size | Params |
+| :-----------------------: | :-----------------------------------------------------------------------------------------: | :---------------: | :----: |
+|      **LUKE (base)**      |           [studio-ousia/luke-base](https://huggingface.co/studio-ousia/luke-base)           |       500K        | 253 M  |
+|     **LUKE (large)**      |          [studio-ousia/luke-large](https://huggingface.co/studio-ousia/luke-large)          |       500K        | 484 M  |
+|     **mLUKE (base)**      |          [studio-ousia/mluke-base](https://huggingface.co/studio-ousia/mluke-base)          |       1.2M        | 586 M  |
+|     **mLUKE (large)**     |         [studio-ousia/mluke-large](https://huggingface.co/studio-ousia/mluke-large)         |       1.2M        | 868 M  |
+| **LUKE Japanese (base)**  |  [studio-ousia/luke-japanese-base](https://huggingface.co/studio-ousia/luke-japanese-base)  |       570K        | 281 M  |
+| **LUKE Japanese (large)** | [studio-ousia/luke-japanese-large](https://huggingface.co/studio-ousia/luke-japanese-large) |       570K        | 562 M  |
 
 ### Lite Models
 
@@ -208,13 +229,14 @@ lite models only with special entity embeddings. These models perform exactly
 the same as the full models but have much fewer parameters, which enable
 fine-tuning the model with small GPUs.
 
-|           Name           |                                             model_name                                              | Params |
-| :----------------------: | :-------------------------------------------------------------------------------------------------: | :----: |
-|     **LUKE (base)**      |          [studio-ousia/luke-base-lite](https://huggingface.co/studio-ousia/luke-base-lite)          | 125 M  |
-|     **LUKE (large)**     |         [studio-ousia/luke-large-lite](https://huggingface.co/studio-ousia/luke-large-lite)         | 356 M  |
-|     **mLUKE (base)**     |         [studio-ousia/mluke-base-lite](https://huggingface.co/studio-ousia/mluke-base-lite)         | 279 M  |
-|    **mLUKE (large)**     |        [studio-ousia/mluke-large-lite](https://huggingface.co/studio-ousia/mluke-large-lite)        | 561 M  |
-| **LUKE Japanese (base)** | [studio-ousia/luke-japanese-base-lite](https://huggingface.co/studio-ousia/luke-japanese-base-lite) | 134 M  |
+|           Name            |                                              model_name                                               | Params |
+| :-----------------------: | :---------------------------------------------------------------------------------------------------: | :----: |
+|      **LUKE (base)**      |           [studio-ousia/luke-base-lite](https://huggingface.co/studio-ousia/luke-base-lite)           | 125 M  |
+|     **LUKE (large)**      |          [studio-ousia/luke-large-lite](https://huggingface.co/studio-ousia/luke-large-lite)          | 356 M  |
+|     **mLUKE (base)**      |          [studio-ousia/mluke-base-lite](https://huggingface.co/studio-ousia/mluke-base-lite)          | 279 M  |
+|     **mLUKE (large)**     |         [studio-ousia/mluke-large-lite](https://huggingface.co/studio-ousia/mluke-large-lite)         | 561 M  |
+| **LUKE Japanese (base)**  |  [studio-ousia/luke-japanese-base-lite](https://huggingface.co/studio-ousia/luke-japanese-base-lite)  | 134 M  |
+| **LUKE Japanese (large)** | [studio-ousia/luke-japanese-large-lite](https://huggingface.co/studio-ousia/luke-japanese-large-lite) | 415 M  |
 
 ## Fine-tuning LUKE models
 
