@@ -36,6 +36,7 @@ tokenizer_name_mapping = {
 @click.option("--cuda-device", type=int, default=0)
 @click.option("--result-save-path", type=click.Path(exists=False), default=None)
 @click.option("--prediction-save-path", type=click.Path(exists=False), default=None)
+@click.option("--iob-scheme", type=str, default="iob1")
 @click.option("--file-encoding", type=str, default="utf-8")
 def evaluate_transformers_checkpoint(
     data_path: str,
@@ -46,6 +47,7 @@ def evaluate_transformers_checkpoint(
     cuda_device: int,
     result_save_path: str,
     prediction_save_path: str,
+    iob_scheme: str,
     file_encoding: str,
 ):
     """
@@ -63,6 +65,9 @@ def evaluate_transformers_checkpoint(
     batch_size : int
     cuda_device : int
     result_save_path : str
+    prediction_save_path: str
+    iob_scheme: str
+    file_encoding: str
     """
     import_module_and_submodules("examples")
 
@@ -77,6 +82,7 @@ def evaluate_transformers_checkpoint(
         ),
         token_indexers={"tokens": PretrainedTransformerIndexer(model_name=checkpoint_tokenizer_name)},
         use_entity_feature=True,
+        iob_scheme=iob_scheme,
         encoding=file_encoding,
     )
 
