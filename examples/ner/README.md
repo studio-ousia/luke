@@ -20,10 +20,10 @@ You may find the result a little higher than [the original paper of LUKE](https:
 ### mLUKE-large
 ```bash
 # Reproduce the result of studio-ousia/mluke-large-lite-finetuned-conll-2003
-python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/de/deu.testb.bio  studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0
+python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/de/deu.testb.bio  studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0 --iob-scheme iob2
 
 # When the input file has a file encoding different from utf-8, you should specify it with --file-encoding.
-python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/es/esp.testb studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0 --file-encoding ISO-8859-1
+python examples/ner/evaluate_transformers_checkpoint.py data/ner_conll/es/esp.testb studio-ousia/mluke-large-lite-finetuned-conll-2003 --cuda-device 0 --iob-scheme iob2 --file-encoding ISO-8859-1
 
 # Expected results for each language.
 # {"en": 94.1, "de": 78.8 "nl": 82.4 "es": 82.2", "average": 84.4}  
