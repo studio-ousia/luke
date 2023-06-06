@@ -97,8 +97,10 @@ class ConllSpanReader(DatasetReader):
 
         if isinstance(self.tokenizer.tokenizer, (LukeTokenizer, MLukeTokenizer)):
             self.entity_id = self.tokenizer.tokenizer.entity_vocab["[MASK]"]
+            self.entity_pad_id = self.tokenizer.tokenizer.entity_vocab["[PAD]"]
         else:
             self.entity_id = 1
+            self.entity_pad_id = 0
 
     def data_to_instance(self, words: List[str], labels: List[str], sentence_boundaries: List[int], doc_index: str):
         if self.tokenizer is None:
@@ -203,8 +205,9 @@ class ConllSpanReader(DatasetReader):
                 if self.use_entity_feature:
                     fields.update(
                         {
-                            "entity_ids": TensorField(np.array(entity_ids[start:end]), padding_value=0),
+                            "entity_ids": TensorField(np.array(entity_ids[start:end]), padding_value=self.entity_pad_id),
                             "entity_position_ids": TensorField(np.array(entity_position_ids[start:end])),
+                            "entity_attention_mask": TensorField(np.ones(len(entity_ids[start:end]), dtype=np.int64), padding_value=0),
                         }
                     )
 

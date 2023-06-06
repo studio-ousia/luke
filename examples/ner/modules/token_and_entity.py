@@ -24,11 +24,12 @@ class TokenEntityNERFeatureExtractor(NERFeatureExtractor):
         entity_end_positions: torch.LongTensor,
         entity_ids: torch.LongTensor = None,
         entity_position_ids: torch.LongTensor = None,
+        entity_attention_mask: torch.LongTensor = None,
     ):
 
         inputs["entity_ids"] = entity_ids
         inputs["entity_position_ids"] = entity_position_ids
-        inputs["entity_attention_mask"] = entity_ids != 0
+        inputs["entity_attention_mask"] = entity_attention_mask
 
         token_embeddings, entity_embeddings = self.embedder(**inputs)
         embedding_size = token_embeddings.size(-1)

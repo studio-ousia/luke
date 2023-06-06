@@ -43,11 +43,12 @@ class ExhaustiveNERModel(Model):
         labels: torch.LongTensor = None,
         entity_ids: torch.LongTensor = None,
         entity_position_ids: torch.LongTensor = None,
+        entity_attention_mask: torch.LongTensor = None,
         input_words: List[List[str]] = None,
         **kwargs,
     ):
         feature_vector = self.feature_extractor(
-            word_ids[self.text_field_key], entity_start_positions, entity_end_positions, entity_ids, entity_position_ids
+            word_ids[self.text_field_key], entity_start_positions, entity_end_positions, entity_ids, entity_position_ids, entity_attention_mask
         )
 
         feature_vector = self.dropout(feature_vector)
