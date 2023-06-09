@@ -26,6 +26,7 @@ class TokenBasedNERFeatureExtractor(NERFeatureExtractor):
         entity_end_positions: torch.LongTensor,
         entity_ids: torch.LongTensor = None,
         entity_position_ids: torch.LongTensor = None,
+        entity_attention_mask: torch.LongTensor = None,
     ):
         token_embeddings = self.embedder(**inputs)
         token_embeddings = self.encoder(token_embeddings)
