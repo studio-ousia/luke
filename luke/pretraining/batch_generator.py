@@ -164,7 +164,7 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                 batch.update({k: np.stack([o.word_features[k][:max_word_len] for o in buf]) for k in word_keys})
 
                 if self._cls_entity_prediction:
-                    batch.update({"page_id": np.array([o.page_id for o in buf], dtype=np.int)})
+                    batch.update({"page_id": np.array([o.page_id for o in buf], dtype=np.int64)})
 
                 if not self._word_only:
                     entity_keys = buf[0].entity_features.keys()
@@ -178,20 +178,20 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
                 max_entity_len = 1
 
     def _create_word_features(self, word_ids: np.ndarray, masked_entity_positions: List[List[int]]):
-        output_word_ids = np.full(self._max_seq_length, self._pad_id, dtype=np.int)
+        output_word_ids = np.full(self._max_seq_length, self._pad_id, dtype=np.int64)
         output_word_ids[: word_ids.size + 2] = np.concatenate([[self._cls_id], word_ids, [self._sep_id]])
-        word_attention_mask = np.zeros(self._max_seq_length, dtype=np.int)
+        word_attention_mask = np.zeros(self._max_seq_length, dtype=np.int64)
         word_attention_mask[: word_ids.size + 2] = 1
 
         ret = dict(
             word_ids=output_word_ids,
             word_attention_mask=word_attention_mask,
-            word_segment_ids=np.zeros(self._max_seq_length, dtype=np.int),
+            word_segment_ids=np.zeros(self._max_seq_length, dtype=np.int64),
         )
 
         if self._masked_lm_prob != 0.0:
             num_masked_words = 0
-            masked_lm_labels = np.full(self._max_seq_length, -1, dtype=np.int)
+            masked_lm_labels = np.full(self._max_seq_length, -1, dtype=np.int64)
 
             def perform_masking(indices: List[int]):
                 p = random.random()
@@ -247,27 +247,27 @@ class LukePretrainingBatchWorker(multiprocessing.Process):
         return ret
 
     def _create_entity_features(self, entity_ids: np.ndarray, entity_position_ids: np.ndarray):
-        output_entity_ids = np.zeros(self._max_entity_length, dtype=np.int)
+        output_entity_ids = np.zeros(self._max_entity_length, dtype=np.int64)
         output_entity_ids[: entity_ids.size] = entity_ids
 
-        entity_attention_mask = np.zeros(self._max_entity_length, dtype=np.int)
+        entity_attention_mask = np.zeros(self._max_entity_length, dtype=np.int64)
         entity_attention_mask[: entity_ids.size] = 1
 
         entity_position_ids += entity_position_ids != -1  # +1 for [CLS]
-        output_entity_position_ids = np.full((self._max_entity_length, self._max_mention_length), -1, dtype=np.int)
+        output_entity_position_ids = np.full((self._max_entity_length, self._max_mention_length), -1, dtype=np.int64)
         output_entity_position_ids[: entity_position_ids.shape[0]] = entity_position_ids
 
         ret = dict(
             entity_ids=output_entity_ids,
             entity_position_ids=output_entity_position_ids,
             entity_attention_mask=entity_attention_mask,
-            entity_segment_ids=np.zeros(self._max_entity_length, dtype=np.int),
+            entity_segment_ids=np.zeros(self._max_entity_length, dtype=np.int64),
         )
 
         masked_positions = []
         if self._masked_entity_prob != 0.0:
             num_to_predict = max(1, int(round(entity_ids.size * self._masked_entity_prob)))
-            masked_entity_labels = np.full(self._max_entity_length, -1, dtype=np.int)
+            masked_entity_labels = np.full(self._max_entity_length, -1, dtype=np.int64)
             for index in np.random.permutation(range(entity_ids.size))[:num_to_predict]:
                 p = random.random()
                 masked_entity_labels[index] = entity_ids[index]

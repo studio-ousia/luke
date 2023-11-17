@@ -92,9 +92,9 @@ class InterwikiDB:
                 indptr.append(len(data))
 
         title_trie = Trie(titles)
-        data = np.fromiter((title_trie[titles[n]] for n in data), dtype=np.int)
-        indptr = np.array(indptr, dtype=np.int)
-        new_title_indices = np.empty(len(titles), dtype=np.int)
+        data = np.fromiter((title_trie[titles[n]] for n in data), dtype=np.int64)
+        indptr = np.array(indptr, dtype=np.int64)
+        new_title_indices = np.empty(len(titles), dtype=np.int64)
         for (title, index) in zip(titles, title_indices):
             new_title_indices[title_trie[title]] = index
 

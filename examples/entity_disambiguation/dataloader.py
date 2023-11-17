@@ -177,18 +177,18 @@ def _create_input_dict(
     eval_mention_indices: Optional[List[int]] = None,
 ) -> Dict[str, np.ndarray]:
     input_tokens = [tokenizer.cls_token] + tokens + [tokenizer.sep_token]
-    input_ids = np.full(max_seq_length, tokenizer.pad_token_id, dtype=np.int)
+    input_ids = np.full(max_seq_length, tokenizer.pad_token_id, dtype=np.int64)
     input_ids[: len(input_tokens)] = tokenizer.convert_tokens_to_ids(input_tokens)
-    attention_mask = np.zeros(max_seq_length, dtype=np.int)
+    attention_mask = np.zeros(max_seq_length, dtype=np.int64)
     attention_mask[: len(input_tokens)] = 1
 
     pad_entity_id = entity_vocab[PAD_TOKEN]
     unk_entity_id = entity_vocab[UNK_TOKEN]
-    entity_ids = np.full(max_entity_length, pad_entity_id, dtype=np.int)
-    entity_attention_mask = np.zeros(max_entity_length, dtype=np.int)
-    entity_position_ids = np.full((max_entity_length, max_mention_length), -1, dtype=np.int)
-    entity_candidate_ids = np.zeros((max_entity_length, max_candidate_length), dtype=np.int)
-    eval_entity_mask = np.zeros(max_entity_length, dtype=np.int)
+    entity_ids = np.full(max_entity_length, pad_entity_id, dtype=np.int64)
+    entity_attention_mask = np.zeros(max_entity_length, dtype=np.int64)
+    entity_position_ids = np.full((max_entity_length, max_mention_length), -1, dtype=np.int64)
+    entity_candidate_ids = np.zeros((max_entity_length, max_candidate_length), dtype=np.int64)
+    eval_entity_mask = np.zeros(max_entity_length, dtype=np.int64)
 
     for index, (mention, (mention_start, mention_end)) in enumerate(zip(mentions, mention_spans)):
         entity_ids[index] = entity_vocab.get_id(mention.title, default=unk_entity_id)
