@@ -170,19 +170,18 @@ These numbers are reported in
 
 ## Installation
 
-LUKE can be installed using [Poetry](https://python-poetry.org/):
+LUKE can be installed using `pip`:
 
 ```bash
-poetry install
+# For Python 3.9+, wikipedia2vec should be installed from GitHub in advance
+pip install git+https://github.com/singletongue/wikipedia2vec.git
 
+pip install .
 # If you want to run pretraining for LUKE
-poetry install --extras "pretraining opennlp"
+pip install '.[pretraining,opennlp]'
 # If you want to run pretraining for mLUKE
-poetry install --extras "pretraining icu"
+pip install '.[pretraining,icu]'
 ```
-
-The virtual environment automatically created by Poetry can be activated by
-`poetry shell`.
 
 **A note on installing `torch`**
 
@@ -191,9 +190,9 @@ hardware. In such case, see [the official site](https://pytorch.org/) and
 reinstall the correct version with the `pip` command.
 
 ```bash
-poetry run pip3 uninstall torch torchvision torchaudio
-# Example for Linux with CUDA 11.3
-poetry run pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+pip uninstall torch torchvision
+# Example for installing PyTorch v2.1.1 on Linux with CUDA 11.8
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 ```
 
 ## Released Models
